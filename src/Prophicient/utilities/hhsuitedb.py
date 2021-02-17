@@ -327,7 +327,7 @@ def sort_ffindex(db_dir, sorting_file, ffindex_tuple, stdout=None):
     # Defines the path for the ordered ffindex database
     ord_ffdata = db_dir.joinpath("".join([ffindex_tuple[0].stem,
                                           "ordered.ffdata"]))
-    ord_ffindex = db_dir.joinpath("".join([ffindex_tuple[1],
+    ord_ffindex = db_dir.joinpath("".join([ffindex_tuple[1].stem,
                                            "ordered.ffindex"]))
 
     command = (f"ffindex_order {sorting_file} "
