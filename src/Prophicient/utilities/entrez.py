@@ -19,16 +19,6 @@ def set_entrez_credentials(tool=None, email=None, api_key=None):
         Entrez.api_key = api_key
 
 
-def esearch_taxa(taxon_id, db="nucleotide", idtype="acc", retmax=99999):
-    taxon_identifier_ref = "".join(["txid", str(taxon_id), "[Orgn]"])
-
-    handle = Entrez.esearch(db=db, term=taxon_identifier_ref, idtype=idtype,
-                            retmax=retmax)
-    record = Entrez.read(handle)
-
-    return record["IdList"]
-
-
 def run_esearch(db="", term="", usehistory="", idtype="", retmax=99999):
     """Search for valid records in NCBI.
 

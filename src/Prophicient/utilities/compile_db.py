@@ -1,14 +1,13 @@
 """Pipeline for downloading, clustering, and making hhsuite3-compatible
 databases from phage genomes."""
 import argparse
-import configparser
-from configparser import Error as ConfigError
 from pathlib import Path
-import sys
+
+from Prophicient.utilities import (config_handling, entrez, hhsuite,
+                                   path_basic)
 
 # GLOBAL VARIABLES
 # -----------------------------------------------------------------------------
-DEFAULT_CONFIG_SECTIONS = {"ncbi": {"api_key", "email", "tool"}}
 DEFAULT_FOLDER_NAME = "PhageGeneRef"
 
 
@@ -22,7 +21,7 @@ def main(unparsed_args_list):
     """
     args = parse_compile_db(unparsed_args_list)
 
-    config = build_complete_config(args.config_file)
+    config = config_handling.build_complete_config(args.config_file)
     config
 
     taxon_ids = parse_taxon_ids(args.identifiers_file)
@@ -42,11 +41,12 @@ def parse_compile_db(unparsed_args_list):
     """
     parser = argparse.ArgumentParser()
 
-    parser.add_argument("identifiers_file", type=convert_file_path)
+    parser.add_argument("identifiers_file", type=path_basic.convert_file_path)
 
     parser.add_argument("-m", "--folder_name", type=str)
     parser.add_argument("-o", "--folder_path", type=Path)
-    parser.add_argument("-c", "--config_file", type=convert_file_path)
+    parser.add_argument("-c", "--config_file",
+                        type=path_basic.convert_file_path)
     parser.add_argument("-v", "--verbose", action="store_true")
     parser.add_argument("-f", "--force", action="store_true")
     parser.add_argument("-np", "--number_processes", type=int)
@@ -62,30 +62,15 @@ def parse_compile_db(unparsed_args_list):
 def execute_compile_db(taxon_ids, folder_path=None,
                        folder_name=DEFAULT_FOLDER_NAME, verbose=False,
                        force=False, cores=1):
+    working_dir = path_basic.create_working_path(folder_path, folder_name,
+                                                 force=force)
+
+    records = retrieve_genome_records(taxon_ids)
     pass
 
 
 # HELPER FUNCTIONS
 # -----------------------------------------------------------------------------
-def convert_file_path(path_string):
-    """Function to convert argparse input to a working file path.
-
-    :param path: A string to be converted into a Path object.
-    :type path: str
-    :returns: A Path object converted from the inputted string.
-    :rtype: pathlib.Path
-    """
-    path = Path(path_string)
-    path = path.expanduser()
-    path = path.resolve()
-
-    if not path.is_file():
-        print(f"The file {path} does not exist.")
-        sys.exit(1)
-
-    return path
-
-
 def parse_taxon_ids(identifiers_file):
     """Parses a taxon identifiers file, assuming each taxon ID is on
     a separate line.
@@ -104,48 +89,44 @@ def parse_taxon_ids(identifiers_file):
     return taxon_ids
 
 
-# CONFIG FILE SETUP
-# -----------------------------------------------------------------------------
-def setup_section(keys, value):
-    dict = {}
-    for key in keys:
-        dict[key] = value
-    return dict
+def esearch_taxa(taxon_id, db="nucleotide", idtype="acc", retmax=99999):
+    """Searches for genome accession IDs using a taxon identifier.
+
+    :param taxon_id: Taxon identifier to find corresponding accession IDs for.
+    :type taxon_id: str
+    :param db: Name of the NCBI database to search:
+    :type db: str
+    :param idtype: Type of identifier to return in the search:
+    :type idtype: str
+    :param retmax: Number of maximum identifiers to retrieve.
+    :type retmax: int
+    :returns: Returns specified identifier type related to the taxon ID
+    :rtype: list[str]
+    """
+    taxon_identifier_ref = "".join(["txid", str(taxon_id), "[Orgn]"])
+
+    record = entrez.run_esearch(db=db, idtype=idtype, retmax=retmax,
+                                term=taxon_identifier_ref)
+
+    return record["IdList"]
 
 
-def default_parser(null_value):
-    """Constructs complete config with empty values."""
-    # Need to allow no value if the null value is None.
-    null_parser = configparser.ConfigParser(allow_no_value=True)
-    config_sections = DEFAULT_CONFIG_SECTIONS
+def retrieve_genome_records(taxon_ids):
+    """Retrieves genome Biopython SeqRecords from a list of taxon NCBI
+    identifiers.
 
-    for header in config_sections.keys():
-        config_section = config_sections[header]
-        for subheader in config_section.keys():
-            config_section[subheader] = null_value
+    :param taxon_ids: Taxon identifiers to find corresponding genomes from
+    :type taxon_ids: list[str]
+    :returns: A list of SeqRecord objects retrieved using taxon identifiers.
+    :rtype: list[Bio.SeqRecord.SeqRecord]
+    """
+    genome_accessions = set()
+    for taxon_id in taxon_ids:
+        taxon_accessions = esearch_taxa(taxon_id)
+        for taxon_accession in taxon_accessions:
+            genome_accessions.append(taxon_accession)
 
-    return null_parser
+    genome_accessions = list(genome_accessions)
+    records = entrez.get_records(genome_accessions)
 
-
-def parse_config(config_path, parser=None):
-    """Get parameters from config file."""
-    if parser is None:
-        parser = configparser.ConfigParser()
-
-    try:
-        parser.read(config_path)
-    except ConfigError:
-        print("Unable to parse config file.")
-        sys.exit(1)
-    else:
-        return parser
-
-
-def build_complete_config(config_path):
-    "Buid a complete config object by merging user-supplied and default config"
-    parser = default_parser(None)
-
-    if config_path is not None:
-        parser = parse_config(config_path, parser)
-
-    return parser
+    return records
