@@ -128,9 +128,9 @@ def phamerate(sequence_db, db, tmpdir, first_iter, second_iter=None):
 
     else:
         pham_list = list()
-        for pham_id, pham_geneids in first_iter_phams:
-            pham_translations = [db.get_translation_from_geneid(x) for x in pham_geneids]
-            pham_list.append(Pham(pham_geneids, pham_translations))
+        for pham_id, all_pham_geneids in first_iter_phams:
+            all_pham_translations = [db.get_translation_from_geneid(x) for x in all_pham_geneids]
+            pham_list.append(Pham(all_pham_geneids, all_pham_translations))
 
     return pham_list
 
