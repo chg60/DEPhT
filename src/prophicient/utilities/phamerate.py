@@ -75,6 +75,8 @@ def phamerate(sequence_db, db, tmpdir, first_iter, second_iter=None):
     if not tmpdir.is_dir():
         tmpdir.mkdir(parents=False)
 
+    temp_phams = list()
+
     # First iteration paths
     cluster_db = tmpdir.joinpath("clusterDB")
     seqfile_db = tmpdir.joinpath("seqfileDB")
@@ -115,7 +117,6 @@ def phamerate(sequence_db, db, tmpdir, first_iter, second_iter=None):
             for pham_geneid in pham_geneids:
                 lookup[pham_geneid] = phamid
 
-        pham_list = list()
         for source_id, source_geneids in second_iter_phams.items():
             all_pham_geneids = set()
             for source_geneid in source_geneids:
@@ -124,15 +125,14 @@ def phamerate(sequence_db, db, tmpdir, first_iter, second_iter=None):
                     all_pham_geneids.add(target_geneid)
             all_pham_geneids = list(all_pham_geneids)
             all_pham_translations = [db.get_translation_from_geneid(x) for x in all_pham_geneids]
-            pham_list.append(Pham(all_pham_geneids, all_pham_translations))
+            temp_phams.append(Pham(all_pham_geneids, all_pham_translations))
 
     else:
-        pham_list = list()
         for pham_id, all_pham_geneids in first_iter_phams:
             all_pham_translations = [db.get_translation_from_geneid(x) for x in all_pham_geneids]
-            pham_list.append(Pham(all_pham_geneids, all_pham_translations))
+            temp_phams.append(Pham(all_pham_geneids, all_pham_translations))
 
-    return pham_list
+    return temp_phams
 
 
 if __name__ == "__main__":
