@@ -1,7 +1,3 @@
-from pathlib import Path
-import time
-
-from Bio import SeqIO
 from Bio.SeqFeature import (FeatureLocation, SeqFeature)
 from networkx import DiGraph
 
@@ -12,45 +8,9 @@ from prophicient.classes import kmers
 # -----------------------------------------------------------------------------
 DEFAULT = {"k": 5, "fpp": 0.0001}
 
-INPUT_PATHS = ["prophiGD17-1.fasta", "prophiGD17-2.fasta",
-               "prophiGD12-2.fasta"]
 
 # MAIN FUNCTIONS
 # -----------------------------------------------------------------------------
-
-
-def main(k=DEFAULT["k"]):
-    for input_path in INPUT_PATHS:
-        input_path = Path.cwd().joinpath(input_path)
-        print(f"Finding attatchment site for {input_path.stem}...")
-        record = SeqIO.read(input_path, "fasta")
-
-        l_region = str(record.seq[:20000])
-        r_region = str(record.seq[-20000:])
-
-        start = time.time()
-        attP = find_naive_attatchment_site(l_region, r_region, k=k)
-        stop = time.time()
-
-        print("Time elapsed: {:.3f}s".format(stop - start))
-        print(f"Longest naive contig @ pos {attP.location.start}: "
-              f"{attP.extract(l_region)}")
-
-        start = time.time()
-        attP = find_attatchment_site(l_region, r_region, k=k)
-        stop = time.time()
-
-        if attP is None:
-            print("Traversing algorithm didn't find any contigs")
-            continue
-
-        print("Time elapsed: {:.3f}s".format(stop - start))
-        print(f"Longest traced contig @ pos {attP.location.start}: "
-              f"{attP.extract(l_region)}")
-
-        print("")
-
-
 def find_attatchment_site(l_sequence, r_sequence, k=DEFAULT["k"]):
     bfilter = load_bloom_filter(l_sequence, k=k)
     deb_graph = create_debruijn_graph(bfilter, r_sequence, k=k)
@@ -69,42 +29,13 @@ def find_attatchment_site(l_sequence, r_sequence, k=DEFAULT["k"]):
     return att_feature
 
 
-def find_naive_attatchment_site(l_sequence, r_sequence, k=DEFAULT["k"]):
-    bfilter = load_bloom_filter(l_sequence, k=k)
-    deb_graph = create_debruijn_graph(bfilter, r_sequence, k=k)
-    contigs = trace_debruijn_graph(deb_graph, l_sequence, k=k)
+def load_bloom_filter(sequence, k=DEFAULT["k"], fpp=DEFAULT["fpp"]):
+    bfilter = kmers.BloomFilter(len(sequence), fpp=fpp)
 
-    contigs.sort(key=lambda x: x[1])
-    contigs.sort(key=lambda x: len(x[0]), reverse=True)
-
-    att_end = (contigs[0][1] + k)
-    att_start = (att_end - len(contigs[0][0]))
-    att_feature = SeqFeature(FeatureLocation(att_start, att_end), strand=1,
-                             type="attP")
-
-    return att_feature
-
-
-def trace_debruijn_graph(deb_graph, sequence, k=DEFAULT["k"]):
-    contigs = []
-
-    contig = None
     for kmer, pos in count_kmers(sequence, k):
-        node = deb_graph.nodes.get(kmer)
+        bfilter.add(kmer)
 
-        if node is None:
-            if contig is not None:
-                contigs.append((contig, pos-1))
-
-            contig = None
-            continue
-
-        if contig is not None:
-            contig = contig + kmer[-1]
-        else:
-            contig = kmer
-
-    return contigs
+    return bfilter
 
 
 def create_debruijn_graph(bfilter, sequence, k=DEFAULT["k"]):
@@ -143,24 +74,6 @@ def create_debruijn_graph(bfilter, sequence, k=DEFAULT["k"]):
     return deb_graph
 
 
-def load_bloom_filter(sequence, k=DEFAULT["k"], fpp=DEFAULT["fpp"]):
-    bfilter = kmers.BloomFilter(len(sequence), fpp=fpp)
-
-    for kmer, pos in count_kmers(sequence, k):
-        bfilter.add(kmer)
-
-    return bfilter
-
-
-def count_kmers(sequence, k):
-    num_kmers = len(sequence) - k
-    if num_kmers <= 0:
-        raise
-
-    for i in range(num_kmers):
-        yield sequence[i:i+k], i
-
-
 def traverse_debruijn_graph(deb_graph, sequence, k=DEFAULT["k"]):
     contigs = []
 
@@ -191,6 +104,15 @@ def traverse_debruijn_graph(deb_graph, sequence, k=DEFAULT["k"]):
             break
 
     return contigs
+
+
+def count_kmers(sequence, k):
+    num_kmers = len(sequence) - k
+    if num_kmers <= 0:
+        raise
+
+    for i in range(num_kmers):
+        yield sequence[i:i+k], i
 
 
 def stitch_kmer_path(deb_graph, kmers):
@@ -259,7 +181,3 @@ def create_kmer_position_lookup(deb_graph, kmers):
             pos_lookup[pos] = kmer
 
     return pos_lookup
-
-
-if __name__ == "__main__":
-    main(k=7)
