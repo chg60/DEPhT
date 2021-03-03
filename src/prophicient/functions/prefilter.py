@@ -16,7 +16,7 @@ DEFAULTS = {"bin_width": plot_gene_density.BIN_WIDTH,
 
 def main(bin_width=DEFAULTS["bin_width"], window_size=DEFAULTS["window_size"],
          F=DEFAULTS["F"], C=DEFAULTS["C"]):
-    record = SeqIO.read("GD17.gbk", "gb")
+    record = SeqIO.read("GD43A.gbk", "gb")
 
     gene_dense_coords = prefilter_genome(record, window_size=window_size,
                                          F=F, C=C)
@@ -47,12 +47,12 @@ def main(bin_width=DEFAULTS["bin_width"], window_size=DEFAULTS["window_size"],
         prophage_start = region.location.start + attL_feature.location.start
         prophage_end = (region.location.start + half + 1 +
                         attR_feature.location.end)
-        phage_regions.append(prophage_start, prophage_end)
+        phage_regions.append((prophage_start, prophage_end))
 
-        print("\tFound putative prophage "
-              f"{(prophage_end - prophage_start) // 1000} kb long "
+        print("\tPutative prophage "
+              f"{(prophage_end - prophage_start) // 1000} kb long @ "
               f"({prophage_start}, {prophage_end}) "
-              f": {att_seq}")
+              f"with att: {att_seq}")
 
     return phage_regions
 
@@ -84,8 +84,8 @@ def prefilter_genome(record, bin_width=DEFAULTS["bin_width"],
 
     gene_dense_coords = list()
     for contig in target_contig_rho:
-        start = contig[0][0]
-        end = contig[-1][0]
+        start = contig[0][0] - window_size // 2
+        end = contig[-1][0] + window_size // 2
 
         gene_dense_coords.append((start, end))
 
