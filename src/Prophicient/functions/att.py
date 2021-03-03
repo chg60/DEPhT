@@ -1,7 +1,7 @@
 from Bio.SeqFeature import (FeatureLocation, SeqFeature)
 from networkx import DiGraph
 
-from prophicient.classes import kmers
+from Prophicient.classes import kmers
 
 
 # GLOBAL VARIABLES
@@ -21,12 +21,17 @@ def find_attatchment_site(l_sequence, r_sequence, k=DEFAULT["k"]):
     if not contigs:
         return None
 
-    att_end = (contigs[0][1] + k)
-    att_start = (att_end - len(contigs[0][0]))
-    att_feature = SeqFeature(FeatureLocation(att_start, att_end), strand=1,
-                             type="attP")
+    attL_end = (contigs[0][1] + k)
+    attL_start = (attL_end - len(contigs[0][0]))
+    attL_feature = SeqFeature(FeatureLocation(attL_start, attL_end), strand=1,
+                              type="attL")
 
-    return att_feature
+    attR_start = (contigs[0][2] + k)
+    attR_end = (attR_start + len(contigs[0][0]))
+    attR_feature = SeqFeature(FeatureLocation(attR_start, attR_end), strand=1,
+                              type="attR")
+
+    return attL_feature, attR_feature
 
 
 def load_bloom_filter(sequence, k=DEFAULT["k"], fpp=DEFAULT["fpp"]):
@@ -87,7 +92,7 @@ def traverse_debruijn_graph(deb_graph, sequence, k=DEFAULT["k"]):
         node = deb_graph.nodes.get(kmer)
 
         if node is not None:
-            contig_kmers, kmer_start = stitch_kmer_path(
+            contig_kmers, r_start = stitch_kmer_path(
                                                 deb_graph, kmers[counter:])
 
             contig = contig_kmers[0]
@@ -96,7 +101,7 @@ def traverse_debruijn_graph(deb_graph, sequence, k=DEFAULT["k"]):
                     contig += contig_kmer[-1]
 
             counter += len(contig_kmers)
-            contigs.append((contig, counter-1))
+            contigs.append((contig, counter-1, r_start))
         else:
             counter += 1
 
