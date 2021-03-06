@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from Bio.SeqFeature import (FeatureLocation, SeqFeature)
 from Bio.SeqRecord import SeqRecord
 
@@ -12,28 +14,38 @@ DEFAULTS = {"bin_width": gene_density.DEFAULTS["bin_width"],
             "F": -0.5, "C": 2}
 
 
-def extract_naive_prophages(record):
+def extract_naive_prophages(record, working_dir):
     gene_dense_records_and_regions = prefilter_genome(record)
 
     phage_regions = list()
-    for region_record, region_feature in gene_dense_records_and_regions:
+    for i in range(len(gene_dense_records_and_regions)):
+        region_record, region_feature = gene_dense_records_and_regions[i]
         sequence = str(region_record.seq)
 
         half = len(sequence) // 2
         l_region = sequence[:half-1]
         r_region = sequence[half+1:]
 
+        name = (f"{record.id}_{i}")
         attL_feature, attR_feature = att.find_attatchment_site(
-                                                        l_region, r_region)
+                                        l_region, r_region, working_dir,
+                                        name=name)
 
         if attL_feature is None or attR_feature is None:
             continue
 
-        region_start = region_feature.location.start
-        prophage_start = (region_start + attL_feature.location.start)
-        prophage_end = (region_start + half + 1 + attR_feature.location.end)
+        prophage_start = (attL_feature.location.start)
+        prophage_end = (half + 1 + attR_feature.location.end)
+        prophage_feature = SeqFeature(FeatureLocation(prophage_start,
+                                                      prophage_end))
+        prophage_seq = prophage_feature.extract(region_record.seq)
 
-        phage_regions.append((prophage_start, prophage_end))
+        prophage_record = SeqRecord(prophage_seq)
+        prophage_record.id = name
+
+        phage_regions.append((prophage_record,
+                              prophage_start + region_feature.location.start,
+                              prophage_end + region_feature.location.start))
 
     return phage_regions
 
@@ -52,26 +64,32 @@ def prefilter_genome(record, bin_width=DEFAULTS["bin_width"],
 
         region_record = SeqRecord(region_seq)
         region_record.id = "_".join([record.id, "region", str(i)])
-        for feature in record.features:
-            if (feature.location.start < gene_dense_feature.location.start or
-                    feature.location.end > gene_dense_feature.location.end):
-                continue
 
-            region_start = gene_dense_feature.location.start
-            feature_start = (feature.location.start - region_start)
-            feature_end = (feature.location.end - region_start)
-            feature_location = FeatureLocation(feature_start, feature_end)
-
-            new_feature = SeqFeature(feature_location, strand=feature.strand,
-                                     type=feature.type,
-                                     qualifiers=feature.qualifiers)
-            region_record.features.append(new_feature)
-
+        realign_subrecord(record, region_record,
+                          gene_dense_feature.location.start,
+                          gene_dense_feature.location.end)
         region_record.features.sort(key=lambda x: x.location.start)
+
         gene_dense_records_and_features.append((region_record,
                                                 gene_dense_feature))
 
     return gene_dense_records_and_features
+
+
+def realign_subrecord(record, subrecord, subrecord_start, subrecord_end):
+    for feature in record.features:
+        if (feature.location.start < subrecord_start or
+                feature.location.end > subrecord_end):
+            continue
+
+        feature_start = (feature.location.start - subrecord_start)
+        feature_end = (feature.location.end - subrecord_start)
+        feature_location = FeatureLocation(feature_start, feature_end)
+
+        new_feature = SeqFeature(feature_location, strand=feature.strand,
+                                 type=feature.type,
+                                 qualifiers=feature.qualifiers)
+        subrecord.features.append(new_feature)
 
 
 def get_gene_dense_regions(record, bin_width=DEFAULTS["bin_width"],

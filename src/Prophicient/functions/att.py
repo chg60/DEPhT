@@ -1,3 +1,7 @@
+import csv
+import shlex
+from subprocess import Popen, PIPE
+
 from Bio.SeqFeature import (FeatureLocation, SeqFeature)
 from networkx import DiGraph
 
@@ -6,183 +10,90 @@ from Prophicient.classes import kmers
 
 # GLOBAL VARIABLES
 # -----------------------------------------------------------------------------
-DEFAULT = {"k": 5, "fpp": 0.0001}
+DEFAULT = {"k": 5, "fpp": 0.0001, "outfmt": 10}
 
+BLAST_CSV_HEADER = ["qstart", "qend", "sstart", "send",
+                    "qseq", "sseq", "length", "mismatch", "gapopen"]
 
 # MAIN FUNCTIONS
 # -----------------------------------------------------------------------------
-def find_attatchment_site(l_sequence, r_sequence, k=DEFAULT["k"]):
-    bfilter = load_bloom_filter(l_sequence, k=k)
-    deb_graph = create_debruijn_graph(bfilter, r_sequence, k=k)
-    contigs = traverse_debruijn_graph(deb_graph, l_sequence, k=k)
+def find_attatchment_site(l_seq, r_seq, working_dir, name=""):
+    l_seq_name = "_".join([name, "attL_region"])
+    r_seq_name = "_".join([name, "attR_region"])
 
-    contigs.sort(key=lambda x: len(x[0]), reverse=True)
+    l_seq_path = working_dir.joinpath(l_seq_name).with_suffix(".fasta")
+    r_seq_path = working_dir.joinpath(r_seq_name).with_suffix(".fasta")
+    outpath = working_dir.joinpath("".join([name, ".csv"]))
 
-    if not contigs:
-        return None
+    write_fasta(l_seq_path, l_seq, l_seq_name)
+    write_fasta(r_seq_path, r_seq, r_seq_name)
 
-    attL_end = (contigs[0][1] + k)
-    attL_start = (attL_end - len(contigs[0][0]))
-    attL_feature = SeqFeature(FeatureLocation(attL_start, attL_end), strand=1,
-                              type="attL")
+    blastn(l_seq_path, r_seq_path, outpath)
+    blast_results = read_blast_csv(outpath)
 
-    attR_start = (contigs[0][2] + k)
-    attR_end = (attR_start + len(contigs[0][0]))
-    attR_feature = SeqFeature(FeatureLocation(attR_start, attR_end), strand=1,
-                              type="attR")
+    if not blast_results:
+        return None, None
+
+    blast_results.sort(key=lambda x: x["length"])
+    
+    att_data = blast_results[0]
+
+    qstart = int(att_data["qstart"]) + 1
+    qend = int(att_data["qend"]) + 1
+    
+    if qstart > qend:
+        temp = qstart
+        qstart = qend 
+        qend = temp
+        strand = -1
+    else:
+        strand = 1
+
+    attL_feature = SeqFeature(FeatureLocation(qstart, qend),
+                              strand=strand, type="attL")
+
+    sstart = int(att_data["sstart"]) + 1
+    send = int(att_data["send"])
+
+    if sstart > send:
+        temp = sstart
+        sstart = send
+        send = temp
+        strand = -1
+    else:
+        strand = 1
+
+    attR_feature = SeqFeature(FeatureLocation(sstart, send),
+                              strand=strand, type="attR")
+
+    if attL_feature.strand != attR_feature.strand:
+        return None, None
 
     return attL_feature, attR_feature
 
 
-def load_bloom_filter(sequence, k=DEFAULT["k"], fpp=DEFAULT["fpp"]):
-    bfilter = kmers.BloomFilter(len(sequence), fpp=fpp)
-
-    for kmer, pos in count_kmers(sequence, k):
-        bfilter.add(kmer)
-
-    return bfilter
+def write_fasta(path, sequence, name):
+    with path.open(mode="w") as filehandle:
+        filehandle.write("".join([">", name, "\n"])) 
+        filehandle.write(sequence)
 
 
-def create_debruijn_graph(bfilter, sequence, k=DEFAULT["k"]):
-    deb_graph = DiGraph()
-
-    prev_match = False
-    prev_kmer = None
-    for kmer, pos in count_kmers(sequence, k):
-        match = bfilter.check(kmer)
-
-        if match:
-            node = deb_graph.nodes.get(kmer)
-
-            if node is None:
-                positions = set()
-                positions.add(pos)
-
-                deb_graph.add_node(kmer, positions=positions)
-            else:
-                node["positions"].add(pos)
-
-            if prev_match:
-                edge = deb_graph[prev_kmer].get(kmer)
-
-                if edge is None:
-                    deb_graph.add_edge(prev_kmer, kmer,
-                                       pos_pairs=[(pos-1, pos)])
-                else:
-                    pos_pairs = edge["pos_pairs"]
-                    pos_pairs.append((pos-1, pos))
-                    edge["pos_pairs"] = pos_pairs
-
-        prev_match = match
-        prev_kmer = kmer
-
-    return deb_graph
+def blastn(query, target, out, outfmt=DEFAULT["outfmt"],
+           header=BLAST_CSV_HEADER):
+    command = (f"""blastn -query {query} -subject {target} -out {out} """
+               f"""-outfmt "10 {' '.join(BLAST_CSV_HEADER)}" """)
+    
+    split_command = shlex.split(command)
+    with Popen(args=split_command, stdin=PIPE) as process:
+        out, err = process.communicate()
 
 
-def traverse_debruijn_graph(deb_graph, sequence, k=DEFAULT["k"]):
-    contigs = []
+def read_blast_csv(filepath, header=BLAST_CSV_HEADER):
+    blast_results = []
+    with filepath.open(mode="r") as filehandle:
+        csv_reader = csv.reader(filehandle, delimiter=",", quotechar='"')
+        for row in csv_reader:
+            row_dict = {header[i]: row[i] for i in range(len(header))}
+            blast_results.append(row_dict)
 
-    kmers = [kmer[0] for kmer in count_kmers(sequence, k)]
-    num_kmers = len(kmers)
-
-    contig = None
-    counter = 0
-    while True:
-        kmer = kmers[counter]
-        node = deb_graph.nodes.get(kmer)
-
-        if node is not None:
-            contig_kmers, r_start = stitch_kmer_path(
-                                                deb_graph, kmers[counter:])
-
-            contig = contig_kmers[0]
-            if len(contig_kmers) > 1:
-                for contig_kmer in contig_kmers[1:]:
-                    contig += contig_kmer[-1]
-
-            counter += len(contig_kmers)
-            contigs.append((contig, counter-1, r_start))
-        else:
-            counter += 1
-
-        if counter >= num_kmers:
-            break
-
-    return contigs
-
-
-def count_kmers(sequence, k):
-    num_kmers = len(sequence) - k
-    if num_kmers <= 0:
-        raise
-
-    for i in range(num_kmers):
-        yield sequence[i:i+k], i
-
-
-def stitch_kmer_path(deb_graph, kmers):
-    contig_kmers = list()
-
-    prev_kmer_start = None
-    for i in range(len(kmers)):
-        kmer = kmers[i]
-
-        node = deb_graph.nodes.get(kmer)
-
-        if node is None:
-            break
-
-        kmer_start = validate_kmer_path(deb_graph, (contig_kmers+[kmer]))
-        if kmer_start is None:
-            break
-        else:
-            prev_kmer_start = kmer_start
-
-        contig_kmers.append(kmer)
-
-    return contig_kmers, prev_kmer_start
-
-
-def validate_kmer_path(deb_graph, kmer_path):
-    pos_lookup = create_kmer_position_lookup(deb_graph, kmer_path)
-
-    if not pos_lookup:
-        return None
-
-    anchor_kmer = kmer_path[0]
-    anchor_node = deb_graph.nodes.get(anchor_kmer)
-
-    valid = True
-    for anchor_pos in anchor_node["positions"]:
-        valid = True
-        for i in range(len(kmer_path)):
-            curr_kmer = pos_lookup.get(anchor_pos+i)
-
-            if curr_kmer is None:
-                valid = False
-                break
-
-            if curr_kmer != kmer_path[i]:
-                valid = False
-                break
-
-        if valid:
-            break
-
-    if valid:
-        return anchor_pos
-
-
-def create_kmer_position_lookup(deb_graph, kmers):
-    pos_lookup = dict()
-
-    for kmer in kmers:
-        node = deb_graph.nodes.get(kmer)
-
-        if node is None:
-            raise
-
-        for pos in node["positions"]:
-            pos_lookup[pos] = kmer
-
-    return pos_lookup
+    return blast_results
