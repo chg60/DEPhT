@@ -31,10 +31,13 @@ def count_genes_per_interval(record, interval=DEFAULTS["bin_width"]):
 
     # Wrap around ends of the genome
     for interval_index in range(0, DEFAULTS["window_size"], interval):
-        genes_per_interval[interval_index + max_interval] = genes_per_interval[interval_index]
+
+        genes_per_interval[interval_index + max_interval] = \
+                                    genes_per_interval[interval_index]
     for interval_index in range(max_interval - DEFAULTS["window_size"],
                                 max_interval, interval):
-        genes_per_interval[interval_index - max_interval] = genes_per_interval[interval_index]
+        genes_per_interval[interval_index - max_interval] = \
+                                    genes_per_interval[interval_index]
 
     return genes_per_interval
 
@@ -67,23 +70,22 @@ def compile_region_contigs(rho_dict, eps):
         if rho >= eps:
             index_rho_map[i] = rho
 
-    contig_rho = list()
-    contig = None
+    region_and_rho = list()
+    region = None
     for i in range(num_rho):
         rho = index_rho_map.get(i)
 
         if rho is not None:
-            if contig is None:
-                contig = list()
+            if region is None:
+                region = list()
 
-            contig.append((index_position_map[i], rho))
+            region.append((index_position_map[i], rho))
 
             continue
 
-        if contig is not None:
-            contig.sort(key=lambda x: x[1], reverse=True)
-            contig_rho.append(contig)
+        if region is not None:
+            region_and_rho.append(region)
 
-        contig = None
+        region = None
 
-    return contig_rho
+    return region_and_rho

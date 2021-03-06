@@ -1,4 +1,5 @@
 from Bio.SeqFeature import (FeatureLocation, SeqFeature)
+from Bio.SeqRecord import SeqRecord
 
 from numpy import (average, std)
 from Prophicient.functions import (att, gene_density)
@@ -6,21 +7,17 @@ from Prophicient.functions import (att, gene_density)
 
 # GLOBAL VARIABLES
 # -----------------------------------------------------------------------------
-DEFAULTS = {"bin_width": gene_density.DEFAULTS["bin_size"],
+DEFAULTS = {"bin_width": gene_density.DEFAULTS["bin_width"],
             "window_size": gene_density.DEFAULTS["window_size"],
             "F": -0.5, "C": 2}
 
 
-def prefilter_genome(record, bin_width=DEFAULTS["bin_width"],
-                     window_size=DEFAULTS["window_size"], F=DEFAULTS["F"],
-                     C=DEFAULTS["C"]):
-    gene_dense_regions = get_gene_dense_regions(
-                                            record, window_size=window_size,
-                                            F=F, C=C)
+def extract_naive_prophages(record):
+    gene_dense_records_and_regions = prefilter_genome(record)
 
     phage_regions = list()
-    for region in gene_dense_regions:
-        sequence = str(region.extract(record.seq))
+    for region_record, region_feature in gene_dense_records_and_regions:
+        sequence = str(region_record.seq)
 
         half = len(sequence) // 2
         l_region = sequence[:half-1]
@@ -29,13 +26,52 @@ def prefilter_genome(record, bin_width=DEFAULTS["bin_width"],
         attL_feature, attR_feature = att.find_attatchment_site(
                                                         l_region, r_region)
 
-        prophage_start = region.location.start + attL_feature.location.start
-        prophage_end = (region.location.start + half + 1 +
-                        attR_feature.location.end)
+        if attL_feature is None or attR_feature is None:
+            continue
+
+        region_start = region_feature.location.start
+        prophage_start = (region_start + attL_feature.location.start)
+        prophage_end = (region_start + half + 1 + attR_feature.location.end)
 
         phage_regions.append((prophage_start, prophage_end))
 
     return phage_regions
+
+
+def prefilter_genome(record, bin_width=DEFAULTS["bin_width"],
+                     window_size=DEFAULTS["window_size"], F=DEFAULTS["F"],
+                     C=DEFAULTS["C"]):
+    gene_dense_features = get_gene_dense_regions(
+                                            record, window_size=window_size,
+                                            F=F, C=C)
+
+    gene_dense_records_and_features = []
+    for i in range(len(gene_dense_features)):
+        gene_dense_feature = gene_dense_features[i]
+        region_seq = gene_dense_feature.extract(record.seq)
+
+        region_record = SeqRecord(region_seq)
+        region_record.id = "_".join([record.id, "region", str(i)])
+        for feature in record.features:
+            if (feature.location.start < gene_dense_feature.location.start or
+                    feature.location.end > gene_dense_feature.location.end):
+                continue
+
+            region_start = gene_dense_feature.location.start
+            feature_start = (feature.location.start - region_start)
+            feature_end = (feature.location.end - region_start)
+            feature_location = FeatureLocation(feature_start, feature_end)
+
+            new_feature = SeqFeature(feature_location, strand=feature.strand,
+                                     type=feature.type,
+                                     qualifiers=feature.qualifiers)
+            region_record.features.append(new_feature)
+
+        region_record.features.sort(key=lambda x: x.location.start)
+        gene_dense_records_and_features.append((region_record,
+                                                gene_dense_feature))
+
+    return gene_dense_records_and_features
 
 
 def get_gene_dense_regions(record, bin_width=DEFAULTS["bin_width"],
@@ -58,14 +94,15 @@ def get_gene_dense_regions(record, bin_width=DEFAULTS["bin_width"],
 
     ceiling = rho_avg + (rho_std * C)
 
-    target_contig_rho = list()
-    for contig in region_contigs:
-        if contig[0][1] >= ceiling:
-            contig.sort(key=lambda x: x[0])
-            target_contig_rho.append(contig)
+    alpha_region_contigs = list()
+    for region_contig in region_contigs:
+        peak = max(region_contig, key=lambda x: x[1])
+        if peak[1] >= ceiling:
+            region_contig.sort(key=lambda x: x[0])
+            alpha_region_contigs.append(region_contig)
 
     gene_dense_coords = list()
-    for contig in target_contig_rho:
+    for contig in alpha_region_contigs:
         start = contig[0][0] - window_size // 2
         end = contig[-1][0] + window_size // 2
 
