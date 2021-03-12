@@ -2,7 +2,7 @@ from Bio.SeqFeature import (FeatureLocation, SeqFeature)
 from Bio.SeqRecord import SeqRecord
 
 from numpy import (average, std)
-from Prophicient.functions import (att, gene_density)
+from src.prophicient.functions import (att, gene_density)
 
 
 # GLOBAL VARIABLES

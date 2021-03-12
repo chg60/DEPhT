@@ -9,9 +9,11 @@ import sys
 import argparse
 import pathlib
 
+from Bio import SeqIO
+
 from src.prophicient.functions.multiprocess import CPUS
-from src.prophicient.functions.fasta import parse_fasta
 from src.prophicient.functions.wrapper_basic import autoannotate
+from src.prophicient.functions.prefilter import prefilter_genome
 
 
 def parse_args(arguments):
@@ -46,11 +48,11 @@ def main(arguments):
         outdir.mkdir(parents=True)
 
     # Parse the input FASTA file
-    try:
-        contig_ids, contig_seqs = parse_fasta(infile)
-    except IndexError:
-        print(f"'{str(infile)}' doesn't appear to be in FASTA format")
-        sys.exit(1)
+    records = list()
+    with infile.open("r") as fasta_reader:
+        record_iterator = SeqIO.parse(fasta_reader, "fasta")
+        for record in record_iterator:
+            records.append(record)
 
     # Create annotation outdir and auto-annotate
     annotate_dir = outdir.joinpath("prodigal")
@@ -58,11 +60,7 @@ def main(arguments):
         annotate_dir.mkdir(parents=False)
     prodigal_out = autoannotate(infile, annotate_dir)
 
-    print(str(prodigal_out))
-
-
-
-    print(contig_ids)
+    # TODO: stitch prodigal genes into records
 
 
 if __name__ == "__main__":
