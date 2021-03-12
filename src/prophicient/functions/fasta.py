@@ -1,26 +1,26 @@
 import pathlib
 
 
-def parse_fasta(f):
+def parse_fasta(filepath):
     """
     Parses a fasta file into a list of geneids and a corresponding
     list of translations.
 
-    :param f: fasta file to parse
-    :type f: pathlib.Path
+    :param filepath: fasta file to parse
+    :type filepath: pathlib.Path
     :return: geneids, translations
     """
     geneids = list()
     translations = list()
-    with f.open("r") as fh:
-        line = fh.readline()
+    with filepath.open("r") as fasta_reader:
+        line = fasta_reader.readline()
         while line:
             if line.startswith(">"):
                 geneids.append(line.lstrip(">").rstrip())
                 translations.append("")
             else:
                 translations[-1] += line.rstrip()
-            line = fh.readline()
+            line = fasta_reader.readline()
 
     return geneids, translations
 

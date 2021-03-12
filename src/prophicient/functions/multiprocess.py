@@ -10,7 +10,7 @@ from src.prophicient.classes.progress import Progress
 # Make sure new processes are forked, not spawned
 mp.set_start_method("fork")
 
-CPUS = mp.cpu_count()
+CPUS = mp.cpu_count() // 2
 
 
 def show_progress(current, end, width=50):
