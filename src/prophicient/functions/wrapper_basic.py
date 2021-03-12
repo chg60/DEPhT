@@ -1,37 +1,22 @@
-import subprocess
+import pathlib
+
+from src.prophicient.functions.run import run
 
 
-def prodigal(args):
+def autoannotate(filepath, output_dir):
     """
-    Wrapper function for prodigal
-    :param args: list of arguments
-    :type args: list
+    Annotate protein-coding genes using Prodigal
+
+    :param filepath: path to the input FASTA file
+    :type filepath: pathlib.Path
+    :param output_dir: path to where the output file can be written
+    :type output_dir: pathlib.Path
     """
-    # the formatted arguments to run prodigal will be stored in a list
-    formatted_args = ["prodigal"]
+    output_file = output_dir.joinpath(filepath.stem + ".fasta")
+    command = f"prodigal -i {str(filepath)} -a {str(output_file)}"
+    run(command)
 
-    # names the output file phage_name.output_format
-    phage_name = args.input_path.stem
-
-    output_format = ".gbk"  # default
-
-    output_filename = phage_name + output_format
-
-    # creating the output filepath
-    output_filepath = args.output_path/output_filename
-
-    formatted_args.extend(["-i", args.input_path, "-a", output_filepath])
-
-    if args.training is not None:
-        formatted_args.extend(["-t", args.training])
-    if args.nucleotide is not None:
-        formatted_args.extend(["-d", args.nucleotide])
-    if args.genes is not None:
-        formatted_args.extend(["-s", args.genes])
-
-    subprocess.run(formatted_args)
-
-    return output_filepath
+    return output_file
 
 
 def hhsearch(input_file, output_dir, database, cutoff):

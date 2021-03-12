@@ -1,7 +1,8 @@
 """
 Prophicient scans bacterial genomes looking for prophages. Regions
 identified as prophage candidates are further scrutinized, and
-attachment sites identified as well as possible.
+attachment sites identified as accurately as possible before
+prophage extraction and generating the final report.
 """
 
 import sys
@@ -10,6 +11,7 @@ import pathlib
 
 from src.prophicient.functions.multiprocess import CPUS
 from src.prophicient.functions.fasta import parse_fasta
+from src.prophicient.functions.wrapper_basic import autoannotate
 
 
 def parse_args(arguments):
@@ -49,6 +51,16 @@ def main(arguments):
     except IndexError:
         print(f"'{str(infile)}' doesn't appear to be in FASTA format")
         sys.exit(1)
+
+    # Create annotation outdir and auto-annotate
+    annotate_dir = outdir.joinpath("prodigal")
+    if not annotate_dir.is_dir():
+        annotate_dir.mkdir(parents=False)
+    prodigal_out = autoannotate(infile, annotate_dir)
+
+    print(str(prodigal_out))
+
+
 
     print(contig_ids)
 

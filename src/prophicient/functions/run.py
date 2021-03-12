@@ -27,4 +27,3 @@ def run(command, verbose=False):
             # Not reading from stdout/stderr so we need to block using p.wait()
             p.wait()
     return out, err
-
