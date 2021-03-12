@@ -100,7 +100,7 @@ def build_msa_ffindex(aln_dir, db_dir, db_name, stdout=None):
     msa_ffdata = db_dir.joinpath("".join([db_name, "_msa.ffdata"]))
     msa_ffindex = db_dir.joinpath("".join([db_name, "_msa.ffindex"]))
 
-    command = f"ffindex_build -s {msa_ffdata} {msa_ffindex} {aln_dir}"
+    command = f"ffindex_build -s '{msa_ffdata}' '{msa_ffindex}' '{aln_dir}'"
 
     split_command = shlex.split(command)
     with Popen(args=split_command, stdout=stdout, stderr=stdout) as process:
@@ -129,7 +129,7 @@ def build_hmm_ffindex(hmm_dir, db_dir, db_name, stdout=None):
     hmm_ffdata = db_dir.joinpath("".join([db_name, "_hmm.ffdata"]))
     hmm_ffindex = db_dir.joinpath("".join([db_name, "_hmm.ffindex"]))
 
-    command = f"ffindex_build -s {hmm_ffdata} {hmm_ffindex} {hmm_dir}"
+    command = f"ffindex_build -s '{hmm_ffdata}' '{hmm_ffindex}' '{hmm_dir}'"
 
     split_command = shlex.split(command)
     with Popen(args=split_command, stdout=stdout, stderr=stdout) as process:
@@ -166,8 +166,8 @@ def convert_a3m_ffindex(db_dir, db_name, msa_fftuple, cores=1, stdout=None,
     # This command assumes that the msa_fftuple holds the path to the ffindex
     # data file at index 0 and the ffindex index file at index 1.
     # The parameter set is supplied by the HHsuite3 documentation.
-    command = (f"{msa_fftuple[0]} {msa_fftuple[1]} "
-               f"-d {a3m_ffdata} -i {a3m_ffindex} "
+    command = (f"'{msa_fftuple[0]}' '{msa_fftuple[1]}' "
+               f"-d '{a3m_ffdata}' -i '{a3m_ffindex}' "
                "-- hhconsensus -M 50 -maxres 65535 "
                "-i stdin -oa3m stdout -v 0")
 
@@ -214,8 +214,8 @@ def convert_hmm_ffindex(db_dir, db_name, a3m_fftuple, cores=1, stdout=None,
 
     # This command assumes that the a3m_fftuple holds the path to the ffindex
     # data file at index 0 and the ffindex index file at index 1.
-    command = (f"{a3m_fftuple[0]} {a3m_fftuple[1]} "
-               f"-i {hmm_ffindex} -d {hmm_ffdata} "
+    command = (f"'{a3m_fftuple[0]}' '{a3m_fftuple[1]}' "
+               f"-i '{hmm_ffindex}' -d '{hmm_ffdata}' "
                "-- hhmake -i stdin -o stdout -v 0")
 
     # If parallel processing with mpirun is desired, use ffindex_apply_mpi.
@@ -260,7 +260,7 @@ def create_cs219_ffindex(db_dir, db_name, cores=1, use_mpi=False,
 
     # The parameter set is supplied by the HHsuite3 documentation
     command = ("cstranslate -f -x 0.3 -c 4 -I a3m "
-               f"-i {a3m_ffpath} -o {cs219_ffpath}")
+               f"-i '{a3m_ffpath}' -o '{cs219_ffpath}'")
 
     if use_mpi:
         command = "".join([f"mpirun -np {cores}", command])
@@ -291,7 +291,7 @@ def create_sorting_file(cs219_ffindex, db_dir, sorting_file=None,
         sorting_file = db_dir.joinpath("sorting.dat")
 
     # The parameter set is supplied by the HHsuite3 documentation
-    sort_command = f"sort -k3 -n -r {cs219_ffindex} "
+    sort_command = f"sort -k3 -n -r '{cs219_ffindex}' "
     cut_command = "cut -f1"
 
     split_sort_command = shlex.split(sort_command)
@@ -306,7 +306,8 @@ def create_sorting_file(cs219_ffindex, db_dir, sorting_file=None,
 
     # Writes the output of the cut command into file, after decoding
     with sorting_file.open(mode="w") as filehandle:
-        filehandle.write((cut_process.communicate()[0]).decode("utf-8"))
+        out, err = cut_process.communicate()
+        filehandle.write((out).decode("utf-8"))
 
     return sorting_file
 
@@ -330,9 +331,9 @@ def sort_ffindex(db_dir, sorting_file, ffindex_tuple, stdout=None):
     ord_ffindex = db_dir.joinpath("".join([ffindex_tuple[1].stem,
                                            "ordered.ffindex"]))
 
-    command = (f"ffindex_order {sorting_file} "
-               f"{ffindex_tuple[0]} {ffindex_tuple[1]} "
-               f"{ord_ffdata} {ord_ffindex}")
+    command = (f"ffindex_order '{sorting_file}' "
+               f"'{ffindex_tuple[0]}' '{ffindex_tuple[1]}' "
+               f"'{ord_ffdata}' '{ord_ffindex}'")
 
     split_command = shlex.split(command)
     with Popen(args=split_command, stdout=stdout, stderr=stdout) as process:
