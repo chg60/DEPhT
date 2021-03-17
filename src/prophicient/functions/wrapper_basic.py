@@ -1,4 +1,5 @@
-import pathlib
+from pathlib import Path
+from subprocess import Popen
 
 from src.prophicient.functions.run import run
 
@@ -20,7 +21,7 @@ def autoannotate(filepath, output_dir):
 
 
 def hhsearch(input_file, output_dir, database, cutoff):
-   # take in three arguments instead
+    # take in three arguments instead
     """
     Wrapper for HHSearch
     :param args: list of parsed arguments
@@ -40,10 +41,11 @@ def hhsearch(input_file, output_dir, database, cutoff):
 
         # with Popen(["hhsearch", "-i", input_file, "-d", database, "-e", cutoff], stdout=output, stderr=output) as p:
         # out = p.stdout.read().decode("utf-8")
-        #err = p.stderr.read().decode("utf-8")
+        # err = p.stderr.read().decode("utf-8")
 
-        with Popen(["hhsearch", "-i", input_file, "-d", database, "-e", cutoff],
-                stdout=output, stderr=output) as process:
+        with Popen(["hhsearch", "-i", input_file, "-d",
+                    database, "-e", cutoff],
+                   stdout=output, stderr=output) as process:
             process.communicate()
 
     return output_file
