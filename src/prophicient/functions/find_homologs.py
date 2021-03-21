@@ -1,20 +1,19 @@
 from prophicient.classes import hhresult_parsing
-from prophicient.functions import multiprocesses, wrapper_basic
+from prophicient.functions import multiprocess, wrapper_basic
 
 
-DEFAULTS = {"expect_cutoff": 0.0001, "probability": 0.9}
+DEFAULTS = {"expect_cutoff": 0.0001, "probability": 90}
 
 
 def find_homologs(trans_dir, output_dir, database_path, cores=1,
                   expect_cutoff=DEFAULTS["expect_cutoff"],
                   probability=DEFAULTS["probability"],
                   verbose=False):
-    work_items = []
-    for input_file in trans_dir.iter_dir():
-        work_items.append((input_file,))
+    work_items = create_job_queue(trans_dir, output_dir, database_path,
+                                  expect_cutoff)
 
-    multiprocesses.parallelize(work_items, cores, wrapper_basic.hhsearch,
-                               verbose=verbose)
+    multiprocess.parallelize(work_items, cores, wrapper_basic.hhsearch,
+                             verbose=verbose)
 
     hhresult_objects = []
     for hhresult_file in output_dir.iterdir():
@@ -22,7 +21,19 @@ def find_homologs(trans_dir, output_dir, database_path, cores=1,
         if hhresult is not None:
             hhresult_objects.append(hhresult)
 
-    return hhresult_objects
+    hit_gene_ids = [hhresult.query_id for hhresult in hhresult_objects]
+
+    return hit_gene_ids
+
+
+def create_job_queue(input_dir, output_dir, database, cutoff):
+    jobs = []
+
+    for filepath in input_dir.iterdir():
+        if filepath.suffix == ".fasta":
+            jobs.append((filepath, output_dir, database, cutoff))
+
+    return jobs
 
 
 def test_homology(hhresult_file, probability):
@@ -33,7 +44,7 @@ def test_homology(hhresult_file, probability):
         return None
 
     hhresult.matches.sort(key=lambda x: x.probability, reverse=True)
-    if hhresult.matches[0].probability < probability:
+    if float(hhresult.matches[0].probability) < probability:
         return None
 
     return hhresult
