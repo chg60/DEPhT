@@ -2,7 +2,7 @@ from Bio.SeqFeature import (FeatureLocation, SeqFeature)
 from Bio.SeqRecord import SeqRecord
 
 from numpy import (average, std)
-from src.prophicient.functions import (att, gene_density)
+from prophicient.functions import (att, gene_density)
 
 
 # GLOBAL VARIABLES
@@ -14,7 +14,8 @@ DEFAULTS = {"bin_width": gene_density.DEFAULTS["bin_width"],
 
 def extract_naive_prophages(record, working_dir,
                             bin_width=DEFAULTS["bin_width"],
-                            window_size=DEFAULTS["window_size"]):
+                            window_size=DEFAULTS["window_size"],
+                            method="kmer_count", split="peak"):
     gene_dense_records_and_regions = prefilter_genome(record,
                                                       bin_width=bin_width,
                                                       window_size=window_size)
@@ -24,21 +25,29 @@ def extract_naive_prophages(record, working_dir,
         region_record, region_feature, peak = gene_dense_records_and_regions[i]
         sequence = str(region_record.seq)
 
-        print(f"{region_record.id} ({region_feature.location.start},"
-              f"{region_feature.location.end}) has peak at {peak}")
-        if True:
+        if split == "peak":
             half = peak - region_feature.location.start
             l_region = sequence[:half-1]
             r_region = sequence[half+1:]
-        else:
+        elif split == "half":
             half = len(sequence) // 2
             l_region = sequence[:half-1]
             r_region = sequence[half+1:]
+        else:
+            raise NotImplementedError(f"'{split}' not recognized as valid "
+                                      "gene-dense region splitting option.")
 
         name = (f"{record.id}_{i}")
-        attL_feature, attR_feature = att.find_attatchment_site(
-                                        l_region, r_region, working_dir,
-                                        name=name)
+        if method == "blast":
+            attL_feature, attR_feature = att.blast_attachment_site(
+                                            l_region, r_region, working_dir,
+                                            name=name)
+        elif method == "kmer_count":
+            attL_feature, attR_feature = att.kmer_count_attachment_site(
+                                                    l_region, r_region)
+        else:
+            raise NotImplementedError(f"'{method}' not recognized as valid "
+                                      "att site algorithm option.")
 
         if attL_feature is None or attR_feature is None:
             continue
