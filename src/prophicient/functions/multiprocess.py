@@ -5,7 +5,7 @@ Adapted from https://docs.python.org/3/library/multiprocessing.html
 
 import multiprocessing as mp
 
-from src.prophicient.classes.progress import Progress
+from prophicient.classes.progress import Progress
 
 # Make sure new processes are forked, not spawned
 mp.set_start_method("fork")

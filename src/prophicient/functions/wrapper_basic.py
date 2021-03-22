@@ -1,6 +1,6 @@
-import pathlib
+from subprocess import PIPE, Popen, DEVNULL
 
-from src.prophicient.functions.run import run
+from prophicient.functions.run import run
 
 
 def autoannotate(filepath, output_dir):
@@ -20,30 +20,30 @@ def autoannotate(filepath, output_dir):
 
 
 def hhsearch(input_file, output_dir, database, cutoff):
-   # take in three arguments instead
+    # take in three arguments instead
     """
     Wrapper for HHSearch
     :param args: list of parsed arguments
     :type: list
     """
 
-    output_file = Path(output_dir/(input_file.stem + ".hhr"))
+    output_file = output_dir.joinpath(input_file.stem).with_suffix(".hhr")
 
-    print(output_file)
+    # run hhsearch
+    # subprocess.run(["hhsearch", "-i", input_file,
+    #                "-d", database, "-e", cutoff])
 
-    with open(output_file, "w") as output:
+    # return output file instead of out
 
-        # run hhsearch
-        # subprocess.run(["hhsearch", "-i", input_file, "-d", database, "-e", cutoff])
+    # with Popen(["hhsearch", "-i", input_file,
+    #             "-d", database, "-e", cutoff],
+    #            stdout=output, stderr=output) as p:
+    # out = p.stdout.read().decode("utf-8")
+    # err = p.stderr.read().decode("utf-8")
 
-        # return output file instead of out
-
-        # with Popen(["hhsearch", "-i", input_file, "-d", database, "-e", cutoff], stdout=output, stderr=output) as p:
-        # out = p.stdout.read().decode("utf-8")
-        #err = p.stderr.read().decode("utf-8")
-
-        with Popen(["hhsearch", "-i", input_file, "-d", database, "-e", cutoff],
-                stdout=output, stderr=output) as process:
-            process.communicate()
+    with Popen(["hhsearch", "-i", input_file, "-o", output_file,
+                "-d", database, "-e", str(cutoff)],
+               stdout=PIPE, stderr=DEVNULL) as process:
+        process.communicate()
 
     return output_file
