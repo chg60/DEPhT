@@ -8,7 +8,7 @@ DEFAULTS = {"expect_cutoff": 0.0001, "probability": 90}
 def find_homologs(trans_dir, output_dir, database_path, cores=1,
                   expect_cutoff=DEFAULTS["expect_cutoff"],
                   probability=DEFAULTS["probability"],
-                  verbose=False):
+                  sort_attr="score", verbose=False):
     work_items = create_job_queue(trans_dir, output_dir, database_path,
                                   expect_cutoff)
 
@@ -20,6 +20,9 @@ def find_homologs(trans_dir, output_dir, database_path, cores=1,
         hhresult = test_homology(hhresult_file, probability)
         if hhresult is not None:
             hhresult_objects.append(hhresult)
+
+    hhresult_objects.sort(key=lambda x: getattr(x.matches[0], sort_attr),
+                          reverse=True)
 
     hit_gene_ids = [hhresult.query_id for hhresult in hhresult_objects]
 
