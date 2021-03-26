@@ -114,12 +114,12 @@ def kmer_count_attachment_site(l_seq, r_seq, k=DEFAULT["k"]):
     kmer_contig = kmer_contigs[0]
 
     attL_start = kmer_contig[1] + 1
-    attL_end = kmer_contig[1] + len(kmer_contig)
+    attL_end = kmer_contig[1] + len(kmer_contig[0])
     attL_feature = SeqFeature(FeatureLocation(attL_start, attL_end),
                               strand=1, type="attL")
 
     attR_end = kmer_contig[2]
-    attR_start = kmer_contig[2] - len(kmer_contig)
+    attR_start = kmer_contig[2] - len(kmer_contig[0])
     attR_feature = SeqFeature(FeatureLocation(attR_start, attR_end),
                               strand=1, type="attR")
 

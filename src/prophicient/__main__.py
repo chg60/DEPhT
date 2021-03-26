@@ -11,12 +11,14 @@ import pathlib
 import time
 
 from Bio import SeqIO
+from Bio.SeqRecord import SeqRecord
 from Bio.SeqFeature import FeatureLocation, SeqFeature
 
+from prophicient.functions.att import kmer_count_attachment_site
 from prophicient.functions.fasta import write_fasta
 from prophicient.functions.multiprocess import CPUS
 from prophicient.functions.wrapper_basic import autoannotate
-from prophicient.functions.prefilter import prefilter_genome
+from prophicient.functions.prefilter import prefilter_genome, realign_subrecord
 from prophicient.functions.find_homologs import find_homologs
 
 # GLOBAL VARIABLES
@@ -101,15 +103,46 @@ def execute_prophicient(infile, outdir, database, cores=1, verbose=False):
                                             verbose=verbose)
 
             extracted_prophages = list()
-            for region_data, integrase_homologs in putative_prophage_regions:
-                putative_prophage = extract_prophage(region_data[0],
-                                                     integrase_homologs)
+            for region_data, integrase_homolog in putative_prophage_regions:
+                prophage_data = extract_prophage(region_data[0],
+                                                 integrase_homolog,
+                                                 verbose=verbose)
 
-                extracted_prophages.append(putative_prophage)
+                prophage_global_start = (region_data[1].location.start +
+                                         prophage_data[1])
+                prophage_global_end = (region_data[1].location.start +
+                                       prophage_data[2])
+
+                if verbose:
+                    print("Prophage detected at: "
+                          f"({prophage_global_start}, {prophage_global_end})")
+                    print("...Att sequence detected:\n"
+                          f"\t\t{prophage_data[3]}")
+
+                extracted_prophages.append(prophage_data[0])
 
 
-def extract_prophage(record, integrase_features):
-    pass
+def extract_prophage(record, integrase_feature, verbose=False):
+    l_region = str(record.seq[:integrase_feature.location.start])
+    r_region = str(record.seq[integrase_feature.location.start+1:])
+
+    attL, attR = kmer_count_attachment_site(l_region, r_region)
+    print(attL)
+    att = str(attL.extract(record.seq))
+
+    prophage_start = attL.location.start
+    prophage_end = integrase_feature.location.start + attR.location.end
+    prophage_feature = SeqFeature(FeatureLocation(prophage_start,
+                                                  prophage_end))
+    prophage_seq = prophage_feature.extract(record.seq)
+
+    prophage_record = SeqRecord(prophage_seq)
+    prophage_record.id = record.id
+
+    realign_subrecord(record, prophage_record, prophage_start, prophage_end)
+    prophage_record.features.sort(key=lambda x: x.location.start)
+
+    return prophage_record, prophage_start, prophage_end, att
 
 
 def evaluate_regions_of_interest(gene_dense_records_and_features, working_dir,
@@ -131,19 +164,18 @@ def evaluate_regions_of_interest(gene_dense_records_and_features, working_dir,
         data_dir = region_dir.joinpath("data")
         data_dir.mkdir()
 
-        integrase_features = find_integrase_homologs(region_tuple[0], data_dir,
-                                                     database, cores=cores,
-                                                     verbose=verbose)
+        integrase_feature = find_integrase_homologs(region_tuple[0], data_dir,
+                                                    database, cores=cores,
+                                                    verbose=verbose)
 
-        if not integrase_features:
+        if not integrase_feature:
             continue
 
         if verbose:
-            for feature in integrase_features:
-                print("...Integrase homolog found at "
-                      f"{(region_start + feature.location.start)}")
+            print("...Integrase homolog found at "
+                  f"{(region_start + integrase_feature.location.start)}")
 
-        putative_prophage_regions.append((region_tuple, integrase_features))
+        putative_prophage_regions.append((region_tuple, integrase_feature))
 
     return putative_prophage_regions
 
@@ -169,13 +201,15 @@ def find_integrase_homologs(record, working_dir, database, cores=1,
     hhresults_dir = working_dir.joinpath("hhresults")
     hhresults_dir.mkdir()
 
-    phagey_gene_ids = find_homologs(trans_dir, hhresults_dir, database,
-                                    cores=cores, verbose=verbose)
+    integrase_homologs = find_homologs(trans_dir, hhresults_dir, database,
+                                       cores=cores, verbose=verbose)
 
-    integrase_features = [gene_id_feature_map[gene_id]
-                          for gene_id in phagey_gene_ids]
+    if not integrase_homologs:
+        return
 
-    return integrase_features
+    integrase_homolog = integrase_homologs[0]
+    integrase_feature = gene_id_feature_map[integrase_homolog]
+    return integrase_feature
 
 
 def annotate_record(record, working_dir):
