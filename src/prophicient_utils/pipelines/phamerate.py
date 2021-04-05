@@ -8,9 +8,9 @@ import pathlib
 import shutil
 import json
 
-from src.prophicient.classes.database import Database, Pham
-from src.prophicient.functions.fasta import parse_fasta
-from src.prophicient.functions.mmseqs import *
+from prophicient.functions.fasta import parse_fasta
+from prophicient_utils.classes.database import Database, Pham
+from prophicient_utils.functions.mmseqs import *
 
 
 def parse_args(arguments):
