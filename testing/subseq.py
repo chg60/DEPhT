@@ -1,10 +1,9 @@
 from Bio import SeqIO
-from Bio.Seq import Seq
 from pathlib import Path
 
 import argparse
 import sys
-import time
+# import time
 
 
 # Global variables
@@ -181,30 +180,7 @@ def print_data(manual_data, testing_data):
         print("----------------------------------------------------\n")
 
 
-def main():
-
-    # Read parent sequence
-    # parent_seq = open_file("Phoebe.fasta
-    # Coordinates of the parent sequence
-    # parent_tuple = get_parent_ends() #TODO
-    # Read manually annotated sequence
-    # manual_seq = open_file("Phoebe.fasta")
-    # Read the hypothetical prophage sequence
-    # hypo_seq = open_file("Phoebe.fasta")
-    # Find the manual annotation lengths
-    # begin = find_sub(parent_seq, manual_seq)
-    # Coordinates of manual relative to parent
-    # manual_tuple = (begin, begin
-    #                + len(manual_seq))
-    # Find test Coordinates
-    # test_left = find_sub(parent_seq, hypo_seq)
-
-    # Hypothetical Coordinates
-    # hypo_tuple = (test_left,
-    #              test_left + len(hypo_seq))
-
-    main_dir = get_dir()    # all the prophages are inside this directory
-
+def compile_data(main_dir):
     if main_dir.is_dir() is False:
         print("Invalid directory")
         sys.exit(1)
@@ -219,7 +195,7 @@ def main():
 
         name = dir.name
         parent_data = get_parent_data(name, dir)
-        parent_ends = parent_data[0]
+        # parent_ends = parent_data[0]
         parent_seq = parent_data[1]
 
         # dictionary with all the data for each phage
@@ -241,6 +217,10 @@ def main():
                 testing_data[name][data_from] = data
 
     print_data(manual_data, testing_data)
+
+
+def main():
+    compile_data(get_dir())    # all the prophages are inside this directory
 
 
 if __name__ == '__main__':
