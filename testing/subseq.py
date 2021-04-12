@@ -24,10 +24,21 @@ def open_file(filename):
     # print(filename)
 
     # Open file
+
+    '''
     with open(filename, "r") as fh:
         # Convert file to a biopython seq object
+        # use SeqIO.parse
+        # only take in longest sequence!
         record = SeqIO.read(fh, "fasta")
     return record
+    '''
+
+    contigs = [record for record in SeqIO.parse(filename, "fasta")]
+    contig_lengths = [len(record) for record in contigs]
+    longest_contig = contigs[contig_lengths.index(max(contig_lengths))]
+
+    return longest_contig
 
 
 def find_sub(parent, other):
