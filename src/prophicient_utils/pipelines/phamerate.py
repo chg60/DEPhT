@@ -13,17 +13,22 @@ from prophicient_utils.classes.database import Database, Pham
 from prophicient_utils.functions.mmseqs import *
 
 
-def parse_args(arguments):
+def parse_phamerate_args(unparsed_args):
     """
 
     :param arguments:
     :return:
     """
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument("fasta", type=pathlib.Path, help="path to the FASTA file containing genes to phamerate")
-    p.add_argument("outdir", type=pathlib.Path, help="directory where file I/O can occur")
-    p.add_argument("param_file", type=pathlib.Path, help="path to the JSON file of MMseqs2 parameters to use")
-    return p.parse_args(arguments)
+
+    p.add_argument("fasta", type=pathlib.Path,
+                   help="path to the FASTA file containing genes to phamerate")
+    p.add_argument("outdir", type=pathlib.Path,
+                   help="directory where file I/O can occur")
+    p.add_argument("param_file", type=pathlib.Path,
+                   help="path to the JSON file of MMseqs2 parameters to use")
+
+    return p.parse_args(unparsed_args)
 
 
 def parse_param_file(param):
@@ -135,16 +140,8 @@ def phamerate(sequence_db, db, tmpdir, first_iter, second_iter=None):
     return temp_phams
 
 
-if __name__ == "__main__":
-    # If no args given, add help flag
-    if len(sys.argv) == 1:
-        sys.argv.append("-h")
-
-    args = parse_args(sys.argv[1:])
-    fasta = args.fasta
-    outdir = args.outdir
+def execute_phamerate_pipeline(fasta, outdir, param_file): 
     tempdir = outdir.joinpath("temp")
-    param_file = args.param_file
 
     # Make sure outdir and tmpdir exist
     if not outdir.is_dir():
@@ -186,3 +183,20 @@ if __name__ == "__main__":
 
     # Clean up temporary directory
     shutil.rmtree(tempdir)
+    pass
+
+
+def main(unparsed_args):
+    args = parse_phamerate_args(unparsed_args)
+
+    execute_phamerate_pipeline(args.fasta, args.outdir, args.param_file)
+
+
+if __name__ == "__main__":
+    # If no args given, add help flag
+    if len(sys.argv) == 1:
+        sys.argv.append("-h")
+
+    main(sys.argv[1:])
+
+    

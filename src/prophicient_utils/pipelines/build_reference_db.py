@@ -9,7 +9,7 @@ from prophicient_utils.functions import blastdb
 
 # GLOBAL VARIABLES
 # -----------------------------------------------------------------------------
-DEFAULTS = {"name": "References"}
+DEFAULTS = {"name": "Mycobacteria"}
 
 
 # MAIN FUNCTIONS
@@ -21,7 +21,10 @@ def parse_build_reference_db(unparsed_args):
     parser.add_argument("output_dir", type=pathlib.Path)
 
     parser.add_argument("-v", "--verbose", action="store_true")
-    
+    parser.add_argument("-n", "--name", type=str)
+   
+    parser.set_defaults(**DEFAULTS)
+
     args = parser.parse_args(unparsed_args)
     return args
 
@@ -50,7 +53,8 @@ def write_concatenated_fasta(input_dir, cc_fasta_path):
 
 def main(unparsed_args):
     args = parse_build_reference_db(unparsed_args)
-    build_reference_db(args.input_dir, args.output_dir)
+    build_reference_db(args.input_dir, args.output_dir, name=args.name,
+                       verbose=args.verbose)
 
 
 if  __name__ == "__main__":

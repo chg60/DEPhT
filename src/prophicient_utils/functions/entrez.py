@@ -67,3 +67,64 @@ def get_records(accession_list, db="nucleotide", rettype="gb", retmode="text"):
     fetch_handle.close()
 
     return retrieved_records
+
+
+def parse_identifiers_file(identifiers_file):
+    """Parses a taxon identifiers file, assuming each ID is on
+    a separate line.
+
+    :param identifiers_file: Path to a file containing taxon identifiers.
+    :type identifiers_file: pathlib.Path
+    :returns: A set of identifiers.
+    :rtype: set()
+    """
+    ids = set()
+
+    with identifiers_file.open(mode="r") as filehandle:
+        for line in filehandle:
+            ids.add(line.rstrip())
+
+    return ids 
+
+
+def esearch_taxa(taxon_id, db="nucleotide", idtype="acc", retmax=99999):
+    """Searches for genome accession IDs using a taxon identifier.
+
+    :param taxon_id: Taxon identifier to find corresponding accession IDs for.
+    :type taxon_id: str
+    :param db: Name of the NCBI database to search:
+    :type db: str
+    :param idtype: Type of identifier to return in the search:
+    :type idtype: str
+    :param retmax: Number of maximum identifiers to retrieve.
+    :type retmax: int
+    :returns: Returns specified identifier type related to the taxon ID
+    :rtype: list[str]
+    """
+    taxon_identifier_ref = "".join(["txid", str(taxon_id), "[Orgn]"])
+
+    record = run_esearch(db=db, idtype=idtype, retmax=retmax,
+                                term=taxon_identifier_ref)
+
+    return record["IdList"]
+
+
+def retrieve_genome_records(taxon_ids):
+    """Retrieves genome Biopython SeqRecords from a list of taxon NCBI
+    identifiers.
+
+    :param taxon_ids: Taxon identifiers to find corresponding genomes from
+    :type taxon_ids: list[str]
+    :returns: A list of SeqRecord objects retrieved using taxon identifiers.
+    :rtype: list[Bio.SeqRecord.SeqRecord]
+    """
+    genome_accessions = set()
+    for taxon_id in taxon_ids:
+        taxon_accessions = esearch_taxa(taxon_id)
+        for taxon_accession in taxon_accessions:
+            genome_accessions.append(taxon_accession)
+
+    genome_accessions = list(genome_accessions)
+    records = get_records(genome_accessions)
+
+    return records
