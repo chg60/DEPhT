@@ -13,6 +13,8 @@ CUT_OFF = 0.5
 # Will convert the file to a biopython object
 def open_file(filename):
 
+    # print(filename)
+
     """
     Converts the FASTA formatted file into a biopython object
     :param: filename
@@ -65,6 +67,39 @@ def find_sub(parent, other):
     return left_coor
 
 
+def comparison(manual_data, testing_data):
+    # testing_data format
+    # {phage_name: {software_name: {prophage_name: <ends>, ...}, ...}, ...}
+    # manual_data format
+    # {phage_name: {prophage_name: <ends>, ...}, ...}
+
+    # go through both dictionaries
+    # compare each testing data ends tuple with every manually annotated one
+
+    matches = {}
+
+    for phage in testing_data:
+        # list of all prophage ends
+        matches[phage] = {}
+        for software in testing_data[phage]:
+            ends_list = list(testing_data[phage][software].values())
+
+            matches[phage][software] = []
+
+            for ends_tuple in ends_list:
+                manual_ends = list(manual_data[phage].values())
+                ind = ends_list.index(ends_tuple)
+                proph_name = list(testing_data[phage][software].keys())[ind]
+
+                for manual_ends_tuple in manual_ends:
+                    binary = compare_ends(manual_ends_tuple, ends_tuple)
+
+                    if binary is True:
+                        matches[phage][software].append(proph_name)
+
+    return matches
+
+
 def compare_ends(manual_coor, test_coor):
     """
     Compares the manually annotated ends with the ends from testing software
@@ -73,6 +108,7 @@ def compare_ends(manual_coor, test_coor):
     :return: True or False based on whether the overlap is over 50% or not
     :rtype: bool
     """
+
     manual_positions = set()
     test_positions = set()
 
@@ -165,30 +201,45 @@ def get_child_data(child_dir, parent_seq):
     return ends
 
 
-def print_data(manual_data, testing_data):
+def print_data(manual_data, testing_data, matches):
     """
     Prints the Testing Data
     :param manual_data: Data from the manually annotated genome
     :param testing_data: Data from testing software
     """
 
-    print("\n----------------------------------------------------")
-    print("Prophage\tEnds")
-    print("----------------------------------------------------\n")
+    print("\n-----------------------------------------------------------")
+    print("Prophage\tMatch\t\tEnds")
+    print("-----------------------------------------------------------\n")
     for bac in manual_data:
         print(bac)
         print("Manually Annotated")
         for prophage in manual_data[bac]:
-            print(f"{prophage}\t{manual_data[bac][prophage]}")
+            print(f"{prophage}\t\t\t{manual_data[bac][prophage]}")
 
         for child_dir in testing_data[bac]:
             print("\n")
             print(child_dir)
-            for prophage in testing_data[bac][child_dir]:
-                print(f"{prophage}\t\t{testing_data[bac][child_dir][prophage]}"
-                      )
 
-        print("----------------------------------------------------\n")
+            for prophage in testing_data[bac][child_dir]:
+                match = False
+                if prophage in matches[bac][child_dir]:
+                    match = True
+                print(f"{prophage}\t\t{match}"
+                      f"\t\t{testing_data[bac][child_dir][prophage]}")
+
+        print("-----------------------------------------------------------\n")
+
+
+def metrics(testing_data):
+    # true positive = binary classifier
+    # sn = (true_positive)/(true_positive+false_negative)
+    # ppv = (true_positive)/(true_positive+false_positive)
+    # for each software - calculate sensitivity, ppv
+    # for each, count the True/False of all prophages - total
+
+    metric_data = {"sn": {}, "ppv": {}}
+    print()
 
 
 def compile_data(main_dir):
@@ -227,7 +278,19 @@ def compile_data(main_dir):
                 data = get_child_data(child_dir, parent_seq)
                 testing_data[name][data_from] = data
 
-    print_data(manual_data, testing_data)
+    # testing_data format
+    # {phage_name: {software_name: {prophage_name: <ends>, ...}, ...}, ...}
+    # manual_data format
+    # {phage_name: {prophage_name: <ends>, ...}, ...}
+
+    # compare here - add binary classifier to testing_data
+
+    # print(testing_data)
+    matches = comparison(manual_data, testing_data)
+
+    print_data(manual_data, testing_data, matches)
+
+    # print(matches)
 
 
 def main():
