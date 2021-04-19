@@ -1,6 +1,11 @@
 biopython~=1.77
-bitarray~=1.7.0
-numpy~=1.19.5
-networkx~=2.5
-matplotlib~=3.3.4
+bitarray~=2.0.0
+matplotlib~=3.4.1
 mmh3~=3.0.0
+numpy~=1.20.2
+networkx~=2.5
+pandas~=1.2.4
+pyrodigal~=0.4.7
+reportlab~=3.5.67
+sklearn~=0.0
+scikit-learn~=0.24.1
