@@ -12,7 +12,7 @@ from prophicient.functions.statistics import average
 RANDOM_STATE = 42
 
 # Default value ranges for model training
-N_ESTIMATORS = (100, 200, 250)
+N_ESTIMATORS = (100, 250, 500)
 CRITERION = ("entropy", "gini")
 MAX_FEATURES = ("log2", "sqrt", None)
 CLASS_WEIGHT = ("balanced", None)
@@ -21,11 +21,19 @@ PARAMS = itertools.product(N_ESTIMATORS, CRITERION, MAX_FEATURES, CLASS_WEIGHT)
 
 def train_random_forest_classifier(prophage_data, bacteria_data):
     """
-    Trains a random forest classifier
+    Train a random forest classifier, to achieve maximal training
+    accuracy in discriminating between prophage genes (`prophage_data`)
+    and bacterial genes (`bacteria_data`).
 
-    :param prophage_data:
-    :param bacteria_data:
-    :return:
+    The model with the highest average accuracy (across training
+    datasets) is re-trained against all the data, then returned
+    as `best_model`.
+
+    :param prophage_data: prophage gene features
+    :type prophage_data: pandas.DataFrame
+    :param bacteria_data: bacterial gene features
+    :type bacteria_data: pandas.DataFrame
+    :return: best_model
     """
     # Cast pandas DataFrames to numpy Arrays
     prophage_data = np.array(prophage_data)
