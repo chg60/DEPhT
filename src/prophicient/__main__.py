@@ -73,25 +73,30 @@ def main(arguments):
     # Verify that the input filepath is valid
     infile = args.infile
     if not infile.is_file():
-        print(f"'{str(infile)}' is not a valid input file - exiting")
+        print(f"'{str(infile)}' is not a valid input file - exiting...")
         sys.exit(1)
 
     outdir = args.outdir
     if not outdir.is_dir():
-        print(f"'{str(outdir)}' does not exist - creating it")
+        print(f"'{str(outdir)}' does not exist - creating it...")
         outdir.mkdir(parents=True)
+
+    gff3 = args.gff3
+    if gff3 and not gff3.is_file():
+        print(f"GFF3 file '{str(gff3)}' does not exist - rollback to "
+              f"auto-annotate...")
+        gff3 = None
 
     cpus = args.cpus
     verbose = args.verbose
-    draw_diagram = not args.no_graphics
+    diagram = not args.no_graphics
 
-    start = datetime.now()
-    find_prophages(infile, outdir, cpus, verbose, draw_diagram)
+    # Mark program start time
+    mark = datetime.now()
+    find_prophages(infile, outdir, gff3, cpus, verbose, diagram)
     # execute_prophicient(args.infile, args.outdir, args.database,
     #                     cores=args.cpus, verbose=args.verbose)
-    stop = datetime.now()
-    elapsed = str(stop - start)
-    print(f"\nTotal runtime: {elapsed}")
+    print(f"\nTotal runtime: {str(datetime.now() - mark)}")
 
 
 def find_prophages(fasta, outdir, gff3=None, cpus=CPUS, verbose=False,
@@ -137,7 +142,7 @@ def find_prophages(fasta, outdir, gff3=None, cpus=CPUS, verbose=False,
     mark = datetime.now()
     # TODO: add mechanism for skipping pyrodigal auto-annotation by
     #  associating records with gff3 file features
-    if gff3 and gff3.is_file():
+    if gff3:
         if verbose:
             print(f"\tUsing gff3 file '{str(gff3)}'...")
         # TODO: check each record's length against MIN_LENGTH - still
