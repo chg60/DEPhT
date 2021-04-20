@@ -52,9 +52,7 @@ def predict_cds_features(contig, meta=False):
     for cds in cds_caller.find_genes(sequence):
         ftr = SeqFeature(location=FeatureLocation(cds.begin-1, cds.end),
                          type="CDS", strand=cds.strand)
-        ftr.qualifiers["locus_tag"] = []
-        ftr.qualifiers["gene"] = []
-        ftr.qualifiers["product"] = []
+        ftr.qualifiers["product"] = ["hypothetical protein"]
         ftr.qualifiers["note"] = [f"rbs_motif: {cds.rbs_motif}; "
                                   f"rbs_spacer: {cds.rbs_spacer}"]
         ftr.qualifiers["translation"] = [cds.translate(11).rstrip("*")]
@@ -112,15 +110,11 @@ def aragorn_output_parser(filepath):
             if row[0] == "tmRNA":
                 ftr = SeqFeature(location=FeatureLocation(start - 1, end),
                                  type="tmRNA", strand=strand)
-                ftr.qualifiers["locus_tag"] = []
-                ftr.qualifiers["gene"] = []
                 tag_peptide = row[-1].rstrip("*")
                 ftr.qualifiers["note"] = [f"tag peptide: {tag_peptide}"]
             else:
                 ftr = SeqFeature(location=FeatureLocation(start - 1, end),
                                  type="tRNA", strand=strand)
-                ftr.qualifiers["locus_tag"] = []
-                ftr.qualifiers["gene"] = []
                 if "?" in row[0] or "SeC" in row[0] or "Pyl" in row[0]:
                     ftr.qualifiers["product"] = ["tRNA-OTHER"]
                 else:
