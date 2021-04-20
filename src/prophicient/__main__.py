@@ -4,67 +4,70 @@ identified as prophage candidates are further scrutinized, and
 attachment sites identified as accurately as possible before
 prophage extraction and generating the final report.
 """
-import re
-import sys
 import argparse
 import pathlib
-import time
+import sys
+from datetime import date, datetime
 
-from Bio import SeqIO
 from Bio.SeqRecord import SeqRecord
-from Bio.SeqFeature import FeatureLocation, SeqFeature
 
 from prophicient.functions.att import kmer_count_attachment_site
-from prophicient.functions.fasta import write_fasta
-from prophicient.functions.multiprocess import CPUS
-from prophicient.functions.wrapper_basic import autoannotate
-from prophicient.functions.prefilter import prefilter_genome, realign_subrecord
 from prophicient.functions.find_homologs import find_homologs
+from prophicient.functions.gene_prediction import *
+from prophicient.functions.multiprocess import CPUS, parallelize
+# from prophicient.functions.wrapper_basic import autoannotate
+from prophicient.functions.prefilter import prefilter_genome, realign_subrecord
+from prophicient.functions.prophage_prediction import *
+from prophicient.functions.visualization import prophage_diagram
 
 # GLOBAL VARIABLES
 # -----------------------------------------------------------------------------
-PRODIGAL_FORMAT = re.compile(r">\w+_(\d+) # (\d+) # (\d+) # (-?1) # ID=\w+;"
-                             r"partial=(\d+);start_type=(\w+);"
-                             r"rbs_motif=(.*|None);"
-                             r"rbs_spacer=(.*bp|None);gc_cont=(\d.\d+)\s+")
-
-ANNOTATIONS = {"molecule_type": "DNA",
-               "topology": "linear",
-               "data_file_division": "PHG",
-               "date": "",
-               "accessions": [],
-               "sequence_version": "1",
-               "keywords": [],
-               "source": "",
-               "organism": "",
-               "taxonomy": [],
+PACKAGE_DIR = pathlib.Path(__file__).resolve().parent
+DATE = date.today().strftime("%d-%b-%Y").upper()
+ANNOTATIONS = {"molecule_type": "DNA", "topology": "linear",
+               "data_file_division": "PHG", "date": DATE,
+               "accessions": [], "sequence_version": "1",
+               "keywords": [], "source": "",
+               "organism": "", "taxonomy": [],
                "comment": [""]}
+MIN_LENGTH = 20000      # Don't annotate short contigs
+META_LENGTH = 100000    # Medium-length contigs -> use metagenomic mode
 
 
 def parse_args(arguments):
     """
-    Parse command line arguments
-    :param arguments:  command line arguments that program was invoked with
+    Parse command line arguments.
+
+    :param arguments: command line arguments that program was invoked with
     :type arguments: list
+    :return: parsed_args
     """
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("-i", "--infile", type=pathlib.Path, required=True,
-                        help=("FASTA file containing nucleotide sequence to "
-                              "scan for prophages"))
-    parser.add_argument("-o", "--outdir", type=pathlib.Path,
-                        required=True,
-                        help="path where output files can be written")
-    parser.add_argument("-d", "--database", type=pathlib.Path,
-                        required=True,
-                        help="Path to a Prophicient database.")
-    parser.add_argument("-v", "--verbose", action="store_true",
-                        help="Toggles verbosity of pipeline.")
+    parser.add_argument("infile", type=pathlib.Path,
+                        help="path to a FASTA nucleotide sequence file to "
+                             "scan for prophages")
+    parser.add_argument("outdir", type=pathlib.Path,
+                        help="path where output files should be written")
+    parser.add_argument("--gff3", type=pathlib.Path,
+                        help="path to a GFF3 file, bypasses auto-annotation")
+    parser.add_argument("--verbose", action="store_true",
+                        help="toggles verbosity of pipeline")
+    parser.add_argument("--no-graphics", action="store_true",
+                        help="don't output genome map PDFs for identified "
+                             "prophages")
     parser.add_argument("--cpus", type=int, default=CPUS,
                         help=f"number of processors to use [default: {CPUS}]")
     return parser.parse_args(arguments)
 
 
 def main(arguments):
+    """
+    Main function that interfaces with command line args and the
+    program workflow.
+
+    :param arguments: command line arguments
+    :type arguments: list
+    """
     args = parse_args(arguments)
 
     # Verify that the input filepath is valid
@@ -73,19 +76,122 @@ def main(arguments):
         print(f"'{str(infile)}' is not a valid input file - exiting")
         sys.exit(1)
 
-    if not args.outdir.is_dir():
-        print(f"'{str(args.outdir)}' does not exist - creating it")
-        args.outdir.mkdir(parents=True)
+    outdir = args.outdir
+    if not outdir.is_dir():
+        print(f"'{str(outdir)}' does not exist - creating it")
+        outdir.mkdir(parents=True)
 
-    start = time.time()
-    execute_prophicient(args.infile, args.outdir, args.database,
-                        cores=args.cpus, verbose=args.verbose)
-    stop = time.time()
+    cpus = args.cpus
+    verbose = args.verbose
+    draw_diagram = not args.no_graphics
 
-    print("\nTime elapsed: {:.3f}".format(stop - start))
+    start = datetime.now()
+    find_prophages(infile, outdir, cpus, verbose, draw_diagram)
+    # execute_prophicient(args.infile, args.outdir, args.database,
+    #                     cores=args.cpus, verbose=args.verbose)
+    stop = datetime.now()
+    elapsed = str(stop - start)
+    print(f"\nTotal runtime: {elapsed}")
 
 
-def execute_prophicient(infile, outdir, database, cores=1, verbose=False):
+def find_prophages(fasta, outdir, gff3=None, cpus=CPUS, verbose=False,
+                   diagram=True):
+    """
+    Runs through all steps of prophage prediction:
+
+    * auto-annotation with Pyrodigal (skip if gff3)
+    * predict prophage genes using binary classifier
+    * identify prophage regions
+    * identify phage genes in prophage regions
+    * detect attL/attR
+    * extract final prophage sequences
+
+    :param fasta: the path to a fasta nucleotide sequence file
+    containing a mycobacterial genome to find prophages in
+    :type fasta: pathlib.Path
+    :param outdir: the path to a directory where output files should
+    be written
+    :type outdir: pathlib.Path
+    :param gff3: (optional) the path to a GFF3 file with an annotation
+    for the indicated fasta file
+    :type gff3: pathlib.Path
+    :param cpus: the maximum number of processors to use
+    :type cpus: int
+    :param verbose: should progress messages be printed along the way?
+    :type verbose: bool
+    :param diagram: should genome diagrams be created at the end?
+    :type diagram: bool
+    """
+    if verbose:
+        print("Loading FASTA file...")
+    # Mark FASTA load start
+    mark = datetime.now()
+    # Parse FASTA file - only keep contigs longer than MIN_LENGTH
+    contigs = [x for x in SeqIO.parse(fasta, "fasta") if len(x) >= MIN_LENGTH]
+    # Print FASTA load time
+    print(f"FASTA load: {str(datetime.now() - mark)}")
+
+    if verbose:
+        print("Beginning annotation...")
+    # Mark annotation start
+    mark = datetime.now()
+    # TODO: add mechanism for skipping pyrodigal auto-annotation by
+    #  associating records with gff3 file features
+    if gff3 and gff3.is_file():
+        if verbose:
+            print(f"\tUsing gff3 file '{str(gff3)}'...")
+        # TODO: check each record's length against MIN_LENGTH - still
+        #  skip these to be consistent
+        pass
+    else:
+        if verbose:
+            print("\tNo gff3 file - using Pyrodigal and Aragorn...")
+        for contig in contigs:
+            # Annotate record CDS & t(m)RNA features in-place
+            annotate_contig(contig, len(contig) < META_LENGTH)
+    # Print annotation time
+    print(f"Annotation: {str(datetime.now() - mark)}")
+
+    if verbose:
+        print("Looking for high-probability prophage regions...")
+    # Mark prophage prediction start
+    mark = datetime.now()
+    # Get dataframes of CDS features for binary classification
+    dataframes = [contig_to_dataframe(contig) for contig in contigs]
+    # Perform binary classification of contig CDS features
+    gene_predictions = [predict_prophage_genes(df) for df in dataframes]
+    # Initial pass at prophage identification
+    initial_prophages = [predict_prophage_coords(x, y) for x, y in zip(contigs, gene_predictions)]
+
+    # Print prophage prediction time
+    print(f"Prediction: {str(datetime.now() - mark)}")
+
+    if len(initial_prophages) == 0:
+        print(f"No complete prophages found in {str(fasta)}. PHASTER may "
+              f"be able to identify partial (dead) prophages.")
+        return
+
+    trimmed_prophages = list()
+    # TODO: add parallel hhsearch to find essential phage functions:
+    #  overwrite "hypothetical function" in cds.qualifiers["product"][0]
+    # TODO: add attachment core detection
+    # TODO: clean up final prophage annotations (add qualifiers for gene and
+    #  locus_tag, and maybe gene features for each CDS/tRNA/tmRNA)
+    # TODO: store final annotated records in `trimmed_prophages`
+
+    if verbose:
+        print("Generating final reports...")
+    mark = datetime.now()
+    for prophage in trimmed_prophages:
+        genbank_filename = outdir.joinpath(f"{prophage.name}.gbk")
+        SeqIO.write(prophage, genbank_filename, "genbank")
+        if diagram:
+            diagram_filename = outdir.joinpath(f"{prophage.name}.pdf")
+            prophage_diagram(prophage, diagram_filename)
+    print(f"File Dumps: {str(datetime.now() - mark)}")
+
+
+def execute_prophicient(infile, outdir, database, cores, verbose=False):
     # Parse the input FASTA file
     with infile.open("r") as fasta_reader:
         record_iterator = SeqIO.parse(fasta_reader, "fasta")
