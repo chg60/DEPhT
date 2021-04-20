@@ -12,7 +12,7 @@ from Bio.SeqFeature import SeqFeature, FeatureLocation
 from prophicient.functions.run import run
 
 
-def annotate(contig, meta=False):
+def annotate_contig(contig, meta=False):
     """
     Annotates CDS and t(m)RNA features on the given contig, in-place.
     Identified features are sorted on their start coordinates.
