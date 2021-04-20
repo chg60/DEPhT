@@ -49,13 +49,7 @@ def predict_cds_features(contig, meta=False):
     if not meta:
         cds_caller.train(sequence)
 
-    for cds in cds_caller.find_genes(sequence):
-        ftr = SeqFeature(location=FeatureLocation(cds.begin-1, cds.end),
-                         type="CDS", strand=cds.strand)
-        ftr.qualifiers["product"] = ["hypothetical protein"]
-        ftr.qualifiers["note"] = [f"rbs_motif: {cds.rbs_motif}; "
-                                  f"rbs_spacer: {cds.rbs_spacer}"]
-        ftr.qualifiers["translation"] = [cds.translate(11).rstrip("*")]
+    for ftr in pyrodigal_output_parser(cds_caller.find_genes(sequence)):
         contig.features.append(ftr)
 
 
@@ -82,6 +76,24 @@ def predict_trna_features(contig):
     # Parse Aragorn tRNAs into new SeqFeatures
     for ftr in aragorn_output_parser(outfile):
         contig.features.append(ftr)
+
+
+def pyrodigal_output_parser(genes):
+    """
+    Generator that creates SeqFeatures from genes in the given
+    Pyrodigal gene predictions.
+
+    :param genes: the genes predicted by pyrodigal
+    :type genes: pyrodigal.Genes
+    """
+    for gene in genes:
+        ftr = SeqFeature(location=FeatureLocation(gene.begin - 1, gene.end),
+                         type="CDS", strand=gene.strand)
+        ftr.qualifiers["product"] = ["hypothetical protein"]
+        ftr.qualifiers["note"] = [f"rbs_motif: {gene.rbs_motif}; "
+                                  f"rbs_spacer: {gene.rbs_spacer}"]
+        ftr.qualifiers["translation"] = [gene.translate(11).rstrip("*")]
+        yield ftr
 
 
 def aragorn_output_parser(filepath):
