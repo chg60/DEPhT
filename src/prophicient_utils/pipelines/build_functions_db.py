@@ -2,8 +2,6 @@ import argparse
 import pathlib
 import sys
 
-from Bio import SeqIO
-
 from prophicient_utils.functions import hhsuitedb
 
 
@@ -35,18 +33,17 @@ def parse_build_functions_db(unparsed_args):
 def build_functions_db(input_dir, output_dir, name=DEFAULTS["name"],
                        cores=1, use_mpi=False, verbose=False):
     output_dir.mkdir(exist_ok=True, parents=True)
-    
+
     hhsuitedb.create_hhsuitedb(input_dir, output_dir, name, cores=cores,
                                use_mpi=use_mpi)
 
 
 def main(unparsed_args):
-    args = parse_build_reference_db(unparsed_args)
-    build_reference_db(args.input_dir, args.output_dir, name=args.name,
-                       cores=cpus, use_mpi=args.use_mpi, verbose=args.verbose)
+    args = parse_build_functions_db(unparsed_args)
+    build_functions_db(args.input_dir, args.output_dir, name=args.name,
+                       cores=args.cpus, use_mpi=args.use_mpi,
+                       verbose=args.verbose)
 
 
 if __name__ == "__main__":
     main(sys.argv[1:])
-
-

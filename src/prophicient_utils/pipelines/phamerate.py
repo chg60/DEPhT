@@ -10,7 +10,7 @@ import json
 
 from prophicient.functions.fasta import parse_fasta
 from prophicient_utils.classes.database import Database, Pham
-from prophicient_utils.functions.mmseqs import *
+from prophicient_utils.functions import mmseqs
 
 
 def parse_phamerate_args(unparsed_args):
@@ -91,10 +91,12 @@ def phamerate(sequence_db, db, tmpdir, first_iter, second_iter=None):
     cmode, cstep, sens, ident, cover, evalue = first_iter
 
     # Cluster database using given parameters
-    mmseqs_cluster(sequence_db, cluster_db, tmpdir, cmode, cstep, sens, ident, cover, evalue)
-    mmseqs_createseqfiledb(sequence_db, cluster_db, seqfile_db)
-    mmseqs_result2flat(sequence_db, sequence_db, seqfile_db, first_iter_out)
-    first_iter_phams = parse_mmseqs(first_iter_out)
+    mmseqs.mmseqs_cluster(sequence_db, cluster_db, tmpdir, cmode, cstep, sens,
+                          ident, cover, evalue)
+    mmseqs.mmseqs_createseqfiledb(sequence_db, cluster_db, seqfile_db)
+    mmseqs.mmseqs_result2flat(sequence_db, sequence_db, seqfile_db,
+                              first_iter_out)
+    first_iter_phams = mmseqs.parse_mmseqs(first_iter_out)
 
     if second_iter:
         # Second iteration paths
@@ -109,13 +111,15 @@ def phamerate(sequence_db, db, tmpdir, first_iter, second_iter=None):
         ident, cover, evalue = second_iter
 
         # Cluster profiles using given parameters
-        mmseqs_result2profile(sequence_db, cluster_db, profile_db)
-        mmseqs_profile2consensus(profile_db, consensus_db)
-        mmseqs_search(profile_db, consensus_db, align_db, tmpdir, ident, cover, evalue)
-        mmseqs_clust(consensus_db, align_db, result_db)
-        mmseqs_createseqfiledb(sequence_db, result_db, hmm_seqfile_db)
-        mmseqs_result2flat(sequence_db, sequence_db, hmm_seqfile_db, second_iter_out)
-        second_iter_phams = parse_mmseqs(second_iter_out)
+        mmseqs.mmseqs_result2profile(sequence_db, cluster_db, profile_db)
+        mmseqs.mmseqs_profile2consensus(profile_db, consensus_db)
+        mmseqs.mmseqs_search(profile_db, consensus_db, align_db, tmpdir,
+                             ident, cover, evalue)
+        mmseqs.mmseqs_clust(consensus_db, align_db, result_db)
+        mmseqs.mmseqs_createseqfiledb(sequence_db, result_db, hmm_seqfile_db)
+        mmseqs.mmseqs_result2flat(sequence_db, sequence_db, hmm_seqfile_db,
+                                  second_iter_out)
+        second_iter_phams = mmseqs.parse_mmseqs(second_iter_out)
 
         lookup = dict()
         for phamid, pham_geneids in first_iter_phams.items():
@@ -129,18 +133,20 @@ def phamerate(sequence_db, db, tmpdir, first_iter, second_iter=None):
                 for target_geneid in first_iter_phams[target_id]:
                     all_pham_geneids.add(target_geneid)
             all_pham_geneids = list(all_pham_geneids)
-            all_pham_translations = [db.get_translation_from_geneid(x) for x in all_pham_geneids]
+            all_pham_translations = [db.get_translation_from_geneid(x) for x in
+                                     all_pham_geneids]
             temp_phams.append(Pham(all_pham_geneids, all_pham_translations))
 
     else:
         for pham_id, all_pham_geneids in first_iter_phams:
-            all_pham_translations = [db.get_translation_from_geneid(x) for x in all_pham_geneids]
+            all_pham_translations = [db.get_translation_from_geneid(x) for x in
+                                     all_pham_geneids]
             temp_phams.append(Pham(all_pham_geneids, all_pham_translations))
 
     return temp_phams
 
 
-def execute_phamerate_pipeline(fasta, outdir, param_file): 
+def execute_phamerate_pipeline(fasta, outdir, param_file):
     tempdir = outdir.joinpath("temp")
 
     # Make sure outdir and tmpdir exist
@@ -158,13 +164,14 @@ def execute_phamerate_pipeline(fasta, outdir, param_file):
     with nr_fasta.open("w") as fh:
         fh.write(repr(input_db))
     mmseqsdb = tempdir.joinpath("sequenceDB")
-    mmseqs_createdb(nr_fasta, mmseqsdb)
+    mmseqs.mmseqs_createdb(nr_fasta, mmseqsdb)
 
     # Read parameters
     first_iter_params, second_iter_params = parse_param_file(param_file)
 
     # Phamerate!
-    phams = phamerate(mmseqsdb, input_db, tempdir, first_iter_params, second_iter_params)
+    phams = phamerate(mmseqsdb, input_db, tempdir, first_iter_params,
+                      second_iter_params)
 
     # Write fasta file for each pham
     for i, pham in enumerate(phams):
@@ -198,5 +205,3 @@ if __name__ == "__main__":
         sys.argv.append("-h")
 
     main(sys.argv[1:])
-
-    

@@ -1,29 +1,41 @@
 import argparse
 import time
 
-from prophicient_utils.pipelines import pull_sequences
+from prophicient_utils.pipelines import (
+                annotate_gene_clusters, build_reference_db, build_functions_db,
+                curate_functions, index_functions, phamerate, pull_sequences)
 
 
 # GLOBAL VARIABLES
 # -----------------------------------------------------------------------------
-PIPELINES = ["build_reference_db", "build_functions_db", "pull_sequences"]
+PIPELINES = [
+        "annotate_gene_clusters", "build_reference_db", "build_functions_db",
+        "curate_functions", "index_functions", "phamerate", "pull_sequences"]
 
 
 def main(unparsed_args):
-    args = parse_prophicient_utilities(unparsed_args)  
+    args = parse_prophicient_utilities(unparsed_args)
 
     start = time.time()
 
-    if args.pipeline == "build_reference_db":
-        pass
+    if args.pipeline == "annotate_gene_clusters":
+        annotate_gene_clusters.main(unparsed_args[1:])
+    elif args.pipeline == "build_reference_db":
+        build_reference_db.main(unparsed_args[1:])
     elif args.pipeline == "build_functions_db":
-        pass
+        build_functions_db.main(unparsed_args[1:])
+    elif args.pipeline == "curate_functions":
+        curate_functions.main(unparsed_args[1:])
+    elif args.pipeline == "index_functions":
+        index_functions.main(unparsed_args[1:])
+    elif args.pipeline == "phamerate":
+        phamerate.main(unparsed_args[1:])
     elif args.pipeline == "pull_sequences":
         pull_sequences.main(unparsed_args[1:])
     else:
         raise NotImplementedError(
                    f"Prophicient Utility pipeline '{args.build_reference_db}' "
-                    "is not supported.")
+                   "is not supported.")
 
     stop = time.time()
 
