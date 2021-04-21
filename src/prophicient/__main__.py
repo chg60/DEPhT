@@ -9,8 +9,11 @@ import pathlib
 import sys
 from datetime import date, datetime
 
+from Bio.Seq import Seq
+from Bio.SeqFeature import FeatureLocation, SeqFeature
 from Bio.SeqRecord import SeqRecord
 
+from prophicient.functions.fasta import write_fasta
 from prophicient.functions.att import kmer_count_attachment_site
 from prophicient.functions.find_homologs import find_homologs
 from prophicient.functions.gene_prediction import *
@@ -22,6 +25,7 @@ from prophicient.functions.visualization import prophage_diagram
 
 # GLOBAL VARIABLES
 # -----------------------------------------------------------------------------
+TEMP_DIR = pathlib.Path("/tmp/Prophicient/")
 PACKAGE_DIR = pathlib.Path(__file__).resolve().parent
 DATE = date.today().strftime("%d-%b-%Y").upper()
 ANNOTATIONS = {"molecule_type": "DNA", "topology": "linear",
@@ -32,6 +36,7 @@ ANNOTATIONS = {"molecule_type": "DNA", "topology": "linear",
                "comment": [""]}
 MIN_LENGTH = 20000      # Don't annotate short contigs
 META_LENGTH = 100000    # Medium-length contigs -> use metagenomic mode
+EXTENSION = 10000
 
 
 def parse_args(arguments):
@@ -100,7 +105,7 @@ def main(arguments):
 
 
 def find_prophages(fasta, outdir, gff3=None, cpus=CPUS, verbose=False,
-                   diagram=True):
+                   diagram=True, extension=EXTENSION):
     """
     Runs through all steps of prophage prediction:
 
@@ -126,6 +131,8 @@ def find_prophages(fasta, outdir, gff3=None, cpus=CPUS, verbose=False,
     :type verbose: bool
     :param diagram: should genome diagrams be created at the end?
     :type diagram: bool
+    :param extend_by: number of basepairs to extend predicted prophage regions
+    :type extend_by: int
     """
     if verbose:
         print("Loading FASTA file...")
@@ -166,7 +173,21 @@ def find_prophages(fasta, outdir, gff3=None, cpus=CPUS, verbose=False,
     # Perform binary classification of contig CDS features
     gene_predictions = [predict_prophage_genes(df) for df in dataframes]
     # Initial pass at prophage identification
-    initial_prophages = [predict_prophage_coords(x, y) for x, y in zip(contigs, gene_predictions)]
+    prophage_predictions = [predict_prophage_coords(x, y, extend_by=extension)
+                            for x, y in zip(contigs, gene_predictions)]
+
+    initial_prophages = []
+    for contig_index, contig in enumerate(contigs):
+        contig_predictions = prophage_predictions[contig_index]
+        for prophage_index, prophage_coordinates in \
+                                            enumerate(contig_predictions):
+            prophage_id = "".join(["prophi", contig.id,
+                                   "-", (prophage_index+1)])
+            start = prophage_coordinates[0]
+            end = prophage_coordinates[1]
+
+            prophage = Prophage(contig, prophage_id, start=start, end=end)
+            initial_prophages.append(prophage)
 
     # Print prophage prediction time
     print(f"Prediction: {str(datetime.now() - mark)}")
@@ -176,7 +197,13 @@ def find_prophages(fasta, outdir, gff3=None, cpus=CPUS, verbose=False,
               f"be able to identify partial (dead) prophages.")
         return
 
-    trimmed_prophages = list()
+    TEMP_DIR.mkdir(exist_ok=True)
+
+    reference_db_path = pathlib.Path("Mycobacterium/references")
+    trimmed_prophages = detect_att_sites(initial_prophages, reference_db_path,
+                                         extension, TEMP_DIR)
+
+    final_prophages = list()
     # TODO: add parallel hhsearch to find essential phage functions:
     #  overwrite "hypothetical function" in cds.qualifiers["product"][0]
     # TODO: add attachment core detection
@@ -187,13 +214,50 @@ def find_prophages(fasta, outdir, gff3=None, cpus=CPUS, verbose=False,
     if verbose:
         print("Generating final reports...")
     mark = datetime.now()
-    for prophage in trimmed_prophages:
+    for prophage in final_prophages:
         genbank_filename = outdir.joinpath(f"{prophage.name}.gbk")
         SeqIO.write(prophage, genbank_filename, "genbank")
         if diagram:
             diagram_filename = outdir.joinpath(f"{prophage.name}.pdf")
             prophage_diagram(prophage, diagram_filename)
     print(f"File Dumps: {str(datetime.now() - mark)}")
+
+
+class Prophage:
+    def __init__(parent_seq, seq_id, start=None, end=None, strand=1):
+        self.parent_seq = parent_seq
+        self.id = seq_id
+
+        self.start = None 
+        self.end = None
+        self.strand = strand
+
+        self.feature = None
+        self.seq = None
+        self.record = None
+
+        self.set_coordinates(start, end, strand=strand)
+
+    def set_coordinates(start, end):
+        self.start = start
+        self.end = end
+
+        self.update_sequence_attributes()
+
+    def set_strand(strand):
+        self.strand = strand
+
+        self.update_sequence_attributes()
+
+    def update_sequence_attributes():
+        if start is None or end is None:
+            return
+
+        self.feature = SeqFeature(FeatureLocation(self.start, self.end),
+                                  strand=1,
+                                  type="source")
+        self.seq = self.feature.extract(self.parent_seq)
+        self.record = SeqRecord(self.seq, id=self.id)
 
 
 def execute_prophicient(infile, outdir, database, cores, verbose=False):
@@ -254,6 +318,25 @@ def extract_prophage(record, integrase_feature, verbose=False):
     prophage_record.features.sort(key=lambda x: x.location.start)
 
     return prophage_record, prophage_start, prophage_end, att
+
+
+def detect_att_sites(initial_prophages, reference_db_path, extension,
+                     temp_dir):
+    for prophage in prophages:
+        l_sequence = prophage.seq[:extention]
+        r_sequence = prophage
+
+        l_sequence_path = temp_dir.joinpath(f"{prophage.id}_l_region.fasta")
+        r_sequence_path = temp_dir.joinpath(f"{prophage.id}_r_region.fasta")
+
+        write_fasta(l_sequence_path, [l_sequence.id], [str(l_sequence.seq)])
+        write_fasta(r_sequence_path, [r_sequence.id], [str(r_sequence.seq)])
+
+        l_sequence_blast = blast_references(l_sequence_path, reference_db_path,
+                                            temp_dir)
+        r_sequence_blast = blast_references(r_sequence_path, reference_db_path,
+                                            temp_dir)
+    pass
 
 
 def evaluate_regions_of_interest(gene_dense_records_and_features, working_dir,
