@@ -36,7 +36,7 @@ def blast_references(query_seq_path, reference_db_path, temp_dir,
     refined_blast_results = []
     # Iterate through blast results and remove weaker alignments
     for blast_result in blast_results:
-        if blast_result["evalue"] > eval_cutoff:
+        if float(blast_result["evalue"]) > eval_cutoff:
             continue
 
         refined_blast_results.append(blast_result)

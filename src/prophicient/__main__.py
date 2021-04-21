@@ -13,6 +13,7 @@ from Bio.Seq import Seq
 from Bio.SeqFeature import FeatureLocation, SeqFeature
 from Bio.SeqRecord import SeqRecord
 
+from prophicient.functions import blastn
 from prophicient.functions.fasta import write_fasta
 from prophicient.functions.att import kmer_count_attachment_site
 from prophicient.functions.find_homologs import find_homologs
@@ -179,14 +180,14 @@ def find_prophages(fasta, outdir, gff3=None, cpus=CPUS, verbose=False,
     initial_prophages = []
     for contig_index, contig in enumerate(contigs):
         contig_predictions = prophage_predictions[contig_index]
-        for prophage_index, prophage_coordinates in \
-                                            enumerate(contig_predictions):
+        for prophage_index, prophage_coordinates in enumerate(
+                                                    contig_predictions):
             prophage_id = "".join(["prophi", contig.id,
-                                   "-", (prophage_index+1)])
+                                   "-", str((prophage_index+1))])
             start = prophage_coordinates[0]
             end = prophage_coordinates[1]
 
-            prophage = Prophage(contig, prophage_id, start=start, end=end)
+            prophage = Prophage(contig.seq, prophage_id, start=start, end=end)
             initial_prophages.append(prophage)
 
     # Print prophage prediction time
@@ -199,7 +200,7 @@ def find_prophages(fasta, outdir, gff3=None, cpus=CPUS, verbose=False,
 
     TEMP_DIR.mkdir(exist_ok=True)
 
-    reference_db_path = pathlib.Path("Mycobacterium/references")
+    reference_db_path = pathlib.Path("references/Mycobacteria")
     trimmed_prophages = detect_att_sites(initial_prophages, reference_db_path,
                                          extension, TEMP_DIR)
 
@@ -224,11 +225,11 @@ def find_prophages(fasta, outdir, gff3=None, cpus=CPUS, verbose=False,
 
 
 class Prophage:
-    def __init__(parent_seq, seq_id, start=None, end=None, strand=1):
+    def __init__(self, parent_seq, seq_id, start=None, end=None, strand=1):
         self.parent_seq = parent_seq
         self.id = seq_id
 
-        self.start = None 
+        self.start = None
         self.end = None
         self.strand = strand
 
@@ -236,21 +237,21 @@ class Prophage:
         self.seq = None
         self.record = None
 
-        self.set_coordinates(start, end, strand=strand)
+        self.set_coordinates(start, end)
 
-    def set_coordinates(start, end):
+    def set_coordinates(self, start, end):
         self.start = start
         self.end = end
 
         self.update_sequence_attributes()
 
-    def set_strand(strand):
+    def set_strand(self, strand):
         self.strand = strand
 
         self.update_sequence_attributes()
 
-    def update_sequence_attributes():
-        if start is None or end is None:
+    def update_sequence_attributes(self):
+        if self.start is None or self.end is None:
             return
 
         self.feature = SeqFeature(FeatureLocation(self.start, self.end),
@@ -320,22 +321,31 @@ def extract_prophage(record, integrase_feature, verbose=False):
     return prophage_record, prophage_start, prophage_end, att
 
 
-def detect_att_sites(initial_prophages, reference_db_path, extension,
+def detect_att_sites(prophages, reference_db_path, extension,
                      temp_dir):
     for prophage in prophages:
-        l_sequence = prophage.seq[:extention]
+        l_sequence = prophage.seq[:extension]
         r_sequence = prophage
 
         l_sequence_path = temp_dir.joinpath(f"{prophage.id}_l_region.fasta")
         r_sequence_path = temp_dir.joinpath(f"{prophage.id}_r_region.fasta")
 
-        write_fasta(l_sequence_path, [l_sequence.id], [str(l_sequence.seq)])
-        write_fasta(r_sequence_path, [r_sequence.id], [str(r_sequence.seq)])
+        write_fasta(l_sequence_path, ["l_region"], [str(l_sequence)])
+        write_fasta(r_sequence_path, ["r_region"], [str(r_sequence)])
 
-        l_sequence_blast = blast_references(l_sequence_path, reference_db_path,
-                                            temp_dir)
-        r_sequence_blast = blast_references(r_sequence_path, reference_db_path,
-                                            temp_dir)
+        try:
+            l_sequence_blast = blastn.blast_references(
+                                l_sequence_path, reference_db_path, temp_dir)
+        except blastn.SignificantAlignmentNotFound:
+            l_sequence_blast = []
+
+        try:
+            r_sequence_blast = blastn.blast_references(
+                                r_sequence_path, reference_db_path, temp_dir)
+        except blastn.SignificantAlignmentNotFound:
+            r_sequence_blast = []
+        
+        pass
     pass
 
 
