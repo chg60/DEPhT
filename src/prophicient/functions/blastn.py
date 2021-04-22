@@ -11,7 +11,7 @@ DEFAULT_BLAST_CSV_HEADER = ["qstart", "qend", "sstart", "send",
                             "length", "evalue", "bitscore"]
 
 DEFAULT = {"outfmt": 10, "blast_csv_header": DEFAULT_BLAST_CSV_HEADER,
-           "eval_cutoff": 0.0001}
+           "eval_cutoff": 0.001}
 
 
 # MAIN FUNCTIONS

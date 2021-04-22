@@ -6,10 +6,10 @@ prophage extraction and generating the final report.
 """
 import argparse
 import pathlib
+import shutil
 import sys
 from datetime import date, datetime
 
-from Bio.Seq import Seq
 from Bio.SeqFeature import FeatureLocation, SeqFeature
 from Bio.SeqRecord import SeqRecord
 
@@ -28,16 +28,23 @@ from prophicient.functions.visualization import prophage_diagram
 # -----------------------------------------------------------------------------
 TEMP_DIR = pathlib.Path("/tmp/Prophicient/")
 PACKAGE_DIR = pathlib.Path(__file__).resolve().parent
+DATABASES_DIR = PACKAGE_DIR.joinpath("data/databases")
+REFERENCES_DB = DATABASES_DIR.joinpath("Mycobacteria")
+FUNCTIONS_DB = DATABASES_DIR.joinpath("functions")
+
 DATE = date.today().strftime("%d-%b-%Y").upper()
+
 ANNOTATIONS = {"molecule_type": "DNA", "topology": "linear",
                "data_file_division": "PHG", "date": DATE,
                "accessions": [], "sequence_version": "1",
                "keywords": [], "source": "",
                "organism": "", "taxonomy": [],
                "comment": [""]}
+
 MIN_LENGTH = 20000      # Don't annotate short contigs
 META_LENGTH = 100000    # Medium-length contigs -> use metagenomic mode
 EXTENSION = 10000
+MIN_KMER_SCORE = 5
 
 
 def parse_args(arguments):
@@ -174,37 +181,33 @@ def find_prophages(fasta, outdir, gff3=None, cpus=CPUS, verbose=False,
     # Perform binary classification of contig CDS features
     gene_predictions = [predict_prophage_genes(df) for df in dataframes]
     # Initial pass at prophage identification
-    prophage_predictions = [predict_prophage_coords(x, y, extend_by=extension)
+    prophage_predictions = [predict_prophage_coords(x, y)
                             for x, y in zip(contigs, gene_predictions)]
-
-    initial_prophages = []
-    for contig_index, contig in enumerate(contigs):
-        contig_predictions = prophage_predictions[contig_index]
-        for prophage_index, prophage_coordinates in enumerate(
-                                                    contig_predictions):
-            prophage_id = "".join(["prophi", contig.id,
-                                   "-", str((prophage_index+1))])
-            start = prophage_coordinates[0]
-            end = prophage_coordinates[1]
-
-            prophage = Prophage(contig.seq, prophage_id, start=start, end=end)
-            initial_prophages.append(prophage)
 
     # Print prophage prediction time
     print(f"Prediction: {str(datetime.now() - mark)}")
 
-    if len(initial_prophages) == 0:
+    if TEMP_DIR.is_dir():
+        shutil.rmtree(TEMP_DIR)
+    TEMP_DIR.mkdir()
+
+    mark = datetime.now()
+    search_for_prophage_region_homology(contigs, prophage_predictions,
+                                        FUNCTIONS_DB, TEMP_DIR, cores=CPUS)
+    print(f"Homology search: {str(datetime.now() - mark)}")
+
+    prophages = load_initial_prophages(contigs, prophage_predictions)
+
+    if len(prophages) == 0:
         print(f"No complete prophages found in {str(fasta)}. PHASTER may "
               f"be able to identify partial (dead) prophages.")
         return
 
-    TEMP_DIR.mkdir(exist_ok=True)
+    mark = datetime.now()
+    detect_att_sites(prophages, REFERENCES_DB, extension*2, TEMP_DIR)
+    print(f"Att search: {str(datetime.now() - mark)}")
 
-    reference_db_path = pathlib.Path("references/Mycobacteria")
-    trimmed_prophages = detect_att_sites(initial_prophages, reference_db_path,
-                                         extension, TEMP_DIR)
-
-    final_prophages = list()
+    prophage_records = [prophage.record for prophage in prophages]
     # TODO: add parallel hhsearch to find essential phage functions:
     #  overwrite "hypothetical function" in cds.qualifiers["product"][0]
     # TODO: add attachment core detection
@@ -215,18 +218,19 @@ def find_prophages(fasta, outdir, gff3=None, cpus=CPUS, verbose=False,
     if verbose:
         print("Generating final reports...")
     mark = datetime.now()
-    for prophage in final_prophages:
-        genbank_filename = outdir.joinpath(f"{prophage.name}.gbk")
+    for prophage in prophage_records:
+        genbank_filename = outdir.joinpath(f"{prophage.id}.gbk")
         SeqIO.write(prophage, genbank_filename, "genbank")
         if diagram:
-            diagram_filename = outdir.joinpath(f"{prophage.name}.pdf")
+            diagram_filename = outdir.joinpath(f"{prophage.id}.pdf")
             prophage_diagram(prophage, diagram_filename)
     print(f"File Dumps: {str(datetime.now() - mark)}")
 
 
 class Prophage:
-    def __init__(self, parent_seq, seq_id, start=None, end=None, strand=1):
-        self.parent_seq = parent_seq
+    def __init__(self, parent_record, seq_id, start=None, end=None, strand=1):
+        self.parent_record = parent_record
+        self.parent_seq = parent_record.seq
         self.id = seq_id
 
         self.start = None
@@ -258,7 +262,9 @@ class Prophage:
                                   strand=1,
                                   type="source")
         self.seq = self.feature.extract(self.parent_seq)
-        self.record = SeqRecord(self.seq, id=self.id)
+        self.record = SeqRecord(self.seq, id=self.id, annotations=ANNOTATIONS)
+        realign_subrecord(self.parent_record, self.record,
+                          self.start, self.end)
 
 
 def execute_prophicient(infile, outdir, database, cores, verbose=False):
@@ -298,122 +304,161 @@ def execute_prophicient(infile, outdir, database, cores, verbose=False):
                 extracted_prophages.append(prophage_data[0])
 
 
-def extract_prophage(record, integrase_feature, verbose=False):
-    l_region = str(record.seq[:integrase_feature.location.start])
-    r_region = str(record.seq[integrase_feature.location.start+1:])
+def load_initial_prophages(contigs, prophage_predictions):
+    prophages = []
+    for contig_index, contig in enumerate(contigs):
+        contig_predictions = prophage_predictions[contig_index]
+        for prophage_index, prophage_coordinates in enumerate(
+                                                    contig_predictions):
+            prophage_id = "".join(["prophi", contig.id,
+                                   "-", str((prophage_index+1))])
+            start = prophage_coordinates[0]
+            end = prophage_coordinates[1]
 
-    attL, attR = kmer_count_attachment_site(l_region, r_region)
-    print(attL)
-    att = str(attL.extract(record.seq))
+            prophage = Prophage(contig, prophage_id, start=start, end=end)
+            prophages.append(prophage)
 
-    prophage_start = attL.location.start
-    prophage_end = integrase_feature.location.start + attR.location.end
-    prophage_feature = SeqFeature(FeatureLocation(prophage_start,
-                                                  prophage_end))
-    prophage_seq = prophage_feature.extract(record.seq)
+    return prophages
 
-    prophage_record = SeqRecord(prophage_seq)
-    prophage_record.id = record.id
 
-    realign_subrecord(record, prophage_record, prophage_start, prophage_end)
-    prophage_record.features.sort(key=lambda x: x.location.start)
+def get_reference_map_from_sequence(sequence, sequence_name,
+                                    reference_db_path, temp_dir):
+    sequence_path = temp_dir.joinpath(".".join([sequence_name, "fasta"]))
 
-    return prophage_record, prophage_start, prophage_end, att
+    write_fasta(sequence_path, [sequence_name], [sequence])
+
+    try:
+        blast_results = blastn.blast_references(
+                                sequence_path, reference_db_path, temp_dir)
+    except blastn.SignificantAlignmentNotFound:
+        blast_results = []
+
+    reference_map = dict()
+    for blast_result in blast_results:
+        reference_map[blast_result["sseqid"]] = blast_result
+
+    return reference_map
+
+
+def search_for_prophage_region_homology(contigs, prophage_predictions,
+                                        functions_db, temp_dir, cores=1,
+                                        min_size=150):
+    translations_dir = temp_dir.joinpath("gene_translations")
+    translations_dir.mkdir()
+
+    gene_id_feature_map = dict()
+    for contig_index, contig in enumerate(contigs):
+        contig_predictions = prophage_predictions[contig_index]
+
+        cds_num = 0
+        for feature in contig.features:
+            if feature.type != "CDS":
+                continue
+            gene_id = "_".join([contig.id, str(cds_num)])
+            feature.qualifiers["locus_tag"] = [gene_id]
+
+            trans = feature.translate(contig.seq,
+                                      table=11, to_stop=True)
+            feature.qualifiers["translation"] = [trans]
+
+            feature.qualifiers["product"] = ["hypothetical protein"]
+
+            if len(trans) < min_size:
+                continue
+
+            cds_num += 1
+            for coordinates in contig_predictions:
+                if (feature.location.end > coordinates[0] and
+                        feature.location.end < coordinates[1]):
+                    gene_id_feature_map[gene_id] = feature
+                    file_path = translations_dir.joinpath(gene_id).with_suffix(
+                                                                    ".fasta")
+
+                    write_fasta(file_path, [gene_id], [trans])
+                    break
+
+    hhresults_dir = temp_dir.joinpath("hhresults")
+    hhresults_dir.mkdir()
+
+    homologs = find_homologs(translations_dir, hhresults_dir, functions_db,
+                             cores=cores, verbose=True)
+
+    for gene_id, product in homologs:
+        feature = gene_id_feature_map[gene_id]
+
+        feature.qualifiers["product"] = [product]
 
 
 def detect_att_sites(prophages, reference_db_path, extension,
-                     temp_dir):
+                     temp_dir, min_kmer_score=5):
     for prophage in prophages:
-        l_sequence = prophage.seq[:extension]
-        r_sequence = prophage
+        l_sequence = str(prophage.seq[:extension])
+        l_sequence_name = "_".join([prophage.id, "L", "extension"])
+        l_reference_map = get_reference_map_from_sequence(
+                                                l_sequence, l_sequence_name,
+                                                reference_db_path, temp_dir)
 
-        l_sequence_path = temp_dir.joinpath(f"{prophage.id}_l_region.fasta")
-        r_sequence_path = temp_dir.joinpath(f"{prophage.id}_r_region.fasta")
+        r_sequence = str(prophage.seq[-1*(extension):])
+        r_sequence_name = "_".join([prophage.id, "R", "extension"])
+        r_reference_map = get_reference_map_from_sequence(
+                                                r_sequence, r_sequence_name,
+                                                reference_db_path, temp_dir)
 
-        write_fasta(l_sequence_path, ["l_region"], [str(l_sequence)])
-        write_fasta(r_sequence_path, ["r_region"], [str(r_sequence)])
+        reference_ids = list(set(l_reference_map.keys()).intersection(
+                             set(r_reference_map.keys())))
 
-        try:
-            l_sequence_blast = blastn.blast_references(
-                                l_sequence_path, reference_db_path, temp_dir)
-        except blastn.SignificantAlignmentNotFound:
-            l_sequence_blast = []
+        reference_data = [
+                (l_reference_map[reference_id], r_reference_map[reference_id])
+                for reference_id in reference_ids]
+        reference_data.sort(key=lambda x: x[0]["evalue"] + x[1]["evalue"])
 
-        try:
-            r_sequence_blast = blastn.blast_references(
-                                r_sequence_path, reference_db_path, temp_dir)
-        except blastn.SignificantAlignmentNotFound:
-            r_sequence_blast = []
-        
-        pass
-    pass
+        new_coords = None
+        for data_tuple in reference_data:
+            left_ref_pos = int(data_tuple[0]["send"])
+            right_ref_pos = int(data_tuple[1]["sstart"])
 
+            if left_ref_pos > right_ref_pos:
+                overlap_len = left_ref_pos - right_ref_pos
+                if overlap_len < min_kmer_score:
+                    continue
 
-def evaluate_regions_of_interest(gene_dense_records_and_features, working_dir,
-                                 database, cores=1, verbose=False):
-    putative_prophage_regions = list()
-    for i in range(len(gene_dense_records_and_features)):
-        region_tuple = gene_dense_records_and_features[i]
+                new_start = (prophage.start +
+                             int(data_tuple[0]["qend"]) - overlap_len)
+                new_end = (prophage.end -
+                           (extension - int(data_tuple[1]["qstart"])) +
+                           overlap_len)
+                new_coords = (new_start, new_end)
 
-        region_start = region_tuple[1].location.start
-        region_end = region_tuple[1].location.end
+                break
 
-        if verbose:
-            print("Evaluating gene dense region at "
-                  f"({region_start}, {region_end})...")
+        if not new_coords:
+            l_anchor = extension // 2
+            r_anchor = extension // 2
+            if reference_data:
+                data_tuple = reference_data[0]
 
-        region_dir = working_dir.joinpath(region_tuple[0].id)
-        region_dir.mkdir()
+                l_end = int(data_tuple[0]["qend"])
+                if l_end < l_anchor:
+                    l_anchor = l_end
 
-        data_dir = region_dir.joinpath("data")
-        data_dir.mkdir()
+                r_start = int(data_tuple[1]["qstart"])
+                if r_start > r_anchor:
+                    r_anchor = r_start
 
-        integrase_feature = find_integrase_homologs(region_tuple[0], data_dir,
-                                                    database, cores=cores,
-                                                    verbose=verbose)
+            kmer_data = kmer_count_attachment_site(
+                                            l_sequence, r_sequence,
+                                            l_anchor, r_anchor,
+                                            k=min_kmer_score)
+            if kmer_data[2] >= min_kmer_score:
+                new_start = (prophage.start +
+                             kmer_data[0].location.start)
+                new_end = ((prophage.end - extension) +
+                           kmer_data[1].location.end)
+                new_coords = (new_start, new_end)
+            else:
+                new_coords = (prophage.start, prophage.end)
 
-        if not integrase_feature:
-            continue
-
-        if verbose:
-            print("...Integrase homolog found at "
-                  f"{(region_start + integrase_feature.location.start)}")
-
-        putative_prophage_regions.append((region_tuple, integrase_feature))
-
-    return putative_prophage_regions
-
-
-def find_integrase_homologs(record, working_dir, database, cores=1,
-                            verbose=False):
-    trans_dir = working_dir.joinpath("gene_translations")
-    trans_dir.mkdir()
-
-    gene_id_feature_map = dict()
-    for feature in record.features:
-        if feature.type != "CDS":
-            continue
-
-        trans = feature.qualifiers["translation"][0]
-
-        gene_id = feature.qualifiers["locus_tag"][0]
-        gene_id_feature_map[gene_id] = feature
-        file_path = trans_dir.joinpath(gene_id).with_suffix(".fasta")
-
-        write_fasta(file_path, [gene_id], [trans])
-
-    hhresults_dir = working_dir.joinpath("hhresults")
-    hhresults_dir.mkdir()
-
-    integrase_homologs = find_homologs(trans_dir, hhresults_dir, database,
-                                       cores=cores, verbose=verbose)
-
-    if not integrase_homologs:
-        return
-
-    integrase_homolog = integrase_homologs[0]
-    integrase_feature = gene_id_feature_map[integrase_homolog]
-    return integrase_feature
+        prophage.set_coordinates(*new_coords)
 
 
 def annotate_record(record, working_dir):

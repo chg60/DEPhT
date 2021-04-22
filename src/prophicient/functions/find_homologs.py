@@ -24,9 +24,10 @@ def find_homologs(trans_dir, output_dir, database_path, cores=1,
     hhresult_objects.sort(key=lambda x: getattr(x.matches[0], sort_attr),
                           reverse=True)
 
-    hit_gene_ids = [hhresult.query_id for hhresult in hhresult_objects]
+    homologs = [(hhresult.query_id, hhresult.matches[0].target_id)
+                for hhresult in hhresult_objects]
 
-    return hit_gene_ids
+    return homologs
 
 
 def create_job_queue(input_dir, output_dir, database, cutoff):

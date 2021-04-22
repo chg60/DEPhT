@@ -1,3 +1,5 @@
+import math
+
 from Bio.SeqFeature import (FeatureLocation, SeqFeature)
 from networkx import DiGraph
 
@@ -11,17 +13,20 @@ DEFAULT = {"k": 5, "fpp": 0.0001, "outfmt": 10}
 
 # KMER COUNTING FUNCTIONS
 # -----------------------------------------------------------------------------
-def kmer_count_attachment_site(l_seq, r_seq, k=DEFAULT["k"]):
-    bfilter = load_bfilter(l_seq, k=k)
-    deb_graph = create_debruijn_graph(bfilter, r_seq)
-    kmer_contigs = traverse_debruijn_graph(deb_graph, l_seq)
+def kmer_count_attachment_site(l_seq, r_seq, l_anchor, r_anchor,
+                               k=DEFAULT["k"]):
+    kmer_contigs = get_kmer_contigs(l_seq, r_seq, k=k)
 
     if not kmer_contigs:
         return None, None
 
-    kmer_contigs.sort(key=lambda x: len(x[0]), reverse=True)
+    scored_kmer_contigs = [
+                (kmer_contig, score_kmer(kmer_contig, l_anchor, r_anchor, k))
+                for kmer_contig in kmer_contigs]
 
-    kmer_contig = kmer_contigs[0]
+    scored_kmer_contigs.sort(key=lambda x: x[1], reverse=True)
+
+    kmer_contig, score = scored_kmer_contigs[0]
 
     attL_start = kmer_contig[1] + 1
     attL_end = kmer_contig[1] + len(kmer_contig[0])
@@ -33,7 +38,24 @@ def kmer_count_attachment_site(l_seq, r_seq, k=DEFAULT["k"]):
     attR_feature = SeqFeature(FeatureLocation(attR_start, attR_end),
                               strand=1, type="attR")
 
-    return attL_feature, attR_feature
+    return attL_feature, attR_feature, score
+
+
+def score_kmer(kmer_contig, l_anchor, r_anchor, base):
+    l_distance = abs(l_anchor - kmer_contig[1])
+    r_distance = abs(r_anchor - kmer_contig[2])
+
+    avg_distance = (l_distance + r_distance) / 2
+
+    return len(kmer_contig[0]) - math.log(avg_distance, base)
+
+
+def get_kmer_contigs(l_seq, r_seq, k=DEFAULT["k"]):
+    bfilter = load_bfilter(l_seq, k=k)
+    deb_graph = create_debruijn_graph(bfilter, r_seq)
+    kmer_contigs = traverse_debruijn_graph(deb_graph, l_seq)
+
+    return kmer_contigs
 
 
 def load_bfilter(sequence, k=DEFAULT["k"]):
