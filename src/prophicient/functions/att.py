@@ -1,6 +1,4 @@
-import csv
-import shlex
-from subprocess import Popen, PIPE
+import math
 
 from Bio.SeqFeature import (FeatureLocation, SeqFeature)
 from networkx import DiGraph
@@ -12,106 +10,23 @@ from prophicient.classes import kmers
 # -----------------------------------------------------------------------------
 DEFAULT = {"k": 5, "fpp": 0.0001, "outfmt": 10}
 
-BLAST_CSV_HEADER = ["qstart", "qend", "sstart", "send",
-                    "qseq", "sseq", "length", "mismatch", "gapopen"]
 
-
-# MAIN FUNCTIONS
+# KMER COUNTING FUNCTIONS
 # -----------------------------------------------------------------------------
-def blast_attachment_site(l_seq, r_seq, working_dir, name=""):
-    l_seq_name = "_".join([name, "attL_region"])
-    r_seq_name = "_".join([name, "attR_region"])
-
-    l_seq_path = working_dir.joinpath(l_seq_name).with_suffix(".fasta")
-    r_seq_path = working_dir.joinpath(r_seq_name).with_suffix(".fasta")
-    outpath = working_dir.joinpath("".join([name, ".csv"]))
-
-    write_fasta(l_seq_path, l_seq, l_seq_name)
-    write_fasta(r_seq_path, r_seq, r_seq_name)
-
-    blastn(l_seq_path, r_seq_path, outpath)
-    blast_results = read_blast_csv(outpath)
-
-    if not blast_results:
-        return None, None
-
-    blast_results.sort(key=lambda x: int(x["length"]), reverse=True)
-
-    att_data = blast_results[0]
-
-    qstart = int(att_data["qstart"]) + 1
-    qend = int(att_data["qend"]) + 1
-
-    if qstart > qend:
-        temp = qstart
-        qstart = qend
-        qend = temp
-        strand = -1
-    else:
-        strand = 1
-
-    attL_feature = SeqFeature(FeatureLocation(qstart, qend),
-                              strand=strand, type="attL")
-
-    sstart = int(att_data["sstart"]) + 1
-    send = int(att_data["send"])
-
-    if sstart > send:
-        temp = sstart
-        sstart = send
-        send = temp
-        strand = -1
-    else:
-        strand = 1
-
-    attR_feature = SeqFeature(FeatureLocation(sstart, send),
-                              strand=strand, type="attR")
-
-    if attL_feature.strand != attR_feature.strand:
-        return None, None
-
-    return attL_feature, attR_feature
-
-
-def write_fasta(path, sequence, name):
-    with path.open(mode="w") as filehandle:
-        filehandle.write("".join([">", name, "\n"]))
-        filehandle.write(sequence)
-
-
-def blastn(query, target, out, outfmt=DEFAULT["outfmt"],
-           header=BLAST_CSV_HEADER, k=DEFAULT["k"]):
-    command = (f"""blastn -query {query} -subject {target} -out {out} """
-               f"""-outfmt "10 {' '.join(BLAST_CSV_HEADER)}" """
-               f"-word_size {k}")
-
-    split_command = shlex.split(command)
-    with Popen(args=split_command, stdin=PIPE) as process:
-        out, err = process.communicate()
-
-
-def read_blast_csv(filepath, header=BLAST_CSV_HEADER):
-    blast_results = []
-    with filepath.open(mode="r") as filehandle:
-        csv_reader = csv.reader(filehandle, delimiter=",", quotechar='"')
-        for row in csv_reader:
-            row_dict = {header[i]: row[i] for i in range(len(header))}
-            blast_results.append(row_dict)
-
-    return blast_results
-
-
-def kmer_count_attachment_site(l_seq, r_seq, k=DEFAULT["k"]):
-    bfilter = load_bfilter(l_seq, k=k)
-    deb_graph = create_debruijn_graph(bfilter, r_seq)
-    kmer_contigs = traverse_debruijn_graph(deb_graph, l_seq)
+def kmer_count_attachment_site(l_seq, r_seq, l_anchor, r_anchor,
+                               k=DEFAULT["k"]):
+    kmer_contigs = get_kmer_contigs(l_seq, r_seq, k=k)
 
     if not kmer_contigs:
         return None, None
 
-    kmer_contigs.sort(key=lambda x: len(x[0]), reverse=True)
+    scored_kmer_contigs = [
+                (kmer_contig, score_kmer(kmer_contig, l_anchor, r_anchor, k))
+                for kmer_contig in kmer_contigs]
 
-    kmer_contig = kmer_contigs[0]
+    scored_kmer_contigs.sort(key=lambda x: x[1], reverse=True)
+
+    kmer_contig, score = scored_kmer_contigs[0]
 
     attL_start = kmer_contig[1] + 1
     attL_end = kmer_contig[1] + len(kmer_contig[0])
@@ -123,7 +38,24 @@ def kmer_count_attachment_site(l_seq, r_seq, k=DEFAULT["k"]):
     attR_feature = SeqFeature(FeatureLocation(attR_start, attR_end),
                               strand=1, type="attR")
 
-    return attL_feature, attR_feature
+    return attL_feature, attR_feature, score
+
+
+def score_kmer(kmer_contig, l_anchor, r_anchor, base):
+    l_distance = abs(l_anchor - kmer_contig[1])
+    r_distance = abs(r_anchor - kmer_contig[2])
+
+    avg_distance = (l_distance + r_distance) / 2
+
+    return len(kmer_contig[0]) - math.log(avg_distance, base)
+
+
+def get_kmer_contigs(l_seq, r_seq, k=DEFAULT["k"]):
+    bfilter = load_bfilter(l_seq, k=k)
+    deb_graph = create_debruijn_graph(bfilter, r_seq)
+    kmer_contigs = traverse_debruijn_graph(deb_graph, l_seq)
+
+    return kmer_contigs
 
 
 def load_bfilter(sequence, k=DEFAULT["k"]):
