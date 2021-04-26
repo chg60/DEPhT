@@ -38,7 +38,7 @@ def kmer_count_attachment_site(l_seq, r_seq, l_anchor, r_anchor,
     attR_feature = SeqFeature(FeatureLocation(attR_start, attR_end),
                               strand=1, type="attR")
 
-    return attL_feature, attR_feature, score
+    return attL_feature, attR_feature, kmer_contig[0], score
 
 
 def score_kmer(kmer_contig, l_anchor, r_anchor, base):
@@ -47,7 +47,7 @@ def score_kmer(kmer_contig, l_anchor, r_anchor, base):
 
     avg_distance = (l_distance + r_distance) / 2
 
-    return len(kmer_contig[0]) - math.log(avg_distance, base)
+    return len(kmer_contig[0]) - ((math.log(avg_distance, base) - 1) ** 3)
 
 
 def get_kmer_contigs(l_seq, r_seq, k=DEFAULT["k"]):

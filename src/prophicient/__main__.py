@@ -19,7 +19,6 @@ from prophicient.functions.att import kmer_count_attachment_site
 from prophicient.functions.find_homologs import find_homologs
 from prophicient.functions.gene_prediction import *
 from prophicient.functions.multiprocess import CPUS, parallelize
-# from prophicient.functions.wrapper_basic import autoannotate
 from prophicient.functions.prefilter import prefilter_genome, realign_subrecord
 from prophicient.functions.prophage_prediction import *
 from prophicient.functions.visualization import prophage_diagram
@@ -43,7 +42,7 @@ ANNOTATIONS = {"molecule_type": "DNA", "topology": "linear",
 
 MIN_LENGTH = 20000      # Don't annotate short contigs
 META_LENGTH = 100000    # Medium-length contigs -> use metagenomic mode
-EXTENSION = 10000
+EXTENSION = 20000
 MIN_KMER_SCORE = 5
 
 
@@ -181,8 +180,9 @@ def find_prophages(fasta, outdir, gff3=None, cpus=CPUS, verbose=False,
     # Perform binary classification of contig CDS features
     gene_predictions = [predict_prophage_genes(df) for df in dataframes]
     # Initial pass at prophage identification
-    prophage_predictions = [predict_prophage_coords(x, y)
+    prophage_predictions = [predict_prophage_coords(x, y, extend_by=extension)
                             for x, y in zip(contigs, gene_predictions)]
+    print(prophage_predictions)
 
     # Print prophage prediction time
     print(f"Prediction: {str(datetime.now() - mark)}")
@@ -335,7 +335,10 @@ def get_reference_map_from_sequence(sequence, sequence_name,
 
     reference_map = dict()
     for blast_result in blast_results:
-        reference_map[blast_result["sseqid"]] = blast_result
+        result_exists = reference_map.get(blast_result["sseqid"], False)
+
+        if not result_exists:
+            reference_map[blast_result["sseqid"]] = blast_result
 
     return reference_map
 
@@ -392,6 +395,10 @@ def search_for_prophage_region_homology(contigs, prophage_predictions,
 def detect_att_sites(prophages, reference_db_path, extension,
                      temp_dir, min_kmer_score=5):
     for prophage in prophages:
+        half = len(prophage.seq) // 2
+        if extension > half:
+            extension = half
+
         l_sequence = str(prophage.seq[:extension])
         l_sequence_name = "_".join([prophage.id, "L", "extension"])
         l_reference_map = get_reference_map_from_sequence(
@@ -414,13 +421,29 @@ def detect_att_sites(prophages, reference_db_path, extension,
 
         new_coords = None
         for data_tuple in reference_data:
-            left_ref_pos = int(data_tuple[0]["send"])
-            right_ref_pos = int(data_tuple[1]["sstart"])
+            l_data = data_tuple[0]
+            r_data = data_tuple[1]
 
-            if left_ref_pos > right_ref_pos:
-                overlap_len = left_ref_pos - right_ref_pos
-                if overlap_len < min_kmer_score:
-                    continue
+            left_ref_range = range(int(l_data["sstart"]),
+                                   int(l_data["send"]))
+            right_ref_range = range(int(r_data["sstart"]),
+                                    int(r_data["send"]))
+
+            overlap_range = set(left_ref_range).intersection(
+                                                    set(right_ref_range))
+            overlap_len = len(overlap_range)
+
+            if overlap_len >= min_kmer_score:
+                l_qend = int(l_data["qend"])
+                attL = l_sequence[l_qend-overlap_len-1:l_qend]
+
+                r_qstart = int(r_data["qstart"])
+                attR = r_sequence[r_qstart-1:r_qstart+overlap_len]
+
+                print(attL)
+                print(attR)
+                print(r_data["sseq"][:overlap_len+1])
+                print(r_data["sseqid"])
 
                 new_start = (prophage.start +
                              int(data_tuple[0]["qend"]) - overlap_len)
@@ -449,7 +472,8 @@ def detect_att_sites(prophages, reference_db_path, extension,
                                             l_sequence, r_sequence,
                                             l_anchor, r_anchor,
                                             k=min_kmer_score)
-            if kmer_data[2] >= min_kmer_score:
+            print(kmer_data[2])
+            if kmer_data[3] >= min_kmer_score:
                 new_start = (prophage.start +
                              kmer_data[0].location.start)
                 new_end = ((prophage.end - extension) +
@@ -459,6 +483,7 @@ def detect_att_sites(prophages, reference_db_path, extension,
                 new_coords = (prophage.start, prophage.end)
 
         prophage.set_coordinates(*new_coords)
+        print(f"({new_coords[0]}, {new_coords[1]})")
 
 
 def annotate_record(record, working_dir):
