@@ -10,17 +10,16 @@ import shutil
 import sys
 from datetime import date, datetime
 
+from Bio import SeqIO
 from Bio.SeqFeature import FeatureLocation, SeqFeature
-from Bio.SeqRecord import SeqRecord
 
+from prophicient.classes.prophage import Prophage
 from prophicient.functions import blastn
 from prophicient.functions.fasta import write_fasta
 from prophicient.functions.att import kmer_count_attachment_site
 from prophicient.functions.find_homologs import find_homologs
 from prophicient.functions.gene_prediction import *
-from prophicient.functions.multiprocess import CPUS, parallelize
-# from prophicient.functions.wrapper_basic import autoannotate
-from prophicient.functions.prefilter import prefilter_genome, realign_subrecord
+from prophicient.functions.multiprocess import CPUS
 from prophicient.functions.prophage_prediction import *
 from prophicient.functions.visualization import prophage_diagram
 
@@ -33,13 +32,6 @@ REFERENCES_DB = DATABASES_DIR.joinpath("Mycobacteria")
 FUNCTIONS_DB = DATABASES_DIR.joinpath("functions")
 
 DATE = date.today().strftime("%d-%b-%Y").upper()
-
-ANNOTATIONS = {"molecule_type": "DNA", "topology": "linear",
-               "data_file_division": "PHG", "date": DATE,
-               "accessions": [], "sequence_version": "1",
-               "keywords": [], "source": "",
-               "organism": "", "taxonomy": [],
-               "comment": [""]}
 
 MIN_LENGTH = 20000      # Don't annotate short contigs
 META_LENGTH = 100000    # Medium-length contigs -> use metagenomic mode
@@ -227,83 +219,6 @@ def find_prophages(fasta, outdir, gff3=None, cpus=CPUS, verbose=False,
     print(f"File Dumps: {str(datetime.now() - mark)}")
 
 
-class Prophage:
-    def __init__(self, parent_record, seq_id, start=None, end=None, strand=1):
-        self.parent_record = parent_record
-        self.parent_seq = parent_record.seq
-        self.id = seq_id
-
-        self.start = None
-        self.end = None
-        self.strand = strand
-
-        self.feature = None
-        self.seq = None
-        self.record = None
-
-        self.set_coordinates(start, end)
-
-    def set_coordinates(self, start, end):
-        self.start = start
-        self.end = end
-
-        self.update_sequence_attributes()
-
-    def set_strand(self, strand):
-        self.strand = strand
-
-        self.update_sequence_attributes()
-
-    def update_sequence_attributes(self):
-        if self.start is None or self.end is None:
-            return
-
-        self.feature = SeqFeature(FeatureLocation(self.start, self.end),
-                                  strand=1,
-                                  type="source")
-        self.seq = self.feature.extract(self.parent_seq)
-        self.record = SeqRecord(self.seq, id=self.id, annotations=ANNOTATIONS)
-        realign_subrecord(self.parent_record, self.record,
-                          self.start, self.end)
-
-
-def execute_prophicient(infile, outdir, database, cores, verbose=False):
-    # Parse the input FASTA file
-    with infile.open("r") as fasta_reader:
-        record_iterator = SeqIO.parse(fasta_reader, "fasta")
-        for record in record_iterator:
-            record_dir = outdir.joinpath(str(record.name))
-            record_dir.mkdir()
-
-            annotate_record(record, record_dir)
-
-            gene_dense_records_and_features = prefilter_genome(record)
-
-            putative_prophage_regions = evaluate_regions_of_interest(
-                                            gene_dense_records_and_features,
-                                            record_dir, database, cores=cores,
-                                            verbose=verbose)
-
-            extracted_prophages = list()
-            for region_data, integrase_homolog in putative_prophage_regions:
-                prophage_data = extract_prophage(region_data[0],
-                                                 integrase_homolog,
-                                                 verbose=verbose)
-
-                prophage_global_start = (region_data[1].location.start +
-                                         prophage_data[1])
-                prophage_global_end = (region_data[1].location.start +
-                                       prophage_data[2])
-
-                if verbose:
-                    print("Prophage detected at: "
-                          f"({prophage_global_start}, {prophage_global_end})")
-                    print("...Att sequence detected:\n"
-                          f"\t\t{prophage_data[3]}")
-
-                extracted_prophages.append(prophage_data[0])
-
-
 def load_initial_prophages(contigs, prophage_predictions):
     prophages = []
     for contig_index, contig in enumerate(contigs):
@@ -459,21 +374,6 @@ def detect_att_sites(prophages, reference_db_path, extension,
                 new_coords = (prophage.start, prophage.end)
 
         prophage.set_coordinates(*new_coords)
-
-
-def annotate_record(record, working_dir):
-    record_file_path = working_dir.joinpath(record.id).with_suffix(".fasta")
-    SeqIO.write(record, record_file_path, "fasta")
-
-    data_dir = working_dir.joinpath("data")
-    data_dir.mkdir()
-
-    prodigal_out_path = autoannotate(record_file_path, data_dir)
-    extract_prodigal_features(record, prodigal_out_path)
-
-    record_file_path = working_dir.joinpath(record.id).with_suffix(".gb")
-    record.annotations = ANNOTATIONS
-    SeqIO.write(record, record_file_path, "gb")
 
 
 def extract_prodigal_features(record, prodigal_output_path):
