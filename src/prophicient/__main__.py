@@ -343,6 +343,22 @@ def get_reference_map_from_sequence(sequence, sequence_name,
 def search_for_prophage_region_homology(contigs, prophage_predictions,
                                         functions_db, temp_dir, cores=1,
                                         min_size=150):
+    """In predicted prophage regions, annotate gene translations on the
+    given bacterial sequence contig.
+
+    :param contigs: Bacterial sequence contigs
+    :type contigs: list
+    :param prophage_predictions: Coordinates of predicted prophages
+    :type prophage_predictions: list
+    :param functions_db: Path to the database with prophage gene homologs.
+    :type functions_db: pathlib.Path
+    :param temp_dir: Path to place result files.
+    :type temp_dir: pathlib.Path
+    :param cores: Number of HHsearch process to create.
+    :type cores: int
+    :param min_size: Minimum length threshold of gene translations.
+    :type min_size: int
+    """
     translations_dir = temp_dir.joinpath("gene_translations")
     translations_dir.mkdir()
 
