@@ -36,7 +36,7 @@ DATE = date.today().strftime("%d-%b-%Y").upper()
 
 MIN_LENGTH = 20000      # Don't annotate short contigs
 META_LENGTH = 100000    # Medium-length contigs -> use metagenomic mode
-EXTENSION = 10000
+EXTENSION = 20000
 MIN_KMER_SCORE = 5
 
 
@@ -174,8 +174,9 @@ def find_prophages(fasta, outdir, gff3=None, cpus=CPUS, verbose=False,
     # Perform binary classification of contig CDS features
     gene_predictions = [predict_prophage_genes(df) for df in dataframes]
     # Initial pass at prophage identification
-    prophage_predictions = [predict_prophage_coords(x, y)
+    prophage_predictions = [predict_prophage_coords(x, y, extend_by=extension)
                             for x, y in zip(contigs, gene_predictions)]
+    print(prophage_predictions)
 
     # Print prophage prediction time
     print(f"Prediction: {str(datetime.now() - mark)}")
@@ -285,13 +286,10 @@ def get_reference_map_from_sequence(sequence, sequence_name,
     reference_map = dict()
     for blast_result in blast_results:
         # Checks to see if the sequence refeernce ID has already been stored
-        exists = reference_map.get(blast_result["sseqid"], None)
+        result_exists = reference_map.get(blast_result["sseqid"], False)
 
-        # If it has been, continue
-        if exists is not None:
-            continue
-
-        reference_map[blast_result["sseqid"]] = blast_result
+        if not result_exists:
+            reference_map[blast_result["sseqid"]] = blast_result
 
     return reference_map
 
@@ -381,6 +379,10 @@ def detect_att_sites(prophages, reference_db_path, extension,
         working_dir = temp_dir.joinpath(prophage.id) 
         working_dir.mkdir()
 
+        half = len(prophage.seq) // 2
+        if extension > half:
+            extension = half
+
         l_sequence = str(prophage.seq[:extension])
         l_sequence_name = "_".join([prophage.id, "L", "extension"])
         l_reference_map = get_reference_map_from_sequence(
@@ -403,13 +405,24 @@ def detect_att_sites(prophages, reference_db_path, extension,
 
         new_coords = None
         for data_tuple in reference_data:
-            left_ref_pos = int(data_tuple[0]["send"])
-            right_ref_pos = int(data_tuple[1]["sstart"])
+            l_data = data_tuple[0]
+            r_data = data_tuple[1]
 
-            if left_ref_pos > right_ref_pos:
-                overlap_len = left_ref_pos - right_ref_pos
-                if overlap_len < min_kmer_score:
-                    continue
+            left_ref_range = range(int(l_data["sstart"]),
+                                   int(l_data["send"]))
+            right_ref_range = range(int(r_data["sstart"]),
+                                    int(r_data["send"]))
+
+            overlap_range = set(left_ref_range).intersection(
+                                                    set(right_ref_range))
+            overlap_len = len(overlap_range)
+
+            if overlap_len >= min_kmer_score:
+                l_qend = int(l_data["qend"])
+                attL = l_sequence[l_qend-overlap_len-1:l_qend]
+
+                r_qstart = int(r_data["qstart"])
+                attR = r_sequence[r_qstart-1:r_qstart+overlap_len]
 
                 new_start = (prophage.start +
                              int(data_tuple[0]["qend"]) - overlap_len)
