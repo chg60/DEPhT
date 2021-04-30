@@ -14,13 +14,14 @@ from Bio import SeqIO
 from Bio.SeqFeature import FeatureLocation, SeqFeature
 
 from prophicient.classes.prophage import Prophage
-from prophicient.functions import blastn
+from prophicient.functions import blastn, gene_prediction
 from prophicient.functions.fasta import write_fasta
 from prophicient.functions.att import kmer_count_attachment_site
 from prophicient.functions.find_homologs import find_homologs
-from prophicient.functions.gene_prediction import *
 from prophicient.functions.multiprocess import CPUS
-from prophicient.functions.prophage_prediction import *
+from prophicient.functions.prophage_prediction import (
+                                contig_to_dataframe, predict_prophage_genes,
+                                predict_prophage_coords, PRODIGAL_FORMAT)
 from prophicient.functions.visualization import prophage_diagram
 
 # GLOBAL VARIABLES
@@ -160,7 +161,7 @@ def find_prophages(fasta, outdir, gff3=None, cpus=CPUS, verbose=False,
             print("\tNo gff3 file - using Pyrodigal and Aragorn...")
         for contig in contigs:
             # Annotate record CDS & t(m)RNA features in-place
-            annotate_contig(contig, len(contig) < META_LENGTH)
+            gene_prediction.annotate_contig(contig, len(contig) < META_LENGTH)
     # Print annotation time
     print(f"Annotation: {str(datetime.now() - mark)}")
 
@@ -179,10 +180,13 @@ def find_prophages(fasta, outdir, gff3=None, cpus=CPUS, verbose=False,
     # Print prophage prediction time
     print(f"Prediction: {str(datetime.now() - mark)}")
 
+    # Create temporary dir, if it doesn't exist.
+    # If it does, destroy the existing first
     if TEMP_DIR.is_dir():
         shutil.rmtree(TEMP_DIR)
     TEMP_DIR.mkdir()
 
+    # Search for phage gene remote homologs and annotate the bacterial sequence
     mark = datetime.now()
     search_for_prophage_region_homology(contigs, prophage_predictions,
                                         FUNCTIONS_DB, TEMP_DIR, cores=CPUS)
@@ -195,6 +199,7 @@ def find_prophages(fasta, outdir, gff3=None, cpus=CPUS, verbose=False,
               f"be able to identify partial (dead) prophages.")
         return
 
+    # Detect attachment sites, where possible, for the predicted prophage
     mark = datetime.now()
     detect_att_sites(prophages, REFERENCES_DB, extension*2, TEMP_DIR)
     print(f"Att search: {str(datetime.now() - mark)}")
@@ -205,7 +210,6 @@ def find_prophages(fasta, outdir, gff3=None, cpus=CPUS, verbose=False,
     # TODO: add attachment core detection
     # TODO: clean up final prophage annotations (add qualifiers for gene and
     #  locus_tag, and maybe gene features for each CDS/tRNA/tmRNA)
-    # TODO: store final annotated records in `trimmed_prophages`
 
     if verbose:
         print("Generating final reports...")
@@ -219,12 +223,26 @@ def find_prophages(fasta, outdir, gff3=None, cpus=CPUS, verbose=False,
     print(f"File Dumps: {str(datetime.now() - mark)}")
 
 
+# HELPER FUNCTIONS
+# -----------------------------------------------------------------------------
 def load_initial_prophages(contigs, prophage_predictions):
+    """Creates Prophage objects from initial prophage prediction coordinates
+    and their respective parent SeqRecord objects.
+
+    :param contigs: SeqRecord nucleotide sequence objects
+    :type contigs: list[Bio.SeqRecord.SeqRecord]
+    :param prophage_predictions: Coordinates for predicted prophages
+    :type prophage_predictions: list[list]
+    :return: Prophage objects that contain putative sequences and coordinates
+    :rtype: list
+    """
     prophages = []
     for contig_index, contig in enumerate(contigs):
+        # Retrieve the contig seqrecord associated with the coordinates
         contig_predictions = prophage_predictions[contig_index]
         for prophage_index, prophage_coordinates in enumerate(
                                                     contig_predictions):
+            # Create a prophage ID from the SeqRecord ID
             prophage_id = "".join(["prophi", contig.id,
                                    "-", str((prophage_index+1))])
             start = prophage_coordinates[0]
@@ -238,18 +256,41 @@ def load_initial_prophages(contigs, prophage_predictions):
 
 def get_reference_map_from_sequence(sequence, sequence_name,
                                     reference_db_path, temp_dir):
+    """Maps sequence BLASTn aligned reference genome IDs to their respective
+    alignment result data.
+
+    :param sequence: Query sequence to be aligned to the reference database
+    :type sequence: str
+    :param sequence_name: Name of the query sequence to be aligned
+    :type sequence_name: str
+    :param reference_db_path: Path to the database of references to search
+    :type referrence: pathlib.Path
+    :param temp_dir: Working directory to place BLASTn inputs and outputs
+    :type temp_dir: pathlib.Path
+    :return: A map of aligned reference genome IDs to alignment result data
+    """
     sequence_path = temp_dir.joinpath(".".join([sequence_name, "fasta"]))
 
+    # Write the sequence to a fasta file in the temp directory
     write_fasta(sequence_path, [sequence_name], [sequence])
 
+    # Try to retrieve reference results for the sequence to the references
     try:
         blast_results = blastn.blast_references(
                                 sequence_path, reference_db_path, temp_dir)
+    # If there are no good alignments, return an empty list
     except blastn.SignificantAlignmentNotFound:
         blast_results = []
 
     reference_map = dict()
     for blast_result in blast_results:
+        # Checks to see if the sequence refeernce ID has already been stored
+        exists = reference_map.get(blast_result["sseqid"], None)
+
+        # If it has been, continue
+        if exists is not None:
+            continue
+
         reference_map[blast_result["sseqid"]] = blast_result
 
     return reference_map
