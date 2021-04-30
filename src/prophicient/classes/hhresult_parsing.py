@@ -57,7 +57,7 @@ BODY_DATA = re.compile(
                  r"\s*Aligned_cols=(\d+)"  # 'match_cols"
                  r"\s*Identities=([\d\.]+)%"  # 'pid'
                  r"\s*Similarity=([-\d\.]+)"  # 'similarity'
-                 r"\s*Sum_probs=([\d\.]+)"  # 'sum_probs'
+                 r"\s*Sum_probs=([\d\.]+|inf)"  # 'sum_probs'
                  r"\s*Template_Neff=([\d\.]+)"))  # 'template_Neff'
 
 ALIGNMENT_BLANK_LINES = 2
