@@ -335,10 +335,10 @@ def search_for_prophage_region_homology(contigs, prophage_predictions,
 
             feature.qualifiers["product"] = ["hypothetical protein"]
 
+            cds_num += 1
             if len(trans) < min_size:
                 continue
 
-            cds_num += 1
             for coordinates in contig_predictions:
                 if (feature.location.end > coordinates[0] and
                         feature.location.end < coordinates[1]):
@@ -363,18 +363,35 @@ def search_for_prophage_region_homology(contigs, prophage_predictions,
 
 def detect_att_sites(prophages, reference_db_path, extension,
                      temp_dir, min_kmer_score=5):
+    """Detect attachment sites demarcating predicted prophage regions from
+    the bacterial contig.
+
+    :param prophages: Predicted prophages
+    :type prophages: list
+    :param reference_db_path: Path to the database with reference sequences
+    :type reference_db_path: pathlib.Path
+    :param extension: Internal length of the prophage to check for att sites
+    :type extension: int
+    :param temp_dir: Path to place result files.
+    :type temp_dir: pathlib.Path
+    :param min_kmer_score: Minimum length threshold of attachment sites.
+    :type min_kmer_score: int
+    """
     for prophage in prophages:
+        working_dir = temp_dir.joinpath(prophage.id) 
+        working_dir.mkdir()
+
         l_sequence = str(prophage.seq[:extension])
         l_sequence_name = "_".join([prophage.id, "L", "extension"])
         l_reference_map = get_reference_map_from_sequence(
                                                 l_sequence, l_sequence_name,
-                                                reference_db_path, temp_dir)
+                                                reference_db_path, working_dir)
 
         r_sequence = str(prophage.seq[-1*(extension):])
         r_sequence_name = "_".join([prophage.id, "R", "extension"])
         r_reference_map = get_reference_map_from_sequence(
                                                 r_sequence, r_sequence_name,
-                                                reference_db_path, temp_dir)
+                                                reference_db_path, working_dir)
 
         reference_ids = list(set(l_reference_map.keys()).intersection(
                              set(r_reference_map.keys())))
@@ -404,23 +421,22 @@ def detect_att_sites(prophages, reference_db_path, extension,
                 break
 
         if not new_coords:
-            l_anchor = extension // 2
-            r_anchor = extension // 2
+            l_origin = extension // 2
+            r_origin = extension // 2
             if reference_data:
                 data_tuple = reference_data[0]
 
                 l_end = int(data_tuple[0]["qend"])
-                if l_end < l_anchor:
-                    l_anchor = l_end
+                if l_end < l_origin:
+                    l_origin = l_end
 
                 r_start = int(data_tuple[1]["qstart"])
-                if r_start > r_anchor:
-                    r_anchor = r_start
+                if r_start > r_origin:
+                    r_origin = r_start
 
-            kmer_data = kmer_count_attachment_site(
-                                            l_sequence, r_sequence,
-                                            l_anchor, r_anchor,
-                                            k=min_kmer_score)
+            kmer_data = find_attachment_site(l_sequence, r_sequence,
+                                             l_origin, r_origin,
+                                             k=min_kmer_score)
             if kmer_data[2] >= min_kmer_score:
                 new_start = (prophage.start +
                              kmer_data[0].location.start)
