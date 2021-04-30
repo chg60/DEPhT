@@ -4,7 +4,7 @@ import pandas as pd
 from Bio.SeqUtils import GC123
 from Bio.SeqUtils.ProtParam import ProteinAnalysis
 
-from prophicient.__main__ import PACKAGE_DIR
+from prophicient import PACKAGE_DIR
 
 MODEL_PATH = PACKAGE_DIR.joinpath("data/prophage_model.pickle")
 RBS_SCORES = {"None": {"None": 0},

@@ -48,8 +48,8 @@ def find_homologs(trans_dir, output_dir, database_path, cores=1,
 
     for hhresult_object in hhresult_objects:
         # Sort the HHresult matches with the given sort key
-        hhresult_object.matches.sort(key=lambda x: int(getattr(x, sort_attr)),
-                                     reverse=True)
+        hhresult_object.matches.sort(key=lambda x: float(
+                                        getattr(x, sort_attr)), reverse=True)
 
     # Take the first HHresult match from the sorted matches
     homologs = [(hhresult.query_id, hhresult.matches[0].target_id)

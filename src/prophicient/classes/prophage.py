@@ -6,7 +6,7 @@ from Bio.SeqRecord import SeqRecord
 
 # GLOBAL VARIABLES
 # -----------------------------------------------------------------------------
-DATE = date.otday.strftime("%d-%b-%Y").upper()
+DATE = date.today().strftime("%d-%b-%Y").upper()
 
 ANNOTATIONS = {"molecule_type": "DNA", "topology": "linear",
                "data_file_division": "PHG", "date": DATE,
@@ -53,8 +53,8 @@ class Prophage:
         self.parent_seq = parent_record.seq
         self.id = seq_id
 
-        self.start = None
-        self.end = None
+        self.start = start
+        self.end = end 
         self.strand = strand
 
         self.feature = None

@@ -13,21 +13,21 @@ from datetime import date, datetime
 from Bio import SeqIO
 from Bio.SeqFeature import FeatureLocation, SeqFeature
 
+from prophicient import PACKAGE_DIR
 from prophicient.classes.prophage import Prophage
 from prophicient.functions import blastn, gene_prediction
 from prophicient.functions.fasta import write_fasta
-from prophicient.functions.att import kmer_count_attachment_site
+from prophicient.functions.att import find_attachment_site
 from prophicient.functions.find_homologs import find_homologs
 from prophicient.functions.multiprocess import CPUS
 from prophicient.functions.prophage_prediction import (
                                 contig_to_dataframe, predict_prophage_genes,
-                                predict_prophage_coords, PRODIGAL_FORMAT)
+                                predict_prophage_coords)
 from prophicient.functions.visualization import prophage_diagram
 
 # GLOBAL VARIABLES
 # -----------------------------------------------------------------------------
 TEMP_DIR = pathlib.Path("/tmp/Prophicient/")
-PACKAGE_DIR = pathlib.Path(__file__).resolve().parent
 DATABASES_DIR = PACKAGE_DIR.joinpath("data/databases")
 REFERENCES_DB = DATABASES_DIR.joinpath("Mycobacteria")
 FUNCTIONS_DB = DATABASES_DIR.joinpath("functions")
