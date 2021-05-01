@@ -87,7 +87,7 @@ def locate_subsequence(child_seq_path, parent_seq_path, temp_dir):
 
 
 def blastn(query, target, out, db=False, outfmt=OUTFMT,
-           header=BLAST_HEADER, word_size=None):
+           header=BLAST_HEADER, word_size=None, gapopen=None, gapextend=None):
     """Performs BLASTn on a query and target sequence.
 
     :param query: Filepath to a fasta-formatted query sequence.
@@ -100,6 +100,12 @@ def blastn(query, target, out, db=False, outfmt=OUTFMT,
     :type outfmt: int
     :param header: BLASTn tabular results header
     :type header: list[str]
+    :param word_size: Word size to use in the BLASTn algorithm
+    :type word_size: int
+    :param gapopen: Penalty for creating gaps in the alignment
+    :type gapopen: int
+    :param gapextend: Penalty for extending gaps in the alignment
+    :type gapextend: int
     """
     if not db:
         command = (f"""blastn -query {query} -subject {target} -out {out} """
@@ -110,6 +116,10 @@ def blastn(query, target, out, db=False, outfmt=OUTFMT,
 
     if word_size is not None:
         command = " ".join([command, "-word_size", str(word_size)])
+    if gapopen is not None:
+        command = " ".join([command, "-gapopen", str(gapopen)])
+    if gapextend is not None:
+        command = " ".join([command, "-gapextend", str(gapextend)])
 
     run_command(command)
 

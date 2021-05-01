@@ -16,7 +16,6 @@ OUTFMT = blastn.OUTFMT
 L_SEQ_NAME = "putative_attL_region"
 R_SEQ_NAME = "putative_attR_region"
 ATT_RESULTS_NAME = "Putative_att_site_blast"
-MAX_GAPOPEN = 0
 
 DEFAULTS = {"k": 5, "fpp": 0.0001, "outfmt": 10}
 
@@ -26,8 +25,7 @@ DEFAULTS = {"k": 5, "fpp": 0.0001, "outfmt": 10}
 def find_attachment_site(l_seq, r_seq, l_origin, r_origin, working_dir,
                          k=K, method="blast",
                          l_seq_name=L_SEQ_NAME, r_seq_name=R_SEQ_NAME,
-                         att_results_name=ATT_RESULTS_NAME, outfmt=OUTFMT,
-                         max_gapopen=MAX_GAPOPEN):
+                         att_results_name=ATT_RESULTS_NAME, outfmt=OUTFMT):
     """Given the sequences of a putative attL region and putative attR region,
     find the most probable attachment site, dictated by the sequence's length
     and it's distance from the predicted origin position.
@@ -54,8 +52,6 @@ def find_attachment_site(l_seq, r_seq, l_origin, r_origin, working_dir,
     :type att_results_name: str
     :param outfmt: BLASTn alignment output type.
     :type outfmt: int
-    :param max_gapopen: Maximum number of gaps allowed in the alignment.
-    :type max_gapopen: int
     :return: A tuple of information associated with the detected att site.
     :rtype: tuple
     """
@@ -87,7 +83,7 @@ def find_attachment_site(l_seq, r_seq, l_origin, r_origin, working_dir,
                             "is not an implemented algorithm")
 
     if not kmer_contigs:
-        return None, None, None, None
+        return
 
     # Score putative attachment site sequences
     scored_kmer_contigs = [
@@ -115,7 +111,7 @@ def find_attachment_site(l_seq, r_seq, l_origin, r_origin, working_dir,
 
 
 def blast_attachment_site(l_seq_path, r_seq_path, out_path,
-                          k=K, outfmt=OUTFMT, max_gapopen=0):
+                          k=K, outfmt=OUTFMT):
     """Given the path to files containing the putative attL region and
     putative attR region, BLASTn the sequences of both regions against each
     other and retrieve matching sequences and their positions.
@@ -130,8 +126,6 @@ def blast_attachment_site(l_seq_path, r_seq_path, out_path,
     :type k: int
     :param outfmt: BLASTn alignment output type.
     :type outfmt: int
-    :param max_gapopen: Maximum number of gaps allowed in the alignment.
-    :type max_gapopen: int
     :return: A list of contigs and their positions in the sequence and graph.
     :rtype: list(tuple(str, int, int))
     """
@@ -146,9 +140,6 @@ def blast_attachment_site(l_seq_path, r_seq_path, out_path,
 
     kmer_contigs = []
     for result in blast_results:
-        if str(result["gapopen"]) >= max_gapopen:
-            continue
-
         # Append the contig and its positions to the list
         kmer_contig = (result["qseq"], result["qstart"], result["send"])
         kmer_contigs.append(kmer_contig)
