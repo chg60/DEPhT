@@ -3,7 +3,7 @@ from pathlib import Path
 
 import csv
 import argparse
-import sys
+import math
 
 
 # Global variables
@@ -93,11 +93,11 @@ def stats(manual_data, testing_data):
 
     for ends in testing_data.values():  # iterates over the ends
         ends = eval(ends)
-        for coor in range(int(ends[0]), int(ends[1]) + 1):
+        for coor in range(int(ends[0]), int(ends[1])):
             soft_set.add(coor)
     for ends in manual_data.values():  # iterates over the ends for manual
         ends = eval(ends)
-        for coor in range(int(ends[0]), int(ends[1]) + 1):
+        for coor in range(int(ends[0]), int(ends[1])):
             manual_set.add(coor)
 
     statistics["TRUE_POSITIVE"] += len(
@@ -160,7 +160,7 @@ def collect_stats(filepath):
             false_negative += per_phage.get("FALSE_NEGATIVE")
 
             true_negative += GENOME_LENGTHS[strain] - \
-                length_manual - length_test - false_negative
+                length_manual - false_positive
     statistics["TRUE_POSITIVE"] += true_positive
     statistics["FALSE_POSITIVE"] += false_positive
     statistics["FALSE_NEGATIVE"] += false_negative
@@ -185,10 +185,12 @@ def metrics(stats):
     sn = (tp/(tp+fn))*100
     ppv = (tp/(tp+fp))*100
     acc = ((tp+tn)/(tp+tn+fp+fn))*100
+    mcc = ((tn*tp) - (fn*fp))/math.sqrt((tp+fp)*(tp+fn)*(tn+fp)*(tn+fn))
 
-    return {"sensitivity": round(sn, 2),
-            "ppv": round(ppv, 2),
-            "accuracy": round(acc, 2)}
+    return {"sensitivity": round(sn, 3),
+            "ppv": round(ppv, 3),
+            "accuracy": round(acc, 3),
+            "mcc": round(mcc, 3)}
 
 
 def get_child_ends(prophage_filepath, parent_contigs):
@@ -318,11 +320,11 @@ def print_data(stats, metrics):
     print(f"{stats['TRUE_POSITIVE']}\t\t{stats['FALSE_POSITIVE']}\t",
           f"\t{stats['TRUE_NEGATIVE']}\t{stats['FALSE_NEGATIVE']}")
 
-    print("\n\n----------------------------------")
-    print("Sensitivity\tPPV\tAccuracy")
-    print("----------------------------------")
+    print("\n\n-----------------------------------------------------------")
+    print("Sensitivity\tPPV\t\tAccuracy\tMCC")
+    print("-----------------------------------------------------------")
     print(f"{metrics['sensitivity']}\t",
-          f"\t{metrics['ppv']}\t{metrics['accuracy']}")
+          f"\t{metrics['ppv']}\t\t{metrics['accuracy']}\t\t{metrics['mcc']}")
 
 
 def get_args():
