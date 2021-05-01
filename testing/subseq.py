@@ -187,7 +187,7 @@ def metrics(stats):
     acc = ((tp+tn)/(tp+tn+fp+fn))*100
 
     return {"sensitivity": round(sn, 2),
-            "positive predictive value": round(ppv, 2),
+            "ppv": round(ppv, 2),
             "accuracy": round(acc, 2)}
 
 
@@ -297,10 +297,32 @@ def comparison(dir, manual_name, software_name):
         csv_file.close()
 
         stats = collect_stats(csv_path)
-        print(stats)
+        # print(stats)
         metric_data = metrics(stats)
-        print(metric_data)
+        # print(metric_data)
+        print_data(stats, metric_data)
         # close files!!
+
+
+def print_data(stats, metrics):
+    """Print the stats and metric data.
+
+    :param stats: Statistics for the software
+    :type stats: dict
+    :param metrics: Metrics for the software
+    :type metrics: dict
+    """
+    print("--------------------------------------------------------------")
+    print("TRUE POSITIVE\tFALSE POSITIVE\tTRUE NEGATIVE\tFALSE NEGATIVE")
+    print("--------------------------------------------------------------")
+    print(f"{stats['TRUE_POSITIVE']}\t\t{stats['FALSE_POSITIVE']}\t",
+          f"\t{stats['TRUE_NEGATIVE']}\t{stats['FALSE_NEGATIVE']}")
+
+    print("\n\n----------------------------------")
+    print("Sensitivity\tPPV\tAccuracy")
+    print("----------------------------------")
+    print(f"{metrics['sensitivity']}\t",
+          f"\t{metrics['ppv']}\t{metrics['accuracy']}")
 
 
 def get_args():
@@ -326,6 +348,8 @@ def main():
     """Run the testing module."""
     # 3 args: reference path, manual path, software path
     args = get_args()
+
+    print(f"\n{args.software}")
 
     comparison(args.dir, args.manual, args.software)
 
