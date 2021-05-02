@@ -70,8 +70,7 @@ def find_attachment_site(l_seq, r_seq, l_origin, r_origin, working_dir,
 
         # Use BLASTn to retrieve putative attachment site sequences
         kmer_contigs = blast_attachment_site(l_seq_path, r_seq_path, out_path,
-                                             k=k, outfmt=outfmt,
-                                             max_gapopen=max_gapopen)
+                                             k=k, outfmt=outfmt)
     # If method is DeBruijn graph
     elif method == "graph":
         # Use a DeBruijn to retrieve putative attachment site sequences
@@ -141,7 +140,8 @@ def blast_attachment_site(l_seq_path, r_seq_path, out_path,
     kmer_contigs = []
     for result in blast_results:
         # Append the contig and its positions to the list
-        kmer_contig = (result["qseq"], result["qstart"], result["send"])
+        kmer_contig = (result["qseq"],
+                       int(result["qstart"]), int(result["send"]))
         kmer_contigs.append(kmer_contig)
 
     return kmer_contigs
