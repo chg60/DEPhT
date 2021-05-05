@@ -1,109 +1,171 @@
-from prophicient.classes import hhresult_parsing
-from prophicient.functions import multiprocess, wrapper_basic
+import tempfile
+import pathlib
+
+from prophicient.classes.hhresult import HHResult
+from prophicient.functions.fasta import write_fasta
+from prophicient.functions.multiprocess import parallelize
+from prophicient.functions.run_command import run_command
+
+HHSEARCH_EVALUE = 1E-04
+HHSEARCH_PROB = 90
 
 
-DEFAULTS = {"expect_cutoff": 0.0001, "probability": 90}
-
-
-def find_homologs(trans_dir, output_dir, database_path, cores=1,
-                  expect_cutoff=DEFAULTS["expect_cutoff"],
-                  probability=DEFAULTS["probability"],
-                  sort_attr="score", verbose=False):
-    """Searches an HHsuite database for every file in the input gene
-    translations directory and returns the translation ID and
-    the ID of the HMM profile of it's best alignment.
-
-    :param trans_dir: Directory of files to perform an HHsearch on.
-    :type trans_dir: pathlib.Path
-    :param output_dir: Directorry to place HHsearch alignment result files.
-    :type output_dir: pathlib.Path
-    :param database: Path to the HHsuite database.
-    :type database: pathlib.Path
-    :param cores: Number of HHsearch processes to create.
-    :type cores: int
-    :param expect_cutoff: E-value cutoff to limit HHsearch alignment matches.
-    :type expect_cutoff: float
-    :param probability: Probability cutoff to limit HHsearch alignment matches.
-    :type probability: float
-    :param sort_attr: Sort key of HHsearch alignment matches.
-    :type sort_attr: str
-    :param verbose: Toggle verbose print statements of the function.
-    :type verbose: bool
+def hhsearch(query, outfile, db, evalue=HHSEARCH_EVALUE):
     """
-    # Create a list of arguments to pass to the HHsearch wrapper function
-    work_items = create_job_queue(trans_dir, output_dir, database_path,
-                                  expect_cutoff)
+    Runs a single instance of hhsearch using the prescribed paths
+    and e-value.
 
-    # Parallelize HHsearch calls
-    multiprocess.parallelize(work_items, cores, wrapper_basic.hhsearch,
-                             verbose=verbose)
+    :param query: the filepath to query against an HHSuite3 database
+    :type query: pathlib.Path
+    :param outfile: the desired output filepath
+    :type outfile: pathlib.Path
+    :param db: the HHSuite3 database to query
+    :type db: pathlib.Path
+    :param evalue: the e-value cutoff to use
+    :type evalue: float
+    """
+    command = f"hhsearch -i {query} -d {db} -o {outfile} -e {evalue}"
+    run_command(command)
 
-    hhresult_objects = []
-    for hhresult_file in output_dir.iterdir():
-        # Apply probability cutoff to HHsearch results
-        # If the result passes the given threshold, parse it into an object
-        hhresult = test_homology(hhresult_file, probability)
-        if hhresult is not None:
-            hhresult_objects.append(hhresult)
 
-    for hhresult_object in hhresult_objects:
-        # Sort the HHresult matches with the given sort key
-        hhresult_object.matches.sort(key=lambda x: float(
-                                        getattr(x, sort_attr)), reverse=True)
+def find_single_homologs(header, sequence, db, tmp_dir, prob=HHSEARCH_PROB):
+    """
+    Runs hhsearch to find functionally annotated homolog(s) for a
+    single protein sequence in the indicated database.
 
-    # Take the first HHresult match from the sorted matches
-    homologs = [(hhresult.query_id, hhresult.matches[0].target_id)
-                for hhresult in hhresult_objects]
+    Returns a tuple containing the header and the label of the
+    best-scoring match with probability greater than `prob`, if such a
+    match exists.
+
+    :param header: a label for the sequence to search
+    :type header: str
+    :param sequence: the sequence to find homologs for
+    :type sequence: str
+    :param db: the database to find homologs in
+    :type db: pathlib.Path
+    :param tmp_dir: the directory where temporary files can go
+    :type tmp_dir: pathlib.Path
+    :param prob: probability threshold to keep a match
+    :type prob: int or float
+    :return: hhresult
+    """
+    # Set up file paths
+    name = tempfile.mkstemp(suffix=".fasta", prefix=f"{header}_", dir=tmp_dir)
+    query_file = pathlib.Path(name[-1])
+    output_file = query_file.with_suffix(".hhr")
+
+    # Write the fasta file, and run hhsearch
+    write_fasta([header], [sequence], query_file)
+    hhsearch(query_file, output_file, db)
+
+    # Parse the hhsearch result
+    hhresult, best_match = HHResult(output_file), None
+    hhresult.parse_result()
+
+    # Cull low-probability matches
+    hhresult.matches = [match for match in hhresult.matches if
+                        float(match.probability) > prob]
+    if hhresult.matches:
+        # Best match is the one with the highest bit-score
+        hhresult.matches.sort(key=lambda x: float(x.score), reverse=True)
+        best_match = hhresult.matches[0].target_id
+
+    return header, best_match
+
+
+def find_batch_homologs(headers, sequences, db, tmp_dir, cpus):
+    """
+    Runs hhsearch to find functionally annotated homologs for each
+    of the given translations in the indicated database.
+
+    :param headers: labels for the sequence to search
+    :type headers: list of str
+    :param sequences: the sequences to find homologs for
+    :type sequences: list of str
+    :param db: the database to find homologs in
+    :type db: pathlib.Path
+    :param tmp_dir: the directory where temporary files can go
+    :type tmp_dir: pathlib.Path
+    :param cpus: how many CPU cores to use?
+    :type cpus: int
+    :return: homologs
+    """
+    jobs = list()
+    for header, sequence in zip(headers, sequences):
+        jobs.append((header, sequence, db, tmp_dir))
+    homologs = parallelize(jobs, cpus, find_single_homologs)
 
     return homologs
 
 
-def create_job_queue(input_dir, output_dir, database, cutoff):
-    """Creates a job queue for hhsearch items from an input and output
-    directory.
-
-    :param input_dir: Directory of files to perform an HHsearch on.
-    :type input_dir: pathlib.Path
-    :param output_dir: Directory to place HHsearch alignment result files.
-    :type output_dir: pathlib.Path
-    :param database: Path to the HHsuite database.
-    :type database: pathlib.Path
-    :param cutoff: E-value cutoff to limit HHsearch alignment matches.
-    :type cutoff: float
-    :return: Work items to parallelize HHsearch calls.
-    :rtype: list[tuple]
+def find_homologs(contigs, prophage_coords, db, tmp_dir, cpus, min_length=150):
     """
-    jobs = []
+    Convenience function for finding all prophage-predicted gene homologs
+    across all contigs of a genome.
 
-    for filepath in input_dir.iterdir():
-        if filepath.suffix == ".fasta":
-            jobs.append((filepath, output_dir, database, cutoff))
+    Updates contig features in-place.
 
-    return jobs
-
-
-def test_homology(hhresult_file, probability):
-    """Tests whether the most probable hit of an HMM profile alignment meets
-    the given probability alignment.
-
-    :param hhresult_file: Filepath to a hhsearch alignment result.
-    :type hhresult_file: pathlib.Path
-    :param probability: Probability threshold.
-    :type probability: pathlib.Path
-    :return: A valid HHResult object if the given alignment meets the threshold
-    :rtype: prophicient.classes.hhresult_parsing.HHResult
+    :param contigs: the contigs from an input file
+    :type contigs: list of Bio.SeqRecord.SeqRecord
+    :param prophage_coords: predicted prophage coords on each contig
+    :type prophage_coords: list of list of tuple(int, int)
+    :param db: the database to find homologs in
+    :type db: pathlib.Path
+    :param tmp_dir: the directory where temporary files can go
+    :type tmp_dir: pathlib.Path
+    :param cpus: how many CPU cores to use?
+    :type cpus: int
+    :param min_length: don't find homologs for genes shorter than this
+    :type min_length: int
     """
-    # Parse the HHSearch alignment result file into an object
-    hhresult = hhresult_parsing.HHResult(hhresult_file)
-    hhresult.parse_result()
+    hhsearch_dir = tmp_dir.joinpath("hhsearch")
+    if not hhsearch_dir.is_dir():
+        hhsearch_dir.mkdir()
 
-    if not hhresult.matches:
-        return None
+    # Iterate over contigs and prophage coordinate predictions together
+    for contig, contig_prophage_coords in zip(contigs, prophage_coords):
+        map_geneid_to_feature = dict()
+        batch_geneids, batch_sequences = list(), list()
+        for i, feature in enumerate(contig.features):
+            geneid = f"{contig.id}_{i+1}"
+            feature.qualifiers["locus_tag"] = [geneid]
+            feature.qualifiers["gene"] = [i + 1]
 
-    # Sort the hhresult matches by probability, and compare the highest
-    # probability alignment against the threshold
-    hhresult.matches.sort(key=lambda x: x.probability, reverse=True)
-    if float(hhresult.matches[0].probability) < probability:
-        return None
+            # Only hhsearch CDS features
+            if feature.type == "CDS":
+                translation = feature.qualifiers["translation"][0]
 
-    return hhresult
+                # Only hhsearch if length > min_length
+                if len(translation) < min_length:
+                    continue
+
+                # Only check features that overlap or are in prophages
+                if __feature_in_prophage(feature, contig_prophage_coords):
+                    map_geneid_to_feature[geneid] = feature
+                    batch_geneids.append(geneid)
+                    batch_sequences.append(translation)
+
+        homologs = find_batch_homologs(
+            batch_geneids, batch_sequences, db, hhsearch_dir, cpus)
+
+        for geneid, product in homologs:
+            if product:
+                feature = map_geneid_to_feature[geneid]
+                feature.qualifiers["product"] = [product]
+
+
+def __feature_in_prophage(feature, contig_prophage_coords):
+    """
+    Checks whether the indicated feature overlaps the coordinates of
+    a predicted prophage.
+
+    :param feature: the feature to check
+    :type feature: Bio.SeqFeature.SeqFeature
+    :param contig_prophage_coords: predicted prophage coordinates
+    :type contig_prophage_coords: list of tuple(int, int)
+    """
+    for start, end in contig_prophage_coords:
+        if (start < feature.location.start < end) or \
+                (start < feature.location.end < end):
+            return True
+    return False
