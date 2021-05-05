@@ -1,151 +1,76 @@
 import csv
 
-from prophicient.functions.run import run as run_command
+from prophicient.functions.run_command import run_command
 
 
 # GLOBAL VARIABLES
 # -----------------------------------------------------------------------------
-
-OUTFMT = 10
-EVAL_CUTOFF = 0.001
-BLAST_HEADER = ["qstart", "qend", "sstart", "send",
-                "qseq", "sseq", "sseqid",
-                "length", "evalue", "bitscore",
-                "gapopen", "mismatch"]
-
-DEFAULTS = {"outfmt": OUTFMT, "blast_csv_header": BLAST_HEADER,
-            "eval_cutoff": EVAL_CUTOFF}
+BLASTN_OUTFMT = "10 sseqid qstart qend qseq sstart send sseq length gapopen " \
+                "mismatch evalue bitscore"
+BLASTN_EVALUE = 1E-05
 
 
 # MAIN FUNCTIONS
 # -----------------------------------------------------------------------------
-def blast_references(query_seq_path, reference_db_path, temp_dir,
-                     eval_cutoff=EVAL_CUTOFF):
-    """Performs BLASTn on a query against a reference blast database and
-    returns all blast results above a evalue threshold
-
-    :param query_seq_path: Filepath to a fasta-formatted query sequence.
-    :type child_seq_path: pathlib.Path
-    :param parent_seq_path: Filepath to a BLAST nucleotide database.
-    :type parent_seq_path: pathlib.Path
-    :param temp_dir: Directory to dump results of the BLASTn alignment.
-    :type temp_dir: pathlib.Path
-    :param eval_cutoff: Upper E-value threshold to permit results for.
-    :type eval_cutoff: float
-    :return refined_blast_results: Result dictionaries above E-value cutoff.
-    :type refined_blast_results: list[dict]
+def blastn(query, target, tmp_dir, mode="db", evalue=BLASTN_EVALUE, **kwargs):
     """
-    csv_path = temp_dir.joinpath(f"{query_seq_path.stem}_blast_results.csv")
+    Runs blastn in either query/subject mode or query/database mode, as
+    indicated by `mode`. Returns hits better than `evalue`.
 
-    # BLASTn query sequence against reference database
-    blastn(query_seq_path, reference_db_path, csv_path, db=True)
-    # Read in tabular BLASTn results
-    blast_results = read_blast_csv(csv_path)
+    NOTE: **kwargs will be interpreted as additional blastn parameters.
 
-    if not blast_results:
-        raise SignificantAlignmentNotFound(
-                    f"BLASTn produced no alignment for {query_seq_path} "
-                    f"against {reference_db_path}.")
-
-    refined_blast_results = []
-    # Iterate through blast results and remove weaker alignments
-    for blast_result in blast_results:
-        if float(blast_result["evalue"]) > eval_cutoff:
-            continue
-
-        refined_blast_results.append(blast_result)
-
-    return refined_blast_results
-
-
-def locate_subsequence(child_seq_path, parent_seq_path, temp_dir):
-    """Performs BLASTn on a query and target sequence and identifies
-    the coordinates of the section of the parent sequence that corresponds
-    to the best alignment.
-
-    :param child_seq_path: Filepath to a fasta-formatted target sequence.
-    :type child_seq_path: pathlib.Path
-    :param parent_seq_path: Filepath to a fasta-formatted query sequence.
-    :type parent_seq_path: pathlib.Path
-    :param temp_dir: Directory to dump tabular results of the BLASTn alignment.
-    :type temp_dir: pathlib.Path
-    """
-    csv_path = temp_dir.joinpath(f"{child_seq_path.stem}_blast_results.csv")
-
-    # BLASTn child subsequence against parent sequence
-    blastn(child_seq_path, parent_seq_path, csv_path)
-    # Read in tabular BLASTn results
-    blast_results = read_blast_csv(csv_path)
-
-    if not blast_results:
-        raise SignificantAlignmentNotFound(
-                        f"BLASTn produced no alignment for {parent_seq_path} "
-                        f"and {child_seq_path}")
-
-    # Return where the top alignment result aligns to in the parent sequence
-    return (int(blast_results[0]["sstart"]), int(blast_results[0]["send"]))
-
-
-def blastn(query, target, out, db=False, outfmt=OUTFMT,
-           header=BLAST_HEADER, word_size=None, gapopen=None, gapextend=None):
-    """Performs BLASTn on a query and target sequence.
-
-    :param query: Filepath to a fasta-formatted query sequence.
+    :param query: the query FASTA file to use
     :type query: pathlib.Path
-    :param target: Filepath to a fasta-formatted target sequence.
+    :param target: the target to BLAST against
     :type target: pathlib.Path
-    :param out: Filepath to dump results of the BLASTn alignment.
-    :type out: pathlib.Path
-    :param outfmt: BLASTn alignment output type
-    :type outfmt: int
-    :param header: BLASTn tabular results header
-    :type header: list[str]
-    :param word_size: Word size to use in the BLASTn algorithm
-    :type word_size: int
-    :param gapopen: Penalty for creating gaps in the alignment
-    :type gapopen: int
-    :param gapextend: Penalty for extending gaps in the alignment
-    :type gapextend: int
+    :param tmp_dir: the directory where temporary files can go
+    :type tmp_dir: pathlib.Path
+    :param mode: how to treat the target (db or subject sequence)
+    :type mode: str
+    :param evalue: the e-value cutoff to use
+    :type evalue: float
+    :return:
     """
-    if not db:
-        command = (f"""blastn -query {query} -subject {target} -out {out} """
-                   f"""-outfmt "10 {' '.join(header)}" """)
+    # Create output filepath
+    outfile = tmp_dir.joinpath(f"{query.stem}_blastn_results.csv")
+
+    # Prepare blastn command
+    if mode == "db":
+        command = f"blastn -query {query} -db {target}"
+    elif mode == "subject":
+        command = f"blastn -query {query} -subject {target}"
     else:
-        command = (f"""blastn -query {query} -db {target} -out {out} """
-                   f"""-outfmt "10 {' '.join(header)}" """)
+        raise ValueError("valid blastn modes are: 'db', 'subject'")
+    command += f" -evalue {evalue} -out {outfile} -outfmt '{BLASTN_OUTFMT}'"
 
-    if word_size is not None:
-        command = " ".join([command, "-word_size", str(word_size)])
-    if gapopen is not None:
-        command = " ".join([command, "-gapopen", str(gapopen)])
-    if gapextend is not None:
-        command = " ".join([command, "-gapextend", str(gapextend)])
-
+    # Interpret any kwargs as blastn keywords
+    for key, value in kwargs.items():
+        command += f" -{key} {value}"
     run_command(command)
 
+    # Return parsed hits as list of dictionaries
+    fields = BLASTN_OUTFMT.split()[1:]
+    blastn_reader = csv.DictReader(open(outfile, "r"), fieldnames=fields)
+    return [row for row in blastn_reader]
 
-def read_blast_csv(filepath, header=BLAST_HEADER):
-    """Reads in a comma-separated value table.
 
-    :param filepath: Filepath to the tabular results of a BLASTn alignment.
-    :type filepath: pathlib.Path
-    :param header: BLASTn tabular results header
-    :type header: list[str]
-    :return: Dictionaries containing key-value pairs, header to value
-    :rtype: list[dict]
+def locate_subsequence(query, subject, tmp_dir):
     """
-    blast_results = []
-    with filepath.open(mode="r") as filehandle:
-        csv_reader = csv.reader(filehandle, delimiter=",", quotechar='"')
-        for row in csv_reader:
-            row_dict = {header[i]: row[i] for i in range(len(header))}
-            blast_results.append(row_dict)
+    Uses `blastn` method to find the coordinates of a query sequence
+     in a target sequence.
 
-    return blast_results
+    :param query: the query sequence to search
+    :type query: pathlib.Path
+    :param subject: the subject sequence to search
+    :type subject: pathlib.Path
+    :param tmp_dir: the directory where temporary files can go
+    :type tmp_dir: pathlib.Path
+    :return: start, end
+    """
+    blast_results = blastn(query, subject, tmp_dir, mode="subject")
 
-
-# ERROR CLASSES
-# -----------------------------------------------------------------------------
-
-class SignificantAlignmentNotFound(Exception):
-    pass
+    # Return best alignment result location if any alignments were found
+    if blast_results:
+        start = int(blast_results[0]["sstart"])
+        end = int(blast_results[0]["send"])
+        return start, end
