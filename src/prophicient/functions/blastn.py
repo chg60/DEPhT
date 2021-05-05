@@ -6,20 +6,34 @@ from prophicient.functions.run import run as run_command
 # GLOBAL VARIABLES
 # -----------------------------------------------------------------------------
 
-DEFAULT_BLAST_CSV_HEADER = ["qstart", "qend", "sstart", "send",
-                            "qseq", "sseq", "sseqid",
-                            "length", "evalue", "bitscore"]
+OUTFMT = 10
+EVAL_CUTOFF = 0.001
+BLAST_HEADER = ["qstart", "qend", "sstart", "send",
+                "qseq", "sseq", "sseqid",
+                "length", "evalue", "bitscore",
+                "gapopen", "mismatch"]
 
-DEFAULT = {"outfmt": 10, "blast_csv_header": DEFAULT_BLAST_CSV_HEADER,
-           "eval_cutoff": 0.001}
+DEFAULTS = {"outfmt": OUTFMT, "blast_csv_header": BLAST_HEADER,
+            "eval_cutoff": EVAL_CUTOFF}
 
 
 # MAIN FUNCTIONS
 # -----------------------------------------------------------------------------
 def blast_references(query_seq_path, reference_db_path, temp_dir,
-                     eval_cutoff=DEFAULT["eval_cutoff"]):
+                     eval_cutoff=EVAL_CUTOFF):
     """Performs BLASTn on a query against a reference blast database and
     returns all blast results above a evalue threshold
+
+    :param query_seq_path: Filepath to a fasta-formatted query sequence.
+    :type child_seq_path: pathlib.Path
+    :param parent_seq_path: Filepath to a BLAST nucleotide database.
+    :type parent_seq_path: pathlib.Path
+    :param temp_dir: Directory to dump results of the BLASTn alignment.
+    :type temp_dir: pathlib.Path
+    :param eval_cutoff: Upper E-value threshold to permit results for.
+    :type eval_cutoff: float
+    :return refined_blast_results: Result dictionaries above E-value cutoff.
+    :type refined_blast_results: list[dict]
     """
     csv_path = temp_dir.joinpath(f"{query_seq_path.stem}_blast_results.csv")
 
@@ -72,8 +86,8 @@ def locate_subsequence(child_seq_path, parent_seq_path, temp_dir):
     return (int(blast_results[0]["sstart"]), int(blast_results[0]["send"]))
 
 
-def blastn(query, target, out, db=False, outfmt=DEFAULT["outfmt"],
-           header=DEFAULT["blast_csv_header"]):
+def blastn(query, target, out, db=False, outfmt=OUTFMT,
+           header=BLAST_HEADER, word_size=None, gapopen=None, gapextend=None):
     """Performs BLASTn on a query and target sequence.
 
     :param query: Filepath to a fasta-formatted query sequence.
@@ -86,6 +100,12 @@ def blastn(query, target, out, db=False, outfmt=DEFAULT["outfmt"],
     :type outfmt: int
     :param header: BLASTn tabular results header
     :type header: list[str]
+    :param word_size: Word size to use in the BLASTn algorithm
+    :type word_size: int
+    :param gapopen: Penalty for creating gaps in the alignment
+    :type gapopen: int
+    :param gapextend: Penalty for extending gaps in the alignment
+    :type gapextend: int
     """
     if not db:
         command = (f"""blastn -query {query} -subject {target} -out {out} """
@@ -94,10 +114,17 @@ def blastn(query, target, out, db=False, outfmt=DEFAULT["outfmt"],
         command = (f"""blastn -query {query} -db {target} -out {out} """
                    f"""-outfmt "10 {' '.join(header)}" """)
 
+    if word_size is not None:
+        command = " ".join([command, "-word_size", str(word_size)])
+    if gapopen is not None:
+        command = " ".join([command, "-gapopen", str(gapopen)])
+    if gapextend is not None:
+        command = " ".join([command, "-gapextend", str(gapextend)])
+
     run_command(command)
 
 
-def read_blast_csv(filepath, header=DEFAULT["blast_csv_header"]):
+def read_blast_csv(filepath, header=BLAST_HEADER):
     """Reads in a comma-separated value table.
 
     :param filepath: Filepath to the tabular results of a BLASTn alignment.
