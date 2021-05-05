@@ -3,53 +3,53 @@ import pathlib
 
 def parse_fasta(filepath):
     """
-    Parses a fasta file into a list of geneids and a corresponding
-    list of translations.
+    Parses a fasta file into a list of headers and a corresponding list
+    of sequences.
 
     :param filepath: fasta file to parse
-    :type filepath: pathlib.Path
-    :return: geneids, translations
+    :type filepath: pathlib.Path or str
+    :return: headers, sequences
     """
-    geneids = list()
-    translations = list()
-    with filepath.open("r") as fasta_reader:
-        line = fasta_reader.readline()
-        while line:
+    headers, sequences = list(), list()
+
+    with open(filepath, "r") as fasta_reader:
+        cache = list()
+        for line in fasta_reader:
+            # If header line, flush the cache and store header
             if line.startswith(">"):
-                geneids.append(line.lstrip(">").rstrip())
-                translations.append("")
+                sequences.append("".join(cache))
+                cache = list()
+                headers.append(line.lstrip(">").rstrip())
+            # Otherwise, append to the cache
             else:
-                translations[-1] += line.rstrip()
-            line = fasta_reader.readline()
+                cache.append(line.rstrip())
 
-    return geneids, translations
+        # Flush the last sequence out of the cache, and pop empty sequence
+        sequences.append("".join(cache))
+        sequences.pop(0)
+
+    return headers, sequences
 
 
-def write_fasta(f, geneids, translations):
+def write_fasta(headers, sequences, filepath, width=80):
     """
-    Writes the given geneids and translations to file f.
+    Writes the given headers and sequences to filepath.
 
-    Round trip with `write_fasta` and `parse_fasta` will produce the same result.
-
-    :param f: the fasta file to write
-    :type f: pathlib.Path
-    :param geneids: the gene labels
-    :type geneids: list
-    :param translations: the gene sequences
-    :type translations: list
-    :return:
-
-    >>> gs = ["Muddy_gp28", "Muddy_gp29"]
-    >>> ts = ["MTKFWEFVKSDKFRLYFYSVCVAVMGLLVYYGIVEAEAVPYWLTLLGAIGMVGNATAAANLGSQIRQKGGEG",
-    ... "MTWWSADFWNNIGPVGLSVLACVFFVVALVRGWLVIGRYHRETVERLDARAQKDAETIDVLSRAVTEKVAEDQATTRILSAIRDLWTSSKEEAT"]
-    >>> fasta_file = pathlib.Path("/tmp/test.fasta")
-    >>> write_fasta(fasta_file, gs, ts)
-    >>> read_gs, read_ts = parse_fasta(fasta_file)
-    >>> assert gs[0] == read_gs[0]
-    >>> assert gs[1] == read_gs[1]
-    >>> assert ts[0] == read_ts[0]
-    >>> assert ts[1] == read_ts[1]
+    :param headers: the sequence labels
+    :type headers: list of str
+    :param sequences: the sequences to write
+    :type sequences: list of str
+    :param filepath: the fasta file to write
+    :type filepath: pathlib.Path or str
+    :param width: maximum number of characters per sequence line
+    :type width: int
     """
-    with f.open("w") as fh:
-        for geneid, translation in zip(geneids, translations):
-            fh.write(f">{geneid}\n{translation}\n")
+    if not isinstance(headers, list) or not isinstance(sequences, list):
+        raise TypeError(f"headers and sequences should be lists of strings")
+
+    with open(filepath, "w") as fasta_writer:
+        for header, sequence in zip(headers, sequences):
+            fasta_writer.write(f">{header}\n")
+            # Use string slicing to split the sequence to satisfy width param
+            for i in range(0, len(sequence), width):
+                fasta_writer.write(f"{sequence[i:i + width]}\n")
