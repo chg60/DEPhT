@@ -28,10 +28,11 @@ from prophicient.functions.visualization import prophage_diagram
 
 # GLOBAL VARIABLES
 # -----------------------------------------------------------------------------
-TEMP_DIR = pathlib.Path("/tmp/Prophicient/")
-DATABASES_DIR = PACKAGE_DIR.joinpath("data/databases")
-REFERENCES_DB = DATABASES_DIR.joinpath("Mycobacteria")
-FUNCTIONS_DB = DATABASES_DIR.joinpath("functions")
+TMP_DIR = pathlib.Path("/tmp/prophicient")
+
+DATA_DIR = PACKAGE_DIR.joinpath("data")
+BLASTN_DB = DATA_DIR.joinpath("blastn/mycobacteria")
+HHSEARCH_DB = DATA_DIR.joinpath("hhsearch/functions")
 
 DATE = date.today().strftime("%d-%b-%Y").upper()
 
@@ -87,9 +88,6 @@ def main(arguments):
     if not outdir.is_dir():
         print(f"'{str(outdir)}' does not exist - creating it...")
         outdir.mkdir(parents=True)
-    elif outdir.is_file():
-        print(f"'{str(outfile)}' already exists as a file - exiting...")
-        return
 
     gff3 = args.gff3
     if gff3 and not gff3.is_file():
@@ -186,14 +184,14 @@ def find_prophages(fasta, outdir, gff3=None, cpus=CPUS, verbose=False,
 
     # Create temporary dir, if it doesn't exist.
     # If it does, destroy the existing first
-    if TEMP_DIR.is_dir():
-        shutil.rmtree(TEMP_DIR)
-    TEMP_DIR.mkdir()
+    if TMP_DIR.is_dir():
+        shutil.rmtree(TMP_DIR)
+    TMP_DIR.mkdir()
 
     # Search for phage gene remote homologs and annotate the bacterial sequence
     mark = datetime.now()
     search_for_prophage_region_homology(contigs, prophage_predictions,
-                                        FUNCTIONS_DB, TEMP_DIR, cores=CPUS)
+                                        HHSEARCH_DB, TMP_DIR, cores=CPUS)
     print(f"Homology search: {str(datetime.now() - mark)}")
 
     prophages = load_initial_prophages(contigs, prophage_predictions)
@@ -205,7 +203,7 @@ def find_prophages(fasta, outdir, gff3=None, cpus=CPUS, verbose=False,
 
     # Detect attachment sites, where possible, for the predicted prophage
     mark = datetime.now()
-    detect_att_sites(prophages, REFERENCES_DB, extension*2, TEMP_DIR)
+    detect_att_sites(prophages, BLASTN_DB, extension*2, TMP_DIR)
     print(f"Att search: {str(datetime.now() - mark)}")
 
     prophage_records = [prophage.record for prophage in prophages]
@@ -259,7 +257,7 @@ def load_initial_prophages(contigs, prophage_predictions):
 
 
 def get_reference_map_from_sequence(sequence, sequence_name,
-                                    reference_db_path, temp_dir):
+                                    reference_db_path, TMP_DIR):
     """Maps sequence BLASTn aligned reference genome IDs to their respective
     alignment result data.
 
@@ -269,11 +267,11 @@ def get_reference_map_from_sequence(sequence, sequence_name,
     :type sequence_name: str
     :param reference_db_path: Path to the database of references to search
     :type referrence: pathlib.Path
-    :param temp_dir: Working directory to place BLASTn inputs and outputs
-    :type temp_dir: pathlib.Path
+    :param TMP_DIR: Working directory to place BLASTn inputs and outputs
+    :type TMP_DIR: pathlib.Path
     :return: A map of aligned reference genome IDs to alignment result data
     """
-    sequence_path = temp_dir.joinpath(".".join([sequence_name, "fasta"]))
+    sequence_path = TMP_DIR.joinpath(".".join([sequence_name, "fasta"]))
 
     # Write the sequence to a fasta file in the temp directory
     write_fasta(sequence_path, [sequence_name], [sequence])
@@ -281,7 +279,7 @@ def get_reference_map_from_sequence(sequence, sequence_name,
     # Try to retrieve reference results for the sequence to the references
     try:
         blast_results = blastn.blast_references(
-                                sequence_path, reference_db_path, temp_dir)
+                                sequence_path, reference_db_path, TMP_DIR)
     # If there are no good alignments, return an empty list
     except blastn.SignificantAlignmentNotFound:
         blast_results = []
@@ -298,7 +296,7 @@ def get_reference_map_from_sequence(sequence, sequence_name,
 
 
 def search_for_prophage_region_homology(contigs, prophage_predictions,
-                                        functions_db, temp_dir, cores=1,
+                                        HHSEARCH_DB, TMP_DIR, cores=1,
                                         min_size=150):
     """In predicted prophage regions, annotate gene translations on the
     given bacterial sequence contig.
@@ -307,16 +305,16 @@ def search_for_prophage_region_homology(contigs, prophage_predictions,
     :type contigs: list
     :param prophage_predictions: Coordinates of predicted prophages
     :type prophage_predictions: list
-    :param functions_db: Path to the database with prophage gene homologs.
-    :type functions_db: pathlib.Path
-    :param temp_dir: Path to place result files.
-    :type temp_dir: pathlib.Path
+    :param HHSEARCH_DB: Path to the database with prophage gene homologs.
+    :type HHSEARCH_DB: pathlib.Path
+    :param TMP_DIR: Path to place result files.
+    :type TMP_DIR: pathlib.Path
     :param cores: Number of HHsearch process to create.
     :type cores: int
     :param min_size: Minimum length threshold of gene translations.
     :type min_size: int
     """
-    translations_dir = temp_dir.joinpath("gene_translations")
+    translations_dir = TMP_DIR.joinpath("gene_translations")
     translations_dir.mkdir()
 
     gene_id_feature_map = dict()
@@ -355,10 +353,10 @@ def search_for_prophage_region_homology(contigs, prophage_predictions,
                     write_fasta(file_path, [gene_id], [trans])
                     break
 
-    hhresults_dir = temp_dir.joinpath("hhresults")
+    hhresults_dir = TMP_DIR.joinpath("hhresults")
     hhresults_dir.mkdir()
 
-    homologs = find_homologs(translations_dir, hhresults_dir, functions_db,
+    homologs = find_homologs(translations_dir, hhresults_dir, HHSEARCH_DB,
                              cores=cores, verbose=True)
 
     for gene_id, product in homologs:
@@ -368,7 +366,7 @@ def search_for_prophage_region_homology(contigs, prophage_predictions,
 
 
 def detect_att_sites(prophages, reference_db_path, extension,
-                     temp_dir, min_kmer_score=5):
+                     TMP_DIR, min_kmer_score=5):
     """Detect attachment sites demarcating predicted prophage regions from
     the bacterial contig.
 
@@ -378,14 +376,14 @@ def detect_att_sites(prophages, reference_db_path, extension,
     :type reference_db_path: pathlib.Path
     :param extension: Internal length of the prophage to check for att sites
     :type extension: int
-    :param temp_dir: Path to place result files.
-    :type temp_dir: pathlib.Path
+    :param TMP_DIR: Path to place result files.
+    :type TMP_DIR: pathlib.Path
     :param min_kmer_score: Minimum length threshold of attachment sites.
     :type min_kmer_score: int
     """
     for prophage in prophages:
         # Create prophage working directory within temp directory
-        working_dir = temp_dir.joinpath(prophage.id) 
+        working_dir = TMP_DIR.joinpath(prophage.id) 
         working_dir.mkdir()
 
         # If the internal extension will cause the right and left regions
@@ -504,41 +502,6 @@ def detect_att_sites(prophages, reference_db_path, extension,
 
         prophage.update()
         prophage.clean_record()
-
-
-def extract_prodigal_features(record, prodigal_output_path):
-    with prodigal_output_path.open(mode="r") as filehandle:
-        prodigal_output = "".join(filehandle.readlines())
-
-    prodigal_genes = PRODIGAL_FORMAT.findall(prodigal_output)
-
-    # Iterate over prodigal_genes (regex "hits" from Prodigal file...)
-    for gene in prodigal_genes:
-        gene_num = int(gene[0])
-        start = int(gene[1]) - 1
-        end = int(gene[2])
-        strand = int(gene[3])
-        partial = int(gene[4])
-        start_codon = gene[5]
-        rbs_type = gene[6]
-        rbs_spacer = gene[7]
-        gc_pct = gene[8]
-
-        # Create SeqFeature from these data, and add it to record.features
-        qualify = {"note": {"partial": partial, "start_codon": start_codon,
-                            "rbs_type": rbs_type, "rbs_spacer": rbs_spacer,
-                            "gc content": gc_pct},
-                   "product": ["hypothetical protein"],
-                   "locus_tag": ["_".join([record.id, "CDS",
-                                 str(gene_num+1)])]}
-        feature = SeqFeature(FeatureLocation(start, end), strand=strand,
-                             qualifiers=qualify, type="CDS")
-
-        feature_sequence = feature.extract(record.seq)
-        feature_trans = feature_sequence.translate(to_stop=True, table=11)
-        feature.qualifiers["translation"] = [str(feature_trans)]
-
-        record.features.append(feature)
 
 
 if __name__ == "__main__":
