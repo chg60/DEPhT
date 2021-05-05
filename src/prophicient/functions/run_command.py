@@ -2,7 +2,7 @@ from subprocess import Popen, DEVNULL, PIPE
 import shlex
 
 
-def run(command, verbose=False):
+def run_command(command, verbose=False):
     """
     Runs the indicated command-line command, with output suppressed.
 
