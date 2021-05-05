@@ -2,7 +2,6 @@
 Functions to parallelize of processing of a list of inputs.
 Adapted from https://docs.python.org/3/library/multiprocessing.html
 """
-
 import multiprocessing as mp
 
 from prophicient.classes.progress import Progress
@@ -10,7 +9,9 @@ from prophicient.classes.progress import Progress
 # Make sure new processes are forked, not spawned
 mp.set_start_method("fork")
 
-CPUS = mp.cpu_count() // 2
+# Assume everyone has hyper-threading; only use physical cores
+LOGICAL_CORES = mp.cpu_count()
+PHYSICAL_CORES = LOGICAL_CORES // 2
 
 
 def show_progress(current, end, width=50):
@@ -30,9 +31,9 @@ def show_progress(current, end, width=50):
     return progress
 
 
-def parallelize(inputs, num_processors, task, verbose=True):
+def parallelize(inputs, num_processors, task, verbose=False):
     """
-    Parallelizes some task on an input list across the specified number
+    Parallelize some task on an input list across the specified number
     of processors
     :param inputs: list of inputs
     :param num_processors: number of processor cores to use
@@ -70,7 +71,7 @@ def count_processors(inputs, num_processors):
     :param num_processors: specified number of processors
     :return: num_processors (optimized)
     """
-    if num_processors < 1 or num_processors > mp.cpu_count():
+    if num_processors < 1 or num_processors > LOGICAL_CORES:
         print(f"Invalid number of CPUs specified ({num_processors})")
         num_processors = min([mp.cpu_count(), len(inputs)])
         print(f"Using {num_processors} CPUs...")
