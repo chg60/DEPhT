@@ -12,7 +12,7 @@ BLASTN_EVALUE = 1E-05
 
 # MAIN FUNCTIONS
 # -----------------------------------------------------------------------------
-def blastn(query, target, tmp_dir, mode="db", evalue=BLASTN_EVALUE, **kwargs):
+def blastn(query, target, tmp_dir, mode="db", evalue=BLASTN_EVALUE, word_size=None):
     """
     Runs blastn in either query/subject mode or query/database mode, as
     indicated by `mode`. Returns hits better than `evalue`.
@@ -29,6 +29,8 @@ def blastn(query, target, tmp_dir, mode="db", evalue=BLASTN_EVALUE, **kwargs):
     :type mode: str
     :param evalue: the e-value cutoff to use
     :type evalue: float
+    :param word_size: specify a word size (>=4) to use with blastn
+    :type word_size: int or None
     :return:
     """
     # Create output filepath
@@ -43,9 +45,9 @@ def blastn(query, target, tmp_dir, mode="db", evalue=BLASTN_EVALUE, **kwargs):
         raise ValueError("valid blastn modes are: 'db', 'subject'")
     command += f" -evalue {evalue} -out {outfile} -outfmt '{BLASTN_OUTFMT}'"
 
-    # Interpret any kwargs as blastn keywords
-    for key, value in kwargs.items():
-        command += f" -{key} {value}"
+    if word_size:
+        command += f" -word_size {word_size}"
+
     run_command(command)
 
     # Return parsed hits as list of dictionaries
