@@ -50,8 +50,11 @@ def blastn(query, target, tmp_dir, mode="db", evalue=BLASTN_EVALUE, **kwargs):
 
     # Return parsed hits as list of dictionaries
     fields = BLASTN_OUTFMT.split()[1:]
-    blastn_reader = csv.DictReader(open(outfile, "r"), fieldnames=fields)
-    return [row for row in blastn_reader]
+    try:
+        blastn_reader = csv.DictReader(open(outfile, "r"), fieldnames=fields)
+        return [row for row in blastn_reader]
+    except FileNotFoundError:
+        return []
 
 
 def locate_subsequence(query, subject, tmp_dir):
