@@ -29,7 +29,7 @@ def prodigal(infile, outfile, meta=False):
     :param meta: run in metagenomic mode?
     :type meta: bool
     """
-    command = f"prodigal -a {str(outfile)} -i {str(infile)}"
+    command = f"prodigal -a {outfile} -i {infile}"
     if meta:
         command += " -p meta"
     run_command(command)
@@ -59,7 +59,7 @@ def prodigal_reader(filepath):
     """
     headers, sequences = parse_fasta(filepath)
     for header, sequence in zip(headers, sequences):
-        header = header.split(" # #")
+        header = header.split(" # ")
         start, end, strand = int(header[1]), int(header[2]), int(header[3])
         notes = header[-1].split(";")
         motif = notes[-3].split("=")[-1]
@@ -85,10 +85,9 @@ def aragorn_reader(filepath):
     :param filepath: the path to an Aragorn output file
     :type filepath: pathlib.Path
     """
-    with open(filepath, "r") as batch_aragorn_reader:
-        next(batch_aragorn_reader)
-        next(batch_aragorn_reader)
-        for row in batch_aragorn_reader:
+    with open(filepath, "r") as ar:
+        next(ar), next(ar)
+        for row in ar:
             row = row.rstrip().split()[1:]  # tokenize line, skip index
 
             # Get coordinates
@@ -98,7 +97,7 @@ def aragorn_reader(filepath):
             else:
                 strand = 1      # forward oriented
                 coords = row[1][1:-1].split(",")
-            start, end = int(coords[0], int(coords[1]))
+            start, end = int(coords[0]), int(coords[1])
 
             # Check if this is a tRNA or tmRNA
             if row[0] == "tmRNA":
@@ -122,7 +121,7 @@ def aragorn_reader(filepath):
             yield ftr
 
 
-def annotate_contig(contig, tmp_dir):
+def annotate_contig(contig, tmp_dir, no_trna=False):
     """
     Uses Prodigal to predict protein-coding genes, and Aragorn to
     predict t(m)RNA genes on bacterial contigs. All resultant features
@@ -132,6 +131,8 @@ def annotate_contig(contig, tmp_dir):
     :type contig: Bio.SeqRecord.SeqRecord
     :param tmp_dir: temporary directory where files can go
     :type tmp_dir: pathlib.Path
+    :param no_trna: don't annotate tRNAs
+    :type no_trna: bool
     """
     # Set up to run Prodigal
     infile = mkstemp(suffix=".fna", prefix=f"{contig.id}_", dir=tmp_dir)[-1]
@@ -149,11 +150,12 @@ def annotate_contig(contig, tmp_dir):
     for ftr in prodigal_reader(prodigal_out):
         contig.features.append(ftr)
 
-    # Set up to run Aragorn
-    aragorn_out = infile.with_suffix(".txt")
+    if not no_trna:
+        # Set up to run Aragorn
+        aragorn_out = infile.with_suffix(".txt")
 
-    # Run Aragorn
-    aragorn(infile, aragorn_out)
+        # Run Aragorn
+        aragorn(infile, aragorn_out)
 
-    for ftr in aragorn_reader(aragorn_out):
-        contig.features.append(ftr)
+        for ftr in aragorn_reader(aragorn_out):
+            contig.features.append(ftr)
