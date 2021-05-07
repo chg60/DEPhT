@@ -118,10 +118,6 @@ def find_homologs(contigs, prophage_coords, db, tmp_dir, cpus, min_length=150):
     :param min_length: don't find homologs for genes shorter than this
     :type min_length: int
     """
-    hhsearch_dir = tmp_dir.joinpath("hhsearch")
-    if not hhsearch_dir.is_dir():
-        hhsearch_dir.mkdir()
-
     # Iterate over contigs and prophage coordinate predictions together
     for contig, contig_prophage_coords in zip(contigs, prophage_coords):
         map_geneid_to_feature = dict()
@@ -146,7 +142,7 @@ def find_homologs(contigs, prophage_coords, db, tmp_dir, cpus, min_length=150):
                     batch_sequences.append(translation)
 
         homologs = find_batch_homologs(
-            batch_geneids, batch_sequences, db, hhsearch_dir, cpus)
+            batch_geneids, batch_sequences, db, tmp_dir, cpus)
 
         for geneid, product in homologs:
             if product:
