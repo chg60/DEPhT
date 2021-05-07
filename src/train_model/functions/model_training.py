@@ -1,22 +1,32 @@
-import itertools
-
 import numpy as np
 
 from sklearn.model_selection import KFold
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.metrics import accuracy_score
 
-from prophicient.functions.statistics import average
+from prophicient.functions.statistics import average, \
+    matthews_correlation_coefficient
 
 # Seed RNG: the answer to the question of life, the universe, and everything
 RANDOM_STATE = 42
 
-# Default value ranges for model training
-N_ESTIMATORS = (100, 250, 500)
-CRITERION = ("entropy", "gini")
-MAX_FEATURES = ("log2", "sqrt", None)
-CLASS_WEIGHT = ("balanced", None)
-PARAMS = itertools.product(N_ESTIMATORS, CRITERION, MAX_FEATURES, CLASS_WEIGHT)
+
+def _score(real_classes, predict_classes):
+    tps, tns, fps, fns = 0, 0, 0, 0
+    for real_value, predict_value in zip(real_classes, predict_classes):
+        if real_value and predict_value:
+            tps += 1
+        elif real_value and not predict_value:
+            fns += 1
+        elif predict_value and not real_value:
+            fps += 1
+        else:
+            tns += 1
+    return tps, tns, fps, fns
+
+
+def _mcc_score(real_classes, predict_classes):
+    tps, tns, fps, fns = _score(real_classes, predict_classes)
+    return matthews_correlation_coefficient(tps, fns, tns, fps)
 
 
 def train_random_forest_classifier(prophage_data, bacteria_data):
@@ -49,45 +59,32 @@ def train_random_forest_classifier(prophage_data, bacteria_data):
     b_trains = [x[0] for x in bacteria_splits]
     b_tests = [x[1] for x in bacteria_splits]
 
-    best_accuracy, best_param, best_model = 0, None, None
-    for i, params in enumerate(PARAMS):
-        n_estimators, criterion, max_features, class_weight = params
-        accuracies = list()
-        clf = RandomForestClassifier(n_estimators=n_estimators,
-                                     criterion=criterion,
-                                     max_features=max_features,
-                                     n_jobs=-1,
-                                     random_state=RANDOM_STATE,
-                                     oob_score=True,
-                                     class_weight=class_weight)
+    mcc_scores = list()
+    clf = RandomForestClassifier(n_estimators=250, criterion="gini",
+                                 bootstrap=False, n_jobs=-1, class_weight="balanced")
 
-        zipper = zip(p_trains, p_tests, b_trains, b_tests)
-        for p_train, p_test, b_train, b_test in zipper:
-            train_feats = np.concatenate((prophage_data[p_train, :-1],
-                                          bacteria_data[b_train, :-1]), axis=0)
-            train_labels = np.concatenate((prophage_data[p_train, -1],
-                                           bacteria_data[b_train, -1]), axis=0)
-            test_feats = np.concatenate((prophage_data[p_test, :-1],
-                                         bacteria_data[b_test, :-1]), axis=0)
-            test_labels = np.concatenate((prophage_data[p_test, -1],
-                                          bacteria_data[b_test, -1]), axis=0)
+    zipper = zip(p_trains, p_tests, b_trains, b_tests)
+    for p_train, p_test, b_train, b_test in zipper:
+        train_feats = np.concatenate((prophage_data[p_train, :-1],
+                                      bacteria_data[b_train, :-1]), axis=0)
+        train_labels = np.concatenate((prophage_data[p_train, -1],
+                                       bacteria_data[b_train, -1]), axis=0)
+        test_feats = np.concatenate((prophage_data[p_test, :-1],
+                                     bacteria_data[b_test, :-1]), axis=0)
+        test_labels = np.concatenate((prophage_data[p_test, -1],
+                                      bacteria_data[b_test, -1]), axis=0)
 
-            clf.fit(train_feats, train_labels)
-            predictions = clf.predict(test_feats)
-            accuracies.append(accuracy_score(test_labels, predictions))
-        mean_accuracy = average(accuracies)
-        if mean_accuracy > best_accuracy:
-            # print(f"Local winner ({mean_accuracy*100:.3f}%)")
-            best_accuracy = mean_accuracy
-            best_param = params
-            best_model = clf
+        clf.fit(train_feats, train_labels)
+        predictions = clf.predict(test_feats)
+        mcc_scores.append(_mcc_score(test_labels, predictions))
+    mean_mcc = average(mcc_scores)
 
     # Now we've got the best model parameters, let's re-train on all data
-    estimators, criterion, max_features, class_weight = best_param
-    print(f"Best model achieves {best_accuracy * 100:.3f}% training accuracy.")
+    print(f"RandomForest classifier got average MCC = {mean_mcc:.3f}")
+
     all_feats = np.concatenate((prophage_data[:, :-1],
                                 bacteria_data[:, :-1]), axis=0)
     all_labels = np.concatenate((prophage_data[:, -1],
                                  bacteria_data[:, -1]), axis=0)
-    best_model.fit(all_feats, all_labels)
-    return best_model
+    clf.fit(all_feats, all_labels)
+    return clf
