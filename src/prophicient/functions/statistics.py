@@ -2,10 +2,19 @@
 Some functions useful for statistics - evaluating models, program
 performance, transforming data, etc.
 """
+import math
 
 
-def average(values):
-    return float(sum(values))/len(values)
+def average(values, kind="arithmetic"):
+    if kind == "arithmetic":
+        numerator, denominator = sum(values), len(values)
+    elif kind == "geometric":
+        numerator, denominator = math.prod(values), len(values)
+    elif kind == "harmonic":
+        numerator, denominator = len(values), sum([1.0/x for x in values])
+    else:
+        raise ValueError(f"'{kind}' is not a supported kind of average")
+    return float(numerator)/denominator
 
 
 def stdev(values, mean=None):
