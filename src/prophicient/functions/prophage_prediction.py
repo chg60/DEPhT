@@ -177,18 +177,18 @@ def predict_prophage_genes(contig, model_path=MODEL_PATH, alpha=0.25):
     predictions = [x[1] for x in classifier.predict_proba(dataframe)]
 
     # Smooth the predictions once to get sharp peaks
-    predictions = smooth_by_averaging(predictions, 5)
+    predictions = smooth_by_averaging(predictions)
 
-    # Smooth the predictions again to broaden the peaks
-    predictions = smooth_by_averaging(predictions, 10)
+    # Smooth again to broaden the peaks - avoids chopping off lysins
+    predictions = smooth_by_averaging(predictions)
 
-    # And one last time
-    predictions = smooth_by_averaging(predictions, 25)
+    # And one last time - avoids chopping off polymorphic toxins
+    predictions = smooth_by_averaging(predictions)
 
     return [x >= alpha for x in predictions]
 
 
-def predict_prophage_coords(contig, extend_by=5000):
+def predict_prophage_coords(contig, extend_by=0):
     """
     Predicts prophage genes on the contig, then tries to approximate
     the coordinates associated with phage <-> bacterial transitions.

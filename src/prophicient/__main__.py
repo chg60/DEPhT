@@ -6,6 +6,7 @@ prophage extraction and generating the final report.
 """
 import argparse
 import pathlib
+import shutil
 import sys
 from datetime import datetime
 
@@ -29,7 +30,7 @@ TMP_DIR = pathlib.Path("/tmp/prophicient")
 BLASTN_DB = PACKAGE_DIR.joinpath("data/blastn/mycobacteria")
 HHSEARCH_DB = PACKAGE_DIR.joinpath("data/hhsearch/functions")
 
-EXTEND_BY = 10000
+EXTEND_BY = 5000
 
 
 def parse_args(arguments):
@@ -79,7 +80,6 @@ def main(arguments):
         outdir.mkdir(parents=True)
 
     # Create temporary dir, if it doesn't exist.
-    # If it does, destroy the existing first
     if not TMP_DIR.is_dir():
         TMP_DIR.mkdir()
 
@@ -91,6 +91,9 @@ def main(arguments):
     mark = datetime.now()
     find_prophages(infile, outdir, TMP_DIR, cpus, verbose, draw, EXTEND_BY)
     print(f"\nTotal runtime: {str(datetime.now() - mark)}")
+
+    # Clean up after ourselves
+    shutil.rmtree(TMP_DIR)
 
 
 def find_prophages(fasta, outdir, tmp_dir, cpus, verbose, draw, extend_by):
@@ -136,13 +139,16 @@ def find_prophages(fasta, outdir, tmp_dir, cpus, verbose, draw, extend_by):
         annotation_dir.mkdir()
 
     # Annotate CDS/tRNA/tmRNA features on contigs
-    [annotate_contig(contig, annotation_dir) for contig in contigs]
+    for contig in contigs:
+        annotate_contig(contig, annotation_dir)
 
     if verbose:
         print("\tLooking for high-probability prophage regions...")
 
     # Predict prophage coordinates for each contig
-    prophage_preds = [predict_prophage_coords(contig) for contig in contigs]
+    prophage_preds = list()
+    for contig in contigs:
+        prophage_preds.append(predict_prophage_coords(contig, EXTEND_BY))
 
     if all([not any(x) for x in prophage_preds]):
         if verbose:
