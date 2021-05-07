@@ -1,31 +1,29 @@
 import math
 
-from Bio.SeqFeature import (FeatureLocation, SeqFeature)
+from Bio.SeqFeature import SeqFeature, FeatureLocation
 from networkx import DiGraph
 
 from prophicient.classes import kmers
-from prophicient.functions import blastn, fasta
+from prophicient.functions.blastn import blastn
+from prophicient.functions.fasta import write_fasta
 
 
 # GLOBAL VARIABLES
 # -----------------------------------------------------------------------------
-K = 5
+KMER_SIZE = 5
 FPP = 0.0001
 
-OUTFMT = blastn.OUTFMT
 L_SEQ_NAME = "putative_attL_region"
 R_SEQ_NAME = "putative_attR_region"
-ATT_RESULTS_NAME = "Putative_att_site_blast"
 
 DEFAULTS = {"k": 5, "fpp": 0.0001, "outfmt": 10}
 
 
 # KMER COUNTING FUNCTIONS
 # -----------------------------------------------------------------------------
-def find_attachment_site(l_seq, r_seq, l_origin, r_origin, working_dir,
-                         k=K, method="blast",
-                         l_seq_name=L_SEQ_NAME, r_seq_name=R_SEQ_NAME,
-                         att_results_name=ATT_RESULTS_NAME, outfmt=OUTFMT):
+def find_attachment_site(l_seq, r_seq, l_origin, r_origin, tmp_dir,
+                         k=KMER_SIZE, method="blast", l_name=L_SEQ_NAME,
+                         r_name=R_SEQ_NAME):
     """Given the sequences of a putative attL region and putative attR region,
     find the most probable attachment site, dictated by the sequence's length
     and it's distance from the predicted origin position.
@@ -38,44 +36,36 @@ def find_attachment_site(l_seq, r_seq, l_origin, r_origin, working_dir,
     :type l_origin: int
     :param r_origin: The origin position for the contig's rightmost position
     :type r_origin: int
-    :param working_dir: The directory for which to write sequences and files to
-    :type working_dir: pathlib.Path
+    :param tmp_dir: The directory for which to write sequences and files to
+    :type tmp_dir: pathlib.Path
     :param k: Length of the word size storerd in the DeBruijn graph.
     :type k: int
     :param method: The method to use to find the attachment sequence.
     :type method: str
-    :param l_seq_name: Name to give to the putative attL region sequence.
-    :type l_seq_name: str
-    :param r_seq_name: Name to give to the putative attR region sequence.
-    :type r_seq_name: str
-    :param att_results_name: Name to give to the attachment site results.
-    :type att_results_name: str
-    :param outfmt: BLASTn alignment output type.
-    :type outfmt: int
+    :param l_name: Name to give to the putative attL region sequence.
+    :type l_name: str
+    :param r_name: Name to give to the putative attR region sequence.
+    :type r_name: str
     :return: A tuple of information associated with the detected att site.
     :rtype: tuple
     """
     # If method is BLASTn
     if method == "blast":
         # Write the putative attL region to file
-        l_seq_path = working_dir.joinpath(L_SEQ_NAME).with_suffix(".fasta")
-        fasta.write_fasta(l_seq_path, [L_SEQ_NAME], [l_seq])
+        l_seq_path = tmp_dir.joinpath(l_name).with_suffix(".fasta")
+        write_fasta([l_name], [l_seq], l_seq_path)
 
         # Write the putative attR region to file
-        r_seq_path = working_dir.joinpath(R_SEQ_NAME).with_suffix(".fasta")
-        fasta.write_fasta(r_seq_path, [R_SEQ_NAME], [r_seq])
-
-        # Set a path for the BLASTn results
-        out_path = working_dir.joinpath(att_results_name).with_suffix(".csv")
+        r_seq_path = tmp_dir.joinpath(r_name).with_suffix(".fasta")
+        write_fasta([r_name], [r_seq], r_seq_path)
 
         # Use BLASTn to retrieve putative attachment site sequences
-        kmer_contigs = blast_attachment_site(l_seq_path, r_seq_path, out_path,
-                                             k=k, outfmt=outfmt)
+        kmer_contigs = blast_attachment_site(
+            l_seq_path, r_seq_path, tmp_dir, k=k)
     # If method is DeBruijn graph
     elif method == "graph":
         # Use a DeBruijn to retrieve putative attachment site sequences
         kmer_contigs = graph_attachment_site(l_seq, r_seq, k=k)
-        pass
     else:
         raise NotImplementedError(
                             f"Attachment site detection method '{method}'"
@@ -95,47 +85,38 @@ def find_attachment_site(l_seq, r_seq, l_origin, r_origin, working_dir,
     kmer_contig, score = scored_kmer_contigs[0]
 
     # Create a SeqFeature from the putative attL sequence
-    attL_start = kmer_contig[1] + 1
-    attL_end = kmer_contig[1] + len(kmer_contig[0])
-    attL_feature = SeqFeature(FeatureLocation(attL_start, attL_end),
-                              strand=1, type="attL")
+    att_l_start = kmer_contig[1] + 1
+    att_l_end = kmer_contig[1] + len(kmer_contig[0])
+    att_l_feature = SeqFeature(FeatureLocation(att_l_start, att_l_end),
+                               strand=1, type="misc_recomb")
 
     # Create a SeqFeature from the putative attR sequence
-    attR_end = kmer_contig[2]
-    attR_start = kmer_contig[2] - len(kmer_contig[0])
-    attR_feature = SeqFeature(FeatureLocation(attR_start, attR_end),
-                              strand=1, type="attR")
+    att_r_end = kmer_contig[2]
+    att_r_start = kmer_contig[2] - len(kmer_contig[0])
+    att_r_feature = SeqFeature(FeatureLocation(att_r_start, att_r_end),
+                               strand=1, type="misc_recomb")
 
-    return attL_feature, attR_feature, score, kmer_contig[0]
+    return att_l_feature, att_r_feature, score, kmer_contig[0]
 
 
-def blast_attachment_site(l_seq_path, r_seq_path, out_path,
-                          k=K, outfmt=OUTFMT):
+def blast_attachment_site(l_seq_path, r_seq_path, tmp_dir, k=KMER_SIZE):
     """Given the path to files containing the putative attL region and
     putative attR region, BLASTn the sequences of both regions against each
     other and retrieve matching sequences and their positions.
 
-    :param l_seq_path: Path to the sequence of the putative attL region
+    :param l_seq_path: path to the sequence of the putative attL region
     :type l_seq_path: pathlib.Path
-    :param r_seq_path: Path to the sequence of the putative attR region
+    :param r_seq_path: path to the sequence of the putative attR region
     :type r_seq_path: pathlib.Path
-    :param out_path: Path to write the BLASTn results
-    :type out_path: pathlib.Path
+    :param tmp_dir: path where temporary files can go
+    :type tmp_dir: pathlib.Path
     :param k: Length of the word size used by the BLAST algorithm
     :type k: int
-    :param outfmt: BLASTn alignment output type.
-    :type outfmt: int
     :return: A list of contigs and their positions in the sequence and graph.
     :rtype: list(tuple(str, int, int))
     """
-    # Try to BLASTn the two sequences
-    try:
-        blastn.blastn(l_seq_path, r_seq_path, out_path, word_size=k)
-    # If there are no results, return an empty list
-    except blastn.SignificantAlignmentNotFound:
-        return []
-
-    blast_results = blastn.read_blast_csv(out_path)
+    blast_results = blastn(
+        l_seq_path, r_seq_path, tmp_dir, mode="subject", word_size=k)
 
     kmer_contigs = []
     for result in blast_results:
@@ -176,7 +157,7 @@ def score_kmer(kmer_contig, l_origin, r_origin, base, exponent):
     return len(kmer_contig[0]) - (math.log(avg_distance, base) ** exponent)
 
 
-def graph_attachment_site(l_seq, r_seq, k=K):
+def graph_attachment_site(l_seq, r_seq, k=KMER_SIZE):
     """Given the sequences of a putative attL region and putative attR region,
     kmer count the sequences of both regions using a DeBruijn graph that has
     been optimized by reducing the inputted words with a Bloom Filter to
@@ -203,7 +184,7 @@ def graph_attachment_site(l_seq, r_seq, k=K):
     return kmer_contigs
 
 
-def load_bfilter(sequence, k=K):
+def load_bfilter(sequence, k=KMER_SIZE):
     """Loads a Bloom Filter with the kmers from a given sequence.
 
     :param sequence: A sequence to load a Bloom Filter with.
@@ -221,7 +202,7 @@ def load_bfilter(sequence, k=K):
     return bfilter
 
 
-def create_debruijn_graph(bfilter, sequence, k=K):
+def create_debruijn_graph(bfilter, sequence, k=KMER_SIZE):
     """Create a DeBruijn graph from a sequence with a loaded Bloom Filter
     as a guide.
 
@@ -301,14 +282,14 @@ def create_debruijn_graph(bfilter, sequence, k=K):
     return deb_graph
 
 
-def traverse_debruijn_graph(deb_graph, sequence, k=K):
+def traverse_debruijn_graph(deb_graph, sequence, k=KMER_SIZE):
     """Iterate over a sequence and, with a DeBruijn graph as a guide,
     find kmer contigs.
 
     :param deb_graph: A DeBruijn graph of words in a sequence.
     :type deb_graph: networkx.DiGraph
-    :param kmer_gen: A generator yielding tuples of kmers and their positions.
-    :type kmer: str
+    :param sequence: A generator yielding tuples of kmers and their positions.
+    :type sequence: str
     :param k: Length of the word size stored in the DeBruijn graph.
     :type k: int
     :return: A list of contigs and their positions in the sequence and graph.
@@ -524,7 +505,7 @@ def get_graph_pos(graph_anchor_set, graph_rel_pos_set, k):
     :param graph_rel_pos_set: Positions of the beginning of a graph kmer (node)
     :type graph_anchor_set: set(int)
     :param k: Length of the word size stored in the DeBruijn graph
-    :type int:
+    :type k: int
     :rtype: int
     """
     # Returns the right-most value the kmer could appear at.
@@ -545,7 +526,7 @@ def count_kmers(sequence, k):
     if k >= len(sequence):
         return [(0, sequence)]
 
-    # Generator that returns kmers and their 0-indexed position in the sequence
+    # Generator that returns k-mers and their 0-indexed position in the sequence
     for i in range(len(sequence) - k):
         kmer = sequence[i:i+k]
-        yield (i, kmer)
+        yield i, kmer
