@@ -1,4 +1,4 @@
-from datetime import date
+import datetime
 
 from Bio.SeqFeature import FeatureLocation, SeqFeature
 from Bio.SeqRecord import SeqRecord
@@ -6,16 +6,14 @@ from Bio.SeqRecord import SeqRecord
 
 # GLOBAL VARIABLES
 # -----------------------------------------------------------------------------
-DATE = date.today().strftime("%d-%b-%Y").upper()
-
+DATE = datetime.date.today().strftime("%d-%b-%Y").upper()
 ANNOTATIONS = {"molecule_type": "DNA", "topology": "linear",
                "data_file_division": "PHG", "date": DATE,
                "accessions": [], "sequence_version": "1",
                "keywords": [], "source": "",
                "organism": "", "taxonomy": [],
                "comment": [""]}
-
-GENE_FEATURES = ["CDS", "tRNA", "tmRNA"]
+FEATURE_TYPES = ("CDS", "tRNA", "tmRNA")
 
 
 def realign_subrecord(record, subrecord, subrecord_start, subrecord_end,
@@ -117,7 +115,7 @@ class Prophage:
 
         orientation = 0
         for feature in self.record.features:
-            if feature.type not in GENE_FEATURES:
+            if feature.type not in FEATURE_TYPES:
                 continue
 
             orientation += int(feature.strand) * len(feature)
@@ -201,7 +199,7 @@ class Prophage:
         gene_counter = 0
         gene_features = []
         for feature in self.record.features:
-            if feature.type not in GENE_FEATURES:
+            if feature.type not in FEATURE_TYPES:
                 continue
 
             gene_counter += 1
