@@ -1,39 +1,98 @@
 import pickle
 
 import pandas as pd
-from Bio.SeqUtils import GC123
-from Bio.SeqUtils.ProtParam import ProteinAnalysis
 
 from prophicient import PACKAGE_DIR
+from prophicient.functions.statistics import average
 
 MODEL_PATH = PACKAGE_DIR.joinpath("data/prophage_model.pickle")
-RBS_SCORES = {"None": {"None": 0},
-              "GGA/GAG/AGG": {"3-4bp": 1, "11-12bp": 6, "5-10bp": 13},
-              "3Base/5BMM": {"13-15bp": 2},
-              "4Base/6BMM": {"13-15bp": 3},
-              "AGxAG": {"11-12bp": 4, "3-4bp": 5, "5-10bp": 9},
-              "GGxGG": {"11-12bp": 4, "3-4bp": 8, "5-10bp": 14},
-              "AGGAG(G)/GGAGG": {"13-15bp": 10},
-              "AGGA/GGAG/GAGG": {"3-4bp": 11, "11-12bp": 12},
-              "AGGA": {"5-10bp": 15},
-              "GGAG/GAGG": {"5-10bp": 16},
-              "AGxAGG/AGGxGG": {"11-12bp": 17, "3-4bp": 18, "5-10bp": 19},
-              "AGGAG/GGAGG": {"11-12bp": 20},
-              "AGGAG": {"3-4bp": 21, "5-10bp": 22},
-              "GGAGG": {"3-4bp": 23, "5-10bp": 24},
-              "AGGAGG": {"11-12bp": 25, "3-4bp": 26, "5-10bp": 27}}
-FEATURE_KEYS = ("left", "right", "strand", "length", "upstream", "downstream",
-                "gc1", "gc2", "gc3", "gravy", "isoelectric", "aromaticity")
-# "rbs_score" not at all predictive, in Mycobacteria
-# "C", "H", "Q" are most independent amino acid frequencies
-# "A", "C", "D", "E", "F", "G", "H", "I", "K", "L", "M", "N", "P", "Q", "R",
-# "S", "T", "V", "W", and "Y" are slightly correlated with other features
 
 BACTERIA = 0        # Gene prediction state - bacterial
 PROPHAGE = 1        # Gene prediction state - prophage
 
 
-def contig_to_dataframe(contig):
+def calculate_gene_density(lefts, rights, length, windows=(5, 10, 25)):
+    """
+    Calculates genes per kilobase over sliding windows of different
+    numbers of genes to get a robust estimate of local gene density
+    for each gene.
+
+    :param lefts: gene left coordinates
+    :type lefts: list of int
+    :param rights: gene right coordinates
+    :type rights: list of int
+    :param length: contig length
+    :type length: int
+    :param windows: windows to calculate gene density across
+    :type windows: tuple of int
+    :return: gene_densities
+    """
+    num_genes = len(lefts)
+    gene_densities = dict()
+    for window_size in windows:
+        gene_densities[window_size] = list()
+
+    for i in range(num_genes):
+        for window_size in windows:
+            i_left, i_right = i - window_size, i + window_size
+
+            # Make sure indices are in range(0, num_genes)
+            if i_left < 0:
+                i_left += num_genes
+            if i_right > num_genes - 1:
+                i_right -= num_genes
+
+            # Get left gene's left coordinate, right gene's right coordinate
+            left, right = lefts[i_left], rights[i_right]
+            if right < left:
+                right += length
+
+            numerator = right - left + 1
+            denominator = 2 * window_size + 1
+
+            gene_densities[window_size].append(float(numerator)/denominator)
+
+    return gene_densities
+
+
+def calculate_strand_agreement(orientations, windows=(5, 10, 25)):
+    """
+    Calculates percent strand agreement over sliding windows of
+    different numbers of genes to get a robust estimate of local
+    strand bias for each gene
+
+    :param orientations: per gene orientations (+1/-1)
+    :type orientations: list
+    :param windows: window sizes to calculate pct strand agreement over
+    :type windows: tuple of int
+    :return: strand_agreements
+    """
+    num_genes = len(orientations)
+    strand_agreements = dict()
+    for window_size in windows:
+        strand_agreements[window_size] = list()
+
+    for i, cursor_orient in enumerate(orientations):
+        for window_size in windows:
+            window_orients = list()
+
+            i_left, i_right = i - window_size, i + window_size
+            for index in range(i_left, i_right + 1):
+                if index < 0:
+                    index += num_genes
+                elif index > num_genes - 1:
+                    index -= num_genes
+                window_orients.append(orientations[index])
+
+            numerator = window_orients.count(cursor_orient)
+            denominator = 2 * window_size + 1
+
+            strand_agreements[window_size].append(float(numerator)/denominator)
+
+    return strand_agreements
+
+
+def calculate_feature_dict(contig):
     """
     Walks the features of the given contig and calculates the feature
     data to be used for model training and/or model prediction.
@@ -42,143 +101,115 @@ def contig_to_dataframe(contig):
     :type contig: Bio.SeqRecord.SeqRecord
     :return: dataframe
     """
-    gene_dict = dict()
-    for key in FEATURE_KEYS:
-        gene_dict[key] = list()
+    cds_features = [ftr for ftr in contig.features if ftr.type == "CDS"]
 
-    cds_features = [feat for feat in contig.features if feat.type == "CDS"]
+    gene_dict = {}
+
+    # These are the basis for gene density and strand bias calculations
+    lefts, rights, strands = list(), list(), list()
     for j, feature in enumerate(cds_features):
         left, right = feature.location.start, feature.location.end
         strand = feature.location.strand
+        lefts.append(left), rights.append(right), strands.append(strand)
 
-        # Can't calculate first gene's upstream distance yet...
-        if j == 0:
-            upstream = 0
-        else:
-            upstream = left - gene_dict["right"][-1] + 1
+    # Calculate gene density attributes (in rolling windows)
+    gene_densities = calculate_gene_density(lefts, rights, len(contig))
+    for key, values in gene_densities.items():
+        gene_dict[f"density{key}"] = values
 
-        _, gc1, gc2, gc3 = GC123(str(feature.extract(contig).seq))
+    # Calculate strand bias attributes (in rolling windows)
+    strand_biases = calculate_strand_agreement(strands)
+    for key, values in strand_biases.items():
+        gene_dict[f"strand{key}"] = values
 
-        # note = feature.qualifiers["note"][0].split("; ")
-        # rbs_motif = note[0].split(": ")[-1]
-        # rbs_spacer = note[1].split(": ")[-1]
-        # rbs_score = RBS_SCORES[rbs_motif][rbs_spacer]
-
-        p_analysis = ProteinAnalysis(feature.qualifiers["translation"][0])
-
-        gene_dict["left"].append(left)
-        gene_dict["right"].append(right)
-        gene_dict["strand"].append(strand)
-        gene_dict["length"].append(len(feature))
-        gene_dict["upstream"].append(upstream)
-        # gene_dict["rbs_score"].append(rbs_score)
-        gene_dict["gc1"].append(gc1)
-        gene_dict["gc2"].append(gc2)
-        gene_dict["gc3"].append(gc3)
-        gene_dict["gravy"].append(p_analysis.gravy())
-        gene_dict["isoelectric"].append(p_analysis.isoelectric_point())
-        gene_dict["aromaticity"].append(p_analysis.aromaticity())
-        # for aa, freq in p_analysis.get_amino_acids_percent().items():
-        #     gene_dict[aa].append(freq)
-
-    # Fix gene_dict["upstream"][0]
-    upstream = gene_dict["left"][0] - gene_dict["right"][-1] + 1 + len(contig)
-    gene_dict["upstream"][0] = upstream
-
-    # Create gene_dict["downstream"]
-    downstream = [x for x in gene_dict["upstream"]]
-    downstream.append(downstream.pop(0))
-    gene_dict["downstream"] = downstream
-
-    # Update gene_dict["strand"] to be something meaningful
-    window_size = 10  # Local window size
-    num_genes = 2 * window_size + 1
-    strands = list()
-    for i in range(len(gene_dict["strand"])):
-        cursor_strand = None
-        local_strands = []
-        min_i, max_i = i - window_size, i + window_size + 1
-        for j in range(min_i, max_i):
-            if j < 0:
-                j += len(gene_dict["strand"])
-            elif j > len(gene_dict["strand"]) - 1:
-                j -= len(gene_dict["strand"])
-            local_strands.append(gene_dict["strand"][j])
-            if i == j:
-                cursor_strand = local_strands[-1]
-        strand = float(local_strands.count(cursor_strand)) / num_genes
-        strands.append(strand)
-    gene_dict["strand"] = strands
-
-    # Absolute left and right coordinates don't matter anymore
-    gene_dict.pop("left"), gene_dict.pop("right")
-
-    return pd.DataFrame(gene_dict)
+    return gene_dict
 
 
-def predict_prophage_genes(dataframe, model_path=MODEL_PATH):
+def smooth_by_averaging(values, window_size=25):
     """
-    Uses an sklearn classifier from `model_path` to predict the nature
-    of genes contained in `dataframe`.
+    Smooths values by averaging them with their `window_size`
+    upstream and downstream neighbors.
 
-    A prediction will be made for each gene - 0 is a bacterial gene,
-    1 is a prophage gene.
+    :param values: the values to be smoothed
+    :type values: list of float
+    :param window_size: number of genes up/down-stream to average over
+    :type window_size: int
+    :return: smoothed_values
+    """
+    # Adjust window_size to avoid IndexError on short lists
+    window_size = min((window_size, len(values)))
+    smoothed_values = list()
 
-    :param dataframe: genes to make predictions for
-    :type dataframe: pd.DataFrame
+    for i in range(len(values)):
+        local_values = list()
+        min_i, max_i = i - window_size, i + window_size
+        for j in range(min_i, max_i + 1):
+            if j < 0:
+                j += len(values)
+            elif j > len(values) - 1:
+                j -= len(values)
+            local_values.append(values[j])
+        smoothed_values.append(average(local_values))
+
+    return smoothed_values
+
+
+def predict_prophage_genes(contig, model_path=MODEL_PATH, alpha=0.25):
+    """
+    Calculates the gene attributes used by the model to predict
+    prophage vs bacterial genes. Then uses the classifier from
+    `model_path` to make those predictions.
+
+    :param contig: the contig to make prophage predictions in
+    :type contig: Bio.SeqRecord.SeqRecord
     :param model_path: path to a binary file with sklearn model inside
     :type model_path: pathlib.Path
+    :param alpha: probability above which to keep prophage prediction
+    :type alpha: float
     :return: predictions
     """
+    feature_dict = calculate_feature_dict(contig)
+    dataframe = pd.DataFrame(feature_dict)
+
     with model_path.open("rb") as model_reader:
-        model = pickle.load(model_reader)
+        classifier = pickle.load(model_reader)
 
-    initial_predictions = [x[1] > 0.5 for x in model.predict_proba(dataframe)]
+    predictions = [x[1] for x in classifier.predict_proba(dataframe)]
 
-    # Smooth the predictions to enforce local continuity
-    window_size = 25  # Local window size
-    num_genes = 2 * window_size + 1
-    predictions = list()
-    for i in range(len(initial_predictions)):
-        local_predictions = list()
-        min_i, max_i = i - window_size, i + window_size + 1
-        for j in range(min_i, max_i):
-            if j < 0:
-                j += len(initial_predictions)
-            elif j > len(initial_predictions) - 1:
-                j -= len(initial_predictions)
-            local_predictions.append(initial_predictions[j])
-        if sum(local_predictions) * 2 > num_genes:
-            prediction = 1
-        else:
-            prediction = 0
-        predictions.append(prediction)
+    # Smooth the predictions once to get sharp peaks
+    predictions = smooth_by_averaging(predictions, 5)
 
-    return predictions
+    # Smooth the predictions again to broaden the peaks
+    predictions = smooth_by_averaging(predictions, 10)
+
+    # And one last time
+    predictions = smooth_by_averaging(predictions, 25)
+
+    return [x >= alpha for x in predictions]
 
 
-def predict_prophage_coords(contig, predictions, extend_by=10000):
+def predict_prophage_coords(contig, extend_by=5000):
     """
-    Uses gene status predictions (0/1 = bacterial/prophage) to estimate
-    coordinates for any prophages that may be on the indicated contig.
+    Predicts prophage genes on the contig, then tries to approximate
+    the coordinates associated with phage <-> bacterial transitions.
 
     :param contig: the contig to scan for possible prophages
     :type contig: Bio.SeqRecord.SeqRecord
-    :param predictions: the binary predictions for this contig's genes
-    :type predictions: list
-    :param extend_by: number of basepairs to extend the prophages by
+    :param extend_by: number of basepairs to overextend prophages by
     :type extend_by: int
     :return: prophage_coords
     """
+    gene_predictions = predict_prophage_genes(contig)
+
     prophage_coords = list()
     left, right = None, None
     n_inflections = 0
-    previous_state = predictions[-1]
+    previous_state = gene_predictions[-1]
 
     # predictions are only made on the cds features
     cds_features = [feat for feat in contig.features if feat.type == "CDS"]
 
-    for i, current_state in enumerate(predictions):
+    for i, current_state in enumerate(gene_predictions):
         if previous_state == BACTERIA and current_state == PROPHAGE:
             left = cds_features[i].location.start - extend_by
             n_inflections += 1
