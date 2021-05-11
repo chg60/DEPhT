@@ -348,7 +348,7 @@ def detect_att_sites(prophages, reference_db_path, extend_by,
                 # of the putative prophage added to the start of the right
                 # region of the prophage in the bacterial sequence
                 new_end = (prophage.end -
-                           (extend_by - int(data_tuple[1]["qstart"])) +
+                           (half_len - int(data_tuple[1]["qstart"])) +
                            overlap_len)
                 new_coords = (new_start, new_end)
                 att_len = overlap_len
@@ -386,7 +386,7 @@ def detect_att_sites(prophages, reference_db_path, extend_by,
                 if kmer_data[2] >= min_kmer_score:
                     new_start = (prophage.start +
                                  kmer_data[0].location.start)
-                    new_end = ((prophage.end - extend_by) +
+                    new_end = ((prophage.end - half_len) +
                                kmer_data[1].location.end)
                     new_coords = (new_start, new_end)
                     att_len = len(kmer_data[3])
