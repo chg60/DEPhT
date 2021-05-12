@@ -212,11 +212,6 @@ class Prophage:
             gene_feature.qualifiers["locus_tag"] = [locus_tag]
             gene_features.append(gene_feature)
 
-            if feature.type == "CDS":
-                assert(
-                 str(feature.translate(self.seq,  to_stop=True, table=11)) == \
-                 feature.qualifiers["translation"][0])
-
         source_feature = SeqFeature(FeatureLocation(0, self.length),
                                     type="source")
 
