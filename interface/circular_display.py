@@ -7,7 +7,7 @@ import sys
 
 class ExpressionUnitTranslator(BiopythonTranslator):
     """Translator for Circular Garphic."""
-    
+
     def compute_feature_color(self, feature):
         """Compute the color of the feature."""
         if feature.location.strand == -1:
@@ -44,9 +44,9 @@ class ExpressionUnitTranslator(BiopythonTranslator):
         """Compute a box_linewidth for this feature."""
         return 1.0
 
-    def compute_feature_legend_text(self, feature):
-        """Compute the legend text for the feature."""
-        return NAME
+    # def compute_feature_legend_text(self, feature):
+        # """Compute the legend text for the feature."""
+        # return NAME
 
 
 def get_path(folder_name):
@@ -58,15 +58,23 @@ def get_path(folder_name):
     dir_name = Path.cwd()
     path_name = dir_name / folder_name
 
+    figures = []
+
     for file in path_name.iterdir():
-        NAME = str(file.name)
-        stem = str(file)
-        translator = ExpressionUnitTranslator()
-        graphic_record = translator.translate_record(
-            stem, record_class=CircularGraphicRecord
-        )
-        ax, _ = graphic_record.plot(figure_width=10)
-        ax.figure.savefig("circular_graphic.svg", bbox_inches="tight")
+        # NAME = str(file.name)
+        if file.suffix == ".gb":
+            stem = str(file)
+            translator = ExpressionUnitTranslator()
+            graphic_record = translator.translate_record(
+                stem, record_class=CircularGraphicRecord
+            )
+            ax, _ = graphic_record.plot(figure_width=10)
+            figure_name = file.stem + "_circular_graphic.svg"
+            figure_path = dir_name / figure_name
+            ax.figure.savefig(figure_name, bbox_inches="tight")
+            figures.append(figure_path)
+
+    return figures
 
 
 def main():
