@@ -1,3 +1,5 @@
+"""Testing module for Prophicient with metrics and statistics."""
+
 from Bio import SeqIO
 from pathlib import Path
 
