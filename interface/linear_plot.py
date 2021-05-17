@@ -1,7 +1,6 @@
-"""BiopythonTrasnlator modified for use for Prophicient display."""
+"""BiopythonTranslator modified for use for Prophicient display."""
 
 from dna_features_viewer import BiopythonTranslator
-from dna_features_viewer import GraphicFeature
 
 
 class CustomTranslator(BiopythonTranslator):
@@ -62,10 +61,10 @@ class CustomTranslator(BiopythonTranslator):
         """Compute color for the given feature - differences based on type."""
         if feature.location.strand == 1:
             # green for forward
-            CDS_color = "#45f432"
+            CDS_color = "#449f66"
         else:
             # red for reverse
-            CDS_color = "#ff4466"
+            CDS_color = "red"
 
         color_dict = {"source": "#34ff56",
                       "gene": "#f45562",

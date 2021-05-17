@@ -6,32 +6,25 @@ import sys
 
 
 class ExpressionUnitTranslator(BiopythonTranslator):
-    """Translator for Circular Garphic."""
+    """Translator for Circular Graphic."""
 
     def compute_feature_color(self, feature):
         """Compute the color of the feature."""
         if feature.location.strand == -1:   # reverse
-            color_map = {
-                "source": "red",  # light orange
-                "gene": "red",
-                "tRNA": "yellow",
-                "CDS": "red",  # pink
-                "misc_recomb": "darkblue",
-                "misc_feature": "#d1e9f1",  # light blue
-                "backbone": "darkblue",
-            }
-            return color_map[feature.type]
+            source_color = "red"
         else:   # forward
-            color_map = {
-                "source": "#45f432",    # light orange
-                "gene": "red",
-                "tRNA": "yellow",
-                "CDS": "#45f432",       # green
-                "misc_recomb": "darkblue",
-                "misc_feature": "#d1e9f1",  # light blue
-                "backbone": "darkblue",
-            }
-            return color_map[feature.type]
+            source_color = "#449f66"
+
+        color_map = {
+            "source": source_color,  # light orange
+            "gene": "red",
+            "tRNA": "yellow",
+            "CDS": "red",  # pink
+            "misc_recomb": "darkblue",
+            "misc_feature": "#d1e9f1",  # light blue
+            "backbone": "darkblue",
+        }
+        return color_map[feature.type]
 
     def compute_feature_label(self, feature):
         """Compute the label of the feature."""

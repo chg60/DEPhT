@@ -1,13 +1,12 @@
-"""Interactive diplay of genome maps for Prophicient."""
+"""Interactive display of genome maps for Prophicient."""
 
 from bokeh.embed import file_html
 from bokeh.resources import CDN
 from pathlib import Path
-import argparse
-
 from linear_plot import CustomTranslator
 import circular_display
 import path_to_directories
+import table
 
 
 def circular_graph_list(dir_path):
@@ -67,6 +66,9 @@ def draw_figures(filename, dir_list):
 
     prophage_list = dir_list[0]
 
+    table_info = table.get_features()
+    proph_table = table.make_table(table_info)
+
     translator = CustomTranslator()
     html_filename = filename + ".html"
 
@@ -76,6 +78,10 @@ def draw_figures(filename, dir_list):
             img_write = "<img src = \"" + str(graph)
             img_write += "\" style=\"height:750px\">"
             f.write(img_write)
+
+        f.write("<br>")
+        f.write(proph_table)
+        f.write("<br>")
 
         for proph in prophage_list:
             proph = Path(proph)
