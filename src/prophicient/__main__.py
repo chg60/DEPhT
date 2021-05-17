@@ -25,12 +25,15 @@ from prophicient.functions.visualization import prophage_diagram
 
 # GLOBAL VARIABLES
 # -----------------------------------------------------------------------------
+RUN_MODE_MAP = {"fast": 0, "norm": 1, "full": 2}
+
 TMP_DIR = pathlib.Path("/tmp/prophicient")
 
 BLASTN_DB = PACKAGE_DIR.joinpath("data/blastn/mycobacteria")
 HHSEARCH_DB = PACKAGE_DIR.joinpath("data/hhsearch/functions")
 
 EXTEND_BY = 5000
+REF_BLAST_SORT_KEY = "bitscore"
 
 
 def parse_args(arguments):
@@ -52,6 +55,9 @@ def parse_args(arguments):
     parser.add_argument("--no-draw", action="store_true",
                         help="don't output genome map PDFs for identified "
                              "prophages")
+    parser.add_argument("--mode", type=str,
+                        choices=RUN_MODE_MAP.keys(),
+                        help="Choose run mode of the pipeline.")
     parser.add_argument("--cpus", type=int, default=PHYSICAL_CORES,
                         help=f"number of processors to use [default: "
                              f"{PHYSICAL_CORES}]")
@@ -86,17 +92,20 @@ def main(arguments):
     cpus = args.cpus
     verbose = args.verbose
     draw = not args.no_draw
+    mode = RUN_MODE_MAP[args.mode]
 
     # Mark program start time
     mark = datetime.now()
-    find_prophages(infile, outdir, TMP_DIR, cpus, verbose, draw, EXTEND_BY)
+    find_prophages(infile, outdir, TMP_DIR, cpus, verbose, draw, EXTEND_BY,
+                   mode)
     print(f"\nTotal runtime: {str(datetime.now() - mark)}")
 
     # Clean up after ourselves
     shutil.rmtree(TMP_DIR)
 
 
-def find_prophages(fasta, outdir, tmp_dir, cpus, verbose, draw, extend_by):
+def find_prophages(fasta, outdir, tmp_dir, cpus, verbose, draw, extend_by,
+                   run_mode):
     """
     Runs through all steps of prophage prediction:
 
@@ -123,6 +132,8 @@ def find_prophages(fasta, outdir, tmp_dir, cpus, verbose, draw, extend_by):
     :type draw: bool
     :param extend_by: number of basepairs to extend predicted prophage regions
     :type extend_by: int
+    :param run_mode: Run mode to operate the prophage identification process
+    :type run_mode:
     """
     if verbose:
         print("\tLoading FASTA file...")
@@ -156,16 +167,18 @@ def find_prophages(fasta, outdir, tmp_dir, cpus, verbose, draw, extend_by):
                   f"may be able to find partial (dead) prophages.")
         return
 
-    if verbose:
-        print("\tSearching for phage gene homologs...")
+    if run_mode >= 1:
+        if verbose:
+            print("\tSearching for phage gene homologs...")
 
-    # Set up directory where we can do hhsearch
-    hhsearch_dir = tmp_dir.joinpath("hhsearch")
-    if not hhsearch_dir.is_dir():
-        hhsearch_dir.mkdir()
+        # Set up directory where we can do hhsearch
+        hhsearch_dir = tmp_dir.joinpath("hhsearch")
+        if not hhsearch_dir.is_dir():
+            hhsearch_dir.mkdir()
 
-    # Search for phage gene remote homologs and annotate the bacterial sequence
-    find_homologs(contigs, prophage_preds, HHSEARCH_DB, hhsearch_dir, cpus)
+        # Search for phage gene remote homologs and
+        # annotate the bacterial sequence
+        find_homologs(contigs, prophage_preds, HHSEARCH_DB, hhsearch_dir, cpus)
 
     prophages = load_initial_prophages(contigs, prophage_preds)
 
@@ -180,21 +193,10 @@ def find_prophages(fasta, outdir, tmp_dir, cpus, verbose, draw, extend_by):
     # Detect attachment sites, where possible, for the predicted prophage
     detect_att_sites(prophages, BLASTN_DB, extend_by*2, att_dir)
 
-    # TODO: clean up final prophage annotations (add qualifiers for gene and
-    #  locus_tag, and maybe gene features for each CDS/tRNA/tmRNA)
-    prophage_records = [prophage.record for prophage in prophages]
-
     if verbose:
         print("\tGenerating final reports...")
 
-    for prophage in prophage_records:
-        genbank_filename = outdir.joinpath(f"{prophage.id}.gbk")
-        fasta_filename = outdir.joinpath(f"{prophage.id}.fasta")
-        SeqIO.write(prophage, genbank_filename, "genbank")
-        SeqIO.write(prophage, fasta_filename, "fasta")
-        if draw:
-            diagram_filename = outdir.joinpath(f"{prophage.id}.pdf")
-            prophage_diagram(prophage, diagram_filename)
+    write_prophage_output(outdir, contigs, prophages, draw)
 
 
 # HELPER FUNCTIONS
@@ -263,7 +265,7 @@ def get_reference_map_from_sequence(sequence, sequence_name,
 
 
 def detect_att_sites(prophages, reference_db_path, extend_by,
-                     tmp_dir, min_kmer_score=5):
+                     tmp_dir, min_kmer_score=5, sort_key=REF_BLAST_SORT_KEY):
     """Detect attachment sites demarcating predicted prophage regions from
     the bacterial contig.
 
@@ -309,7 +311,9 @@ def detect_att_sites(prophages, reference_db_path, extend_by,
         # Sort reference genomes by best cumulative E-value
         ref_data = \
             [(left_map[ref_id], right_map[ref_id]) for ref_id in ref_ids]
-        ref_data.sort(key=lambda x: x[0]["evalue"] + x[1]["evalue"])
+        ref_data.sort(key=lambda x:
+                            (float(x[0][sort_key]) + float(x[1][sort_key])),
+                      reverse=True)
 
         new_coords = None
         for data_tuple in ref_data:
@@ -337,19 +341,18 @@ def detect_att_sites(prophages, reference_db_path, extend_by,
 
                 # Find the left coordinate of the putative attR
                 # in the aligned right region of the prophage 
-                r_qstart = int(r_data["qstart"])
+                r_qstart = int(r_data["qstart"]) 
 
                 # Set the prophage start as the left coordinate of the attL
                 # of the putative prophage added to the start of the left
                 # region of the prophage in the bacterial sequence
-                new_start = (prophage.start +
-                             int(data_tuple[0]["qend"]) - overlap_len)
+                new_start = (prophage.start + int(l_qend) - overlap_len)
                 # Set the prophage end as the right coordinate of the attR
                 # of the putative prophage added to the start of the right
                 # region of the prophage in the bacterial sequence
-                new_end = (prophage.end -
-                           (half_len - int(data_tuple[1]["qstart"])) +
-                           overlap_len)
+                new_end = ((prophage.end - half_len) +
+                            int(r_qstart) + overlap_len)
+                
                 new_coords = (new_start, new_end)
                 att_len = overlap_len
                 break
@@ -397,6 +400,32 @@ def detect_att_sites(prophages, reference_db_path, extend_by,
 
         prophage.update()
         prophage.clean_record()
+
+
+def write_prophage_output(outdir, contigs, prophages, draw):
+    """Generates output structure and writes data to file
+
+    :param outdir: Root directory the data will be written to
+    :type outdir: pathlib.Path
+    :param contigs: Auto-annotated contigs to be written to file
+    :type contigs: list
+    :param prophages: Identified prophages to be written to file
+    :type prophages: list
+    """
+    for prophage in prophages:
+        name = prophage.id
+        prophage_outdir = outdir.joinpath(name)
+        prophage_outdir.mkdir(exist_ok=True)
+
+        genbank_filename = prophage_outdir.joinpath(name).with_suffix(".gbk")
+        fasta_filename = prophage_outdir.joinpath(name).with_suffix(".fasta")
+
+        SeqIO.write(prophage.record, genbank_filename, "genbank")
+        SeqIO.write(prophage.record, fasta_filename, "fasta")
+        if draw:
+            diagram_filename = prophage_outdir.joinpath(
+                                                    name).with_suffix(".pdf")
+            prophage_diagram(prophage.record, diagram_filename)
 
 
 if __name__ == "__main__":
