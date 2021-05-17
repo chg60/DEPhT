@@ -62,7 +62,7 @@ class CustomTranslator(BiopythonTranslator):
         """Compute color for the given feature - differences based on type."""
         if feature.location.strand == 1:
             # green for forward
-            CDS_color = "#449f66"
+            CDS_color = "#45f432"
         else:
             # red for reverse
             CDS_color = "#ff4466"

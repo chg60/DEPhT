@@ -10,7 +10,7 @@ class ExpressionUnitTranslator(BiopythonTranslator):
 
     def compute_feature_color(self, feature):
         """Compute the color of the feature."""
-        if feature.location.strand == -1:
+        if feature.location.strand == -1:   # reverse
             color_map = {
                 "source": "red",  # light orange
                 "gene": "red",
@@ -21,12 +21,12 @@ class ExpressionUnitTranslator(BiopythonTranslator):
                 "backbone": "darkblue",
             }
             return color_map[feature.type]
-        else:
+        else:   # forward
             color_map = {
-                "source": "#45f432",  # light orange
+                "source": "#45f432",    # light orange
                 "gene": "red",
                 "tRNA": "yellow",
-                "CDS": "#45f432",
+                "CDS": "#45f432",       # green
                 "misc_recomb": "darkblue",
                 "misc_feature": "#d1e9f1",  # light blue
                 "backbone": "darkblue",
@@ -49,30 +49,30 @@ class ExpressionUnitTranslator(BiopythonTranslator):
         # return NAME
 
 
-def get_path(folder_name):
+def get_path(dir_list):
     """Get the path of the folder.
 
-    :param folder_name: Name of the folder
-    :type folder_name: str
+    :param dir_list: List of directories to run the code on
+    :type folder_name: list
     """
-    dir_name = Path.cwd()
-    path_name = dir_name / folder_name
+    # dir_name = Path.cwd()
+    # path_name = dir_name / folder_name
 
     figures = []
 
-    for file in path_name.iterdir():
-        # NAME = str(file.name)
-        if file.suffix == ".gb":
-            stem = str(file)
-            translator = ExpressionUnitTranslator()
-            graphic_record = translator.translate_record(
-                stem, record_class=CircularGraphicRecord
-            )
-            ax, _ = graphic_record.plot(figure_width=10)
-            figure_name = file.stem + "_circular_graphic.svg"
-            figure_path = dir_name / figure_name
-            ax.figure.savefig(figure_name, bbox_inches="tight")
-            figures.append(figure_path)
+    for dir in dir_list:
+        translator = ExpressionUnitTranslator()
+        graphic_record = translator.translate_record(
+            dir, record_class=CircularGraphicRecord
+        )
+        ax, _ = graphic_record.plot(figure_width=10)
+
+        dir = Path(dir)
+
+        figure_name = dir.stem + "_circular_graphic.svg"
+        figure_path = Path.cwd() / figure_name
+        ax.figure.savefig(figure_name, bbox_inches="tight")
+        figures.append(figure_path)
 
     return figures
 
