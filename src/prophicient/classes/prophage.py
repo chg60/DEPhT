@@ -14,6 +14,7 @@ ANNOTATIONS = {"molecule_type": "DNA", "topology": "linear",
                "organism": "", "taxonomy": [],
                "comment": [""]}
 FEATURE_TYPES = ("CDS", "tRNA", "tmRNA")
+DEFAULT_PRODUCT = "hypothetical_protein"
 
 
 def realign_subrecord(record, subrecord, subrecord_start, subrecord_end,
@@ -82,6 +83,8 @@ class Prophage:
         self.att_len = att_len
         self.attL = None
         self.attR = None
+
+        self.products = []
 
         self.update_sequence_attributes()
 
@@ -185,9 +188,35 @@ class Prophage:
 
         self.record.features.sort(key=lambda x: x.location.start)
 
+    def update_products(self):
+        """Sets prophage products based on the HMM-HMM profile alignments of
+        the translations for the coding features of the prophage.
+        """
+        if self.seq is None or self.record is None or self.feature is None:
+            return
+
+        product_set = set()
+        for feature in self.record.features:
+            if feature.type != "CDS":
+                continue 
+
+            product_qualifiers = feature.qualifiers.get("product", None)
+            if not product_qualifiers:
+                continue
+
+            product = product_qualifiers[0]
+            if product == DEFAULT_PRODUCT:
+                continue
+
+            product_set.add(product)
+
+        self.products = list(product_set)
+        self.feature.qualifiers["note"] = [", ".join(self.products)]
+
     def update(self):
         """Sets prophage sequence and att features based on stored information
         """
+        self.update_products()
         self.update_sequence_attributes()
         self.update_att_attributes()
 

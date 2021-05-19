@@ -26,6 +26,7 @@ from prophicient.functions.visualization import prophage_diagram
 # GLOBAL VARIABLES
 # -----------------------------------------------------------------------------
 RUN_MODE_MAP = {"fast": 0, "norm": 1, "full": 2}
+DEFAULT_RUN_MODE = "norm"
 
 TMP_DIR = pathlib.Path("/tmp/prophicient")
 
@@ -34,6 +35,7 @@ HHSEARCH_DB = PACKAGE_DIR.joinpath("data/hhsearch/functions")
 
 EXTEND_BY = 5000
 REF_BLAST_SORT_KEY = "bitscore"
+PRODUCT_THRESHOLD = 3
 
 
 def parse_args(arguments):
@@ -56,7 +58,7 @@ def parse_args(arguments):
                         help="don't output genome map PDFs for identified "
                              "prophages")
     parser.add_argument("--mode", type=str,
-                        choices=RUN_MODE_MAP.keys(),
+                        choices=RUN_MODE_MAP.keys(), default=DEFAULT_RUN_MODE,
                         help="Choose run mode of the pipeline.")
     parser.add_argument("--cpus", type=int, default=PHYSICAL_CORES,
                         help=f"number of processors to use [default: "
@@ -180,7 +182,8 @@ def find_prophages(fasta, outdir, tmp_dir, cpus, verbose, draw, extend_by,
         # annotate the bacterial sequence
         find_homologs(contigs, prophage_preds, HHSEARCH_DB, hhsearch_dir, cpus)
 
-    prophages = load_initial_prophages(contigs, prophage_preds)
+    prophages = load_initial_prophages(contigs, prophage_preds,
+                                       reject=(run_mode >=1))
 
     if verbose:
         print("\tSearching for attL/R...")
@@ -201,7 +204,8 @@ def find_prophages(fasta, outdir, tmp_dir, cpus, verbose, draw, extend_by,
 
 # HELPER FUNCTIONS
 # -----------------------------------------------------------------------------
-def load_initial_prophages(contigs, prophage_predictions):
+def load_initial_prophages(contigs, prophage_predictions, reject=True,
+                           product_threshold=PRODUCT_THRESHOLD):
     """Creates Prophage objects from initial prophage prediction coordinates
     and their respective parent SeqRecord objects.
 
@@ -216,8 +220,9 @@ def load_initial_prophages(contigs, prophage_predictions):
     for contig_index, contig in enumerate(contigs):
         # Retrieve the contig seqrecord associated with the coordinates
         contig_predictions = prophage_predictions[contig_index]
-        for prophage_index, prophage_coordinates in enumerate(
-                                                    contig_predictions):
+
+        prophage_index = 0
+        for prophage_coordinates in contig_predictions:
             # Create a prophage ID from the SeqRecord ID
             prophage_id = "".join(["prophi", contig.id,
                                    "-", str((prophage_index+1))])
@@ -225,6 +230,15 @@ def load_initial_prophages(contigs, prophage_predictions):
             end = prophage_coordinates[1]
 
             prophage = Prophage(contig, prophage_id, start=start, end=end)
+            prophage.update()
+
+            if reject:
+                if len(prophage.products) < product_threshold:
+                    continue
+
+
+            products = "\n\t".join(prophage.products)
+            prophage_index += 1
             prophages.append(prophage)
 
     return prophages
@@ -377,7 +391,7 @@ def detect_att_sites(prophages, reference_db_path, extend_by,
             # Attempts to find an attachment site by finding the longest
             # sequence represented in both the left and right prophage regions,
             # penalizing length with distance from the set origin coordinate
-            kmer_data = find_attachment_site(left_seq, right_seq,
+            kmer_data = find_attachment_site(prophage, left_seq, right_seq,
                                              l_origin, r_origin, working_dir,
                                              l_name=left_name,
                                              r_name=right_name,
@@ -412,6 +426,7 @@ def write_prophage_output(outdir, contigs, prophages, draw):
     :param prophages: Identified prophages to be written to file
     :type prophages: list
     """
+    prophage_data_dicts = []
     for prophage in prophages:
         name = prophage.id
         prophage_outdir = outdir.joinpath(name)

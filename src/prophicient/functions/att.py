@@ -21,13 +21,15 @@ DEFAULTS = {"k": 5, "fpp": 0.0001, "outfmt": 10}
 
 # KMER COUNTING FUNCTIONS
 # -----------------------------------------------------------------------------
-def find_attachment_site(l_seq, r_seq, l_origin, r_origin, tmp_dir,
+def find_attachment_site(prophage, l_seq, r_seq, l_origin, r_origin, tmp_dir,
                          k=KMER_SIZE, method="blast", l_name=L_SEQ_NAME,
                          r_name=R_SEQ_NAME):
     """Given the sequences of a putative attL region and putative attR region,
     find the most probable attachment site, dictated by the sequence's length
     and it's distance from the predicted origin position.
 
+    :param prophage: Prophage object to find an attachment site for
+    :type prophage: prophicient.classes.prophage.Prophage
     :param l_seq: The sequence of a putative attL region.
     :type l_seq: str
     :param r_seq: The sequence of a putative attR region.
@@ -75,8 +77,10 @@ def find_attachment_site(l_seq, r_seq, l_origin, r_origin, tmp_dir,
         return
 
     # Score putative attachment site sequences
+    # TODO paramaterize and allow access to change the 'exponent' variable
     scored_kmer_contigs = [
-            (kmer_contig, score_kmer(kmer_contig, l_origin, r_origin, k, 3))
+            (kmer_contig, score_kmer(prophage, kmer_contig, l_origin,
+                                     r_origin, k, 3))
             for kmer_contig in kmer_contigs]
 
     # Sort attachment site sequences by score
@@ -128,7 +132,7 @@ def blast_attachment_site(l_seq_path, r_seq_path, tmp_dir, k=KMER_SIZE):
     return kmer_contigs
 
 
-def score_kmer(kmer_contig, l_origin, r_origin, base, exponent):
+def score_kmer(prophage, kmer_contig, l_origin, r_origin, base, exponent):
     """Score kmer contigs by their relative length and distance from
     an origin position.
 

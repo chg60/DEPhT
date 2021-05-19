@@ -15,6 +15,8 @@ from prophicient.functions.run_command import run_command
 MIN_LENGTH = 20000      # Don't annotate short contigs
 META_LENGTH = 100000    # Medium-length contigs -> use metagenomic mode
 
+DEFAULT_PRODUCT = "hypothetical_protein"
+
 
 def prodigal(infile, outfile, meta=False):
     """
@@ -71,7 +73,7 @@ def prodigal_reader(filepath):
         ftr.qualifiers["locus_tag"] = [""]
         ftr.qualifiers["note"] = [f"rbs_motif: {motif}; rbs_spacer: {spacer}"]
         ftr.qualifiers["transl_table"] = [11]
-        ftr.qualifiers["product"] = ["hypothetical protein"]
+        ftr.qualifiers["product"] = [DEFAULT_PRODUCT]
         ftr.qualifiers["translation"] = [sequence.rstrip("*")]
 
         yield ftr
