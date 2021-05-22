@@ -25,17 +25,20 @@ from prophicient.functions.visualization import prophage_diagram
 
 # GLOBAL VARIABLES
 # -----------------------------------------------------------------------------
-RUN_MODE_MAP = {"fast": 0, "norm": 1, "full": 2}
+RUN_MODE_MAP = {"fast": 0, "normal": 1, "strict": 2}
 DEFAULT_RUN_MODE = "norm"
 
 TMP_DIR = pathlib.Path("/tmp/prophicient")
 
 BLASTN_DB = PACKAGE_DIR.joinpath("data/blastn/mycobacteria")
-HHSEARCH_DB = PACKAGE_DIR.joinpath("data/hhsearch/functions")
+ESSENTIAL_DB = PACKAGE_DIR.joinpath("data/hhsearch/essential/essential")
+EXTENDED_DB = PACKAGE_DIR.joinpath("data/hhsearch/extended/extended")
 
-EXTEND_BY = 5000
+EXTEND_BY = 10000
 REF_BLAST_SORT_KEY = "bitscore"
-PRODUCT_THRESHOLD = 3
+
+NORMAL_PRODUCT_THRESHOLD = 3
+STRICT_PRODUCT_THRESHOLD = 10
 
 
 def parse_args(arguments):
@@ -169,6 +172,7 @@ def find_prophages(fasta, outdir, tmp_dir, cpus, verbose, draw, extend_by,
                   f"may be able to find partial (dead) prophages.")
         return
 
+    product_threshold = 0
     if run_mode >= 1:
         if verbose:
             print("\tSearching for phage gene homologs...")
@@ -180,10 +184,17 @@ def find_prophages(fasta, outdir, tmp_dir, cpus, verbose, draw, extend_by,
 
         # Search for phage gene remote homologs and
         # annotate the bacterial sequence
-        find_homologs(contigs, prophage_preds, HHSEARCH_DB, hhsearch_dir, cpus)
+        if run_mode >= 2: 
+            find_homologs(contigs, prophage_preds, EXTENDED_DB, hhsearch_dir,
+                          cpus)
+            product_threshold = STRICT_PRODUCT_THRESHOLD
+        else:
+            find_homologs(contigs, prophage_preds, ESSENTIAL_DB, hhsearch_dir,
+                          cpus)
+            product_threshold = NORMAL_PRODUCT_THRESHOLD
 
-    prophages = load_initial_prophages(contigs, prophage_preds,
-                                       reject=(run_mode >=1))
+        prophages = load_initial_prophages(contigs, prophage_preds,
+                                           product_threshold=product_threshold)
 
     if verbose:
         print("\tSearching for attL/R...")
@@ -194,7 +205,7 @@ def find_prophages(fasta, outdir, tmp_dir, cpus, verbose, draw, extend_by,
         att_dir.mkdir()
 
     # Detect attachment sites, where possible, for the predicted prophage
-    detect_att_sites(prophages, BLASTN_DB, extend_by*2, att_dir)
+    detect_att_sites(prophages, BLASTN_DB, extend_by, att_dir)
 
     if verbose:
         print("\tGenerating final reports...")
@@ -204,8 +215,8 @@ def find_prophages(fasta, outdir, tmp_dir, cpus, verbose, draw, extend_by,
 
 # HELPER FUNCTIONS
 # -----------------------------------------------------------------------------
-def load_initial_prophages(contigs, prophage_predictions, reject=True,
-                           product_threshold=PRODUCT_THRESHOLD):
+def load_initial_prophages(contigs, prophage_predictions,
+                           product_threshold=NORMAL_PRODUCT_THRESHOLD):
     """Creates Prophage objects from initial prophage prediction coordinates
     and their respective parent SeqRecord objects.
 
@@ -232,9 +243,8 @@ def load_initial_prophages(contigs, prophage_predictions, reject=True,
             prophage = Prophage(contig, prophage_id, start=start, end=end)
             prophage.update()
 
-            if reject:
-                if len(prophage.products) < product_threshold:
-                    continue
+            if len(prophage.products) < product_threshold:
+                continue
 
 
             products = "\n\t".join(prophage.products)
@@ -372,9 +382,9 @@ def detect_att_sites(prophages, reference_db_path, extend_by,
                 break
 
         if not new_coords:
-            # Sets the putative origin to half the internal extensions
-            l_origin = extend_by // 2
-            r_origin = extend_by // 2
+            # Sets the putative origin to the original model predictions
+            l_origin = extend_by
+            r_origin = extend_by
             # If any part of the region aligned, use the last aligned
             # coordinate as the origin
             if ref_data:
