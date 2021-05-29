@@ -11,19 +11,24 @@ from prophicient.functions.fasta import write_fasta
 # GLOBAL VARIABLES
 # -----------------------------------------------------------------------------
 KMER_SIZE = 5
+MIN_ATT_SCORE = 1
 FPP = 0.0001
 
 L_SEQ_NAME = "putative_attL_region"
 R_SEQ_NAME = "putative_attR_region"
 
+AQ_WEIGHT = 1
+IP_WEIGHT = 0.5
+MC_WEIGHT = 0.5
+RC_WEIGHT = 2
+
 DEFAULTS = {"k": 5, "fpp": 0.0001, "outfmt": 10}
 
 
-# KMER COUNTING FUNCTIONS
-# -----------------------------------------------------------------------------
-def find_attachment_site(prophage, l_seq, r_seq, l_origin, r_origin, tmp_dir,
-                         k=KMER_SIZE, method="blast", l_name=L_SEQ_NAME,
-                         r_name=R_SEQ_NAME):
+def find_attachment_site(prophage, l_seq, r_seq, l_origin, r_origin,
+                         reference_db_path, tmp_dir, sort_key,
+                         k=KMER_SIZE, min_score=MIN_ATT_SCORE,
+                         l_name=L_SEQ_NAME, r_name=R_SEQ_NAME):
     """Given the sequences of a putative attL region and putative attR region,
     find the most probable attachment site, dictated by the sequence's length
     and it's distance from the predicted origin position.
@@ -42,8 +47,6 @@ def find_attachment_site(prophage, l_seq, r_seq, l_origin, r_origin, tmp_dir,
     :type tmp_dir: pathlib.Path
     :param k: Length of the word size storerd in the DeBruijn graph.
     :type k: int
-    :param method: The method to use to find the attachment sequence.
-    :type method: str
     :param l_name: Name to give to the putative attL region sequence.
     :type l_name: str
     :param r_name: Name to give to the putative attR region sequence.
@@ -51,60 +54,70 @@ def find_attachment_site(prophage, l_seq, r_seq, l_origin, r_origin, tmp_dir,
     :return: A tuple of information associated with the detected att site.
     :rtype: tuple
     """
-    # If method is BLASTn
-    if method == "blast":
-        # Write the putative attL region to file
-        l_seq_path = tmp_dir.joinpath(l_name).with_suffix(".fasta")
-        write_fasta([l_name], [l_seq], l_seq_path)
+    # Write the putative attL region to file
+    l_seq_path = tmp_dir.joinpath(l_name).with_suffix(".fasta")
+    write_fasta([l_name], [l_seq], l_seq_path)
+    
+    # Write the putative attR region to file
+    r_seq_path = tmp_dir.joinpath(r_name).with_suffix(".fasta")
+    write_fasta([r_name], [r_seq], r_seq_path)
 
-        # Write the putative attR region to file
-        r_seq_path = tmp_dir.joinpath(r_name).with_suffix(".fasta")
-        write_fasta([r_name], [r_seq], r_seq_path)
-
-        # Use BLASTn to retrieve putative attachment site sequences
-        kmer_contigs = blast_attachment_site(
-            l_seq_path, r_seq_path, tmp_dir, k=k)
-    # If method is DeBruijn graph
-    elif method == "graph":
-        # Use a DeBruijn to retrieve putative attachment site sequences
-        kmer_contigs = graph_attachment_site(l_seq, r_seq, k=k)
-    else:
-        raise NotImplementedError(
-                            f"Attachment site detection method '{method}'"
-                            "is not an implemented algorithm")
+    paired_ref_map = find_reference_att_sites(prophage, l_seq_path, r_seq_path,
+                                              reference_db_path, tmp_dir,
+                                              k, sort_key)
+        
+    # Use BLASTn to retrieve putative attachment site sequences
+    kmer_contigs = blast_attachment_site(l_seq_path, r_seq_path, tmp_dir, k=k)
 
     if not kmer_contigs:
         return
 
     # Score putative attachment site sequences
     # TODO paramaterize and allow access to change the 'exponent' variable
-    scored_kmer_contigs = [
-            (kmer_contig, score_kmer(prophage, kmer_contig, l_origin,
-                                     r_origin, k, 3))
-            for kmer_contig in kmer_contigs]
+    scored_kmer_contigs = []
+    for kmer_contig in kmer_contigs:
+        scores = score_kmer(kmer_contig, prophage, paired_ref_map,
+                           l_origin, r_origin)
+
+        scored_kmer_contigs.append((kmer_contig, scores))
 
     # Sort attachment site sequences by score
-    scored_kmer_contigs.sort(key=lambda x: x[1], reverse=True)
+    scored_kmer_contigs.sort(key=lambda x: x[1][0], reverse=True)
 
-    kmer_contig, score = scored_kmer_contigs[0]
+    att_table_path = tmp_dir.joinpath("att.txt")  
+    dump_attachment_sites(prophage, scored_kmer_contigs, att_table_path)
 
-    # Create a SeqFeature from the putative attL sequence
-    att_l_start = kmer_contig[1] + 1
-    att_l_end = kmer_contig[1] + len(kmer_contig[0])
-    att_l_feature = SeqFeature(FeatureLocation(att_l_start, att_l_end),
-                               strand=1, type="misc_recomb")
+    kmer_contig, scores = scored_kmer_contigs[0]
 
-    # Create a SeqFeature from the putative attR sequence
-    att_r_end = kmer_contig[2]
-    att_r_start = kmer_contig[2] - len(kmer_contig[0])
-    att_r_feature = SeqFeature(FeatureLocation(att_r_start, att_r_end),
-                               strand=1, type="misc_recomb")
+    if scores[0] < min_score:
+        return
 
-    return att_l_feature, att_r_feature, score, kmer_contig[0]
+    half_len = len(prophage.seq) // 2
+
+    new_start = prophage.start + kmer_contig[1]
+    new_end = prophage.start + half_len + kmer_contig[2]
+
+    return new_start, new_end, scores, kmer_contig[0]
+
+
+# MAIN HELPER FUNCTIONS
+# -----------------------------------------------------------------------------
+def find_reference_att_sites(prophage, left_seq_path, right_seq_path,
+                             reference_db_path, tmp_dir, k, sort_key): 
+    # BLASTn both regions against the reference database
+    left_map = build_reference_map(left_seq_path, reference_db_path, tmp_dir)
+    right_map = build_reference_map(right_seq_path, reference_db_path, tmp_dir)
+
+    ref_ids = list(set(left_map.keys()).intersection(set(right_map.keys())))
+
+    paired_ref_map = pair_reference_maps(prophage, ref_ids,
+                                         left_map, right_map, k, sort_key)
+
+    return paired_ref_map
 
 
 def blast_attachment_site(l_seq_path, r_seq_path, tmp_dir, k=KMER_SIZE):
-    """Given the path to files containing the putative attL region and
+    """Given the path to files containink the putative attL region and
     putative attR region, BLASTn the sequences of both regions against each
     other and retrieve matching sequences and their positions.
 
@@ -120,45 +133,18 @@ def blast_attachment_site(l_seq_path, r_seq_path, tmp_dir, k=KMER_SIZE):
     :rtype: list(tuple(str, int, int))
     """
     blast_results = blastn(
-        l_seq_path, r_seq_path, tmp_dir, mode="subject", word_size=k)
+        l_seq_path, r_seq_path, tmp_dir, mode="subject", word_size=k,
+        evalue=100000)
 
     kmer_contigs = []
     for result in blast_results:
         # Append the contig and its positions to the list
         kmer_contig = (result["qseq"],
-                       int(result["qstart"]), int(result["send"]))
+                       int(result["qstart"]), int(result["send"]),
+                       float(result["bitscore"]))
         kmer_contigs.append(kmer_contig)
 
     return kmer_contigs
-
-
-def score_kmer(prophage, kmer_contig, l_origin, r_origin, base, exponent):
-    """Score kmer contigs by their relative length and distance from
-    an origin position.
-
-    :param kmer_contig: A tuple containing the contig, and its positions
-    :type kmer_contig: tuple(str, int, int)
-    :param l_origin: The origin position for the contig's leftmost position
-    :type l_origin: int
-    :param r_origin: The origin position for the contig's rightmost position
-    :type r_origin: int
-    :param base: The base of the logarithmic function from origin.
-    :type base: int
-    :param exponent: The exponent of the exponential function from origin
-    :type exponent: int
-    :return: The score of the given kmer, with respect to the given origins
-    :rtype: int
-    """
-    # Get the distance of the kmer from its left position to the left origin
-    l_distance = abs(l_origin - kmer_contig[1])
-    # Get the distance of the kmer from its right position to the right origin
-    r_distance = abs(r_origin - kmer_contig[2])
-
-    avg_distance = (l_distance + r_distance) / 2
-
-    # Return the length of the kmer, penalized by some function
-    # with the average distance as the input
-    return len(kmer_contig[0]) - (math.log(avg_distance, base) ** exponent)
 
 
 def graph_attachment_site(l_seq, r_seq, k=KMER_SIZE):
@@ -186,6 +172,253 @@ def graph_attachment_site(l_seq, r_seq, k=KMER_SIZE):
     kmer_contigs = traverse_debruijn_graph(deb_graph, l_seq)
 
     return kmer_contigs
+
+
+def dump_attachment_sites(prophage, scored_kmer_contigs, outpath):
+    half_len = len(prophage.seq) // 2
+
+    with outpath.open(mode="w") as filehandle:
+        for kmer_contig, scores in scored_kmer_contigs:
+            new_start = prophage.start + kmer_contig[1]
+            new_end = prophage.start + half_len + kmer_contig[2]
+
+            att_line_data = [new_start, new_end, len(kmer_contig[0])] 
+            score_line_data = [round(score, 2) for score in scores]
+            seq_data = [kmer_contig[0]]
+
+            line_data = att_line_data + score_line_data + seq_data
+            line_data = [str(line_entry) for line_entry in line_data]
+
+
+            filehandle.write("\t".join(line_data))
+            filehandle.write("\n")
+
+
+# REFERENCE BLASTING HELPER FUNCTIONS
+# -----------------------------------------------------------------------------
+def build_reference_map(sequence_path, reference_db_path, tmp_dir):
+    """Maps sequence BLASTn aligned reference genome IDs to their respective
+    alignment result data.
+
+    :param sequence_path: Path to query to be aligned to the reference database
+    :type sequence_path: pathlib.Path 
+    :param reference_db_path: Path to the database of references to search
+    :type reference_db_path: pathlib.Path
+    :param tmp_dir: Working directory to place BLASTn inputs and outputs
+    :type tmp_dir: pathlib.Path
+    :return: A map of aligned reference genome IDs to alignment result data
+    """
+    # Try to retrieve reference results for the sequence to the references
+    blast_results = blastn(sequence_path, reference_db_path, tmp_dir)
+
+    reference_map = dict()
+    for blast_result in blast_results:
+        # Checks to see if the sequence reference ID has already been stored
+        results = reference_map.get(blast_result["sseqid"], list())
+ 
+        results.append(blast_result)
+        reference_map[blast_result["sseqid"]] = results
+
+    return reference_map
+
+
+def pair_reference_maps(prophage, ref_ids, left_map, right_map, k, sort_key):
+    half_len = len(prophage.seq) // 2
+
+    paired_ref_map = {}
+    for ref_id in ref_ids:
+        ref_data = []
+        
+        for l_data in left_map[ref_id]:
+            for r_data in right_map[ref_id]:
+                # Find the coordinate ranges of the aligned reference genomes
+                left_ref_range = range(int(l_data["sstart"]),
+                                       int(l_data["send"]))
+                right_ref_range = range(int(r_data["sstart"]),
+                                        int(r_data["send"]))
+
+                # Determine if the coordinate ranges overlap
+                overlap_range = set(left_ref_range).intersection(
+                                                        set(right_ref_range))
+                overlap_len = len(overlap_range)
+
+                # If the overlap length meets the minimum att length
+                # treat the sequence as a putative attB that we can use 
+                # as a reference to set the boundaries for the prophage
+                if overlap_len >= k:
+                    # Find the right coordinate of the putative attL
+                    # in the aligned left region of the prophage 
+                    l_qend = int(l_data["qend"])
+
+                    # Find the left coordinate of the putative attR
+                    # in the aligned right region of the prophage 
+                    r_qstart = int(r_data["qstart"]) 
+
+                    new_start = (int(l_qend) - overlap_len)
+                    new_end = (half_len + int(r_qstart) + overlap_len)
+                   
+                    score = float(l_data[sort_key]) + float(r_data[sort_key])
+                    att_data = (new_start, new_end, overlap_len, score)
+
+                    ref_data.append(att_data)
+
+            ref_data.sort(key=lambda x: x[3], reverse=True)
+           
+            if ref_data:
+                paired_ref_map[ref_id] = ref_data[0]
+
+    return paired_ref_map
+
+
+# SCORING HELPER FUNCTIONS
+# -----------------------------------------------------------------------------
+def score_kmer(kmer_contig, prophage, paired_ref_map, l_origin, r_origin):
+    """Score kmer contigs with a complete holsitic approach.
+
+    :param kmer_contig: A tuple containing the contig, and its positions
+    :type kmer_contig: tuple(str, int, int)
+    :param l_origin: The origin position for the contig's leftmost position
+    :type l_origin: int
+    :param r_origin: The origin position for the contig's rightmost position
+    :type r_origin: int
+    :return: The score of the given kmer
+    :rtype: float
+    """
+    half_len = len(prophage.seq) // 2
+    attL_pos = kmer_contig[1]
+    attR_pos = half_len + kmer_contig[2]
+
+    att_quality_score = score_att_quality(kmer_contig[3])
+
+    int_proximity_score = score_integrase_proximity(prophage,
+                                                    attL_pos, attR_pos)
+
+    model_cov_score = score_model_coverage(attR_pos - attL_pos,
+                                           len(prophage.seq))
+
+    reference_score = score_reference_concurrence(
+                                        attL_pos, attR_pos,
+                                        len(kmer_contig[0]), paired_ref_map)
+
+    composite_score = (att_quality_score + int_proximity_score +
+                       model_cov_score + reference_score)
+
+    return (composite_score, att_quality_score, int_proximity_score,
+            model_cov_score, reference_score)
+
+
+def score_att_quality(bitscore, base=KMER_SIZE, weight=AQ_WEIGHT):
+    score = 1 - (base / bitscore)
+
+    if score < 0:
+        score = 0.0
+    elif score > 1:
+        score = 1.0
+
+    score = score * weight
+    return score
+
+
+def score_integrase_proximity(prophage, attL_pos, attR_pos, base=10,
+                              weight=IP_WEIGHT):
+    int_dist = None
+    for feature in prophage.record.features:
+        if feature.type != "CDS":
+            continue
+        
+        products = feature.qualifiers.get("product", None)
+
+        if not products:
+            continue
+ 
+        for product in products:
+            if "integrase" in product:
+                left_int_dist = int(feature.location.start - attL_pos)
+                right_int_dist = int(attR_pos - feature.location.end)
+                
+                if left_int_dist < 0 or right_int_dist < 0:
+                    continue
+
+                if int_dist is None:
+                    int_dist = left_int_dist
+                else:
+                    if left_int_dist < int_dist:
+                        int_dist = left_int_dist
+
+                if right_int_dist < int_dist:
+                    int_dist = right_int_dist
+
+    if int_dist is None:
+        return 0.0
+
+    if int_dist < 10:
+        int_dist = 10
+
+    score = 1 / (math.log(int_dist, base))
+
+    if score < 0:
+        score = 0.0
+    elif score > 1:
+        score = 1.0
+
+    score = score * weight
+    return score
+
+
+def score_model_coverage(putative_len, model_len, weight=MC_WEIGHT):
+    score = putative_len / model_len
+
+    if score > 1:
+        score = 1.0
+
+    score = score * weight
+    return score
+
+
+def score_reference_concurrence(attL_pos, attR_pos, att_len, paired_ref_map,
+                                base=10, weight=RC_WEIGHT):
+    """Return a score dependant on the coordinate range overlap of the
+    kmer contig with a preducted reference attB.
+    """
+    ref_bitscore = None
+    for ref_id, ref_data in paired_ref_map.items():
+        attL_range = set(range(attL_pos, (attL_pos + att_len)))
+        ref_attL_range = set(range(ref_data[0], (ref_data[0] + att_len)))
+
+        if not attL_range.intersection(ref_attL_range):
+            continue
+
+        attR_range = set(range((attR_pos - att_len), attR_pos))
+        ref_attR_range = set(range((ref_data[1] - att_len), ref_data[1])) 
+
+        if not attR_range.intersection(ref_attR_range):
+            continue
+
+        if ref_bitscore is None:
+            ref_bitscore = ref_data[3]
+        else:
+            if ref_data[3] > ref_bitscore:
+                ref_bitscore = ref_data[3]
+
+    if ref_bitscore is None:
+        return 0.0
+
+    if ref_bitscore < 10:
+        ref_bitscore = 10
+
+    score = 1 - (1 / math.log(ref_bitscore, base))
+
+    if score < 0:
+        score = 0.0
+    elif score > 1:
+        score = 1.0
+
+    score = score * weight
+    return score
+
+
+# DEB-GRAPH KMER-COUNTING HELPER FUNCTIONS
+# -----------------------------------------------------------------------------
 
 
 def load_bfilter(sequence, k=KMER_SIZE):

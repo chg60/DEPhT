@@ -44,7 +44,10 @@ def blastn(query, target, tmp_dir, mode="db", evalue=BLASTN_EVALUE,
         command = f"blastn -query {query} -subject {target}"
     else:
         raise ValueError("valid blastn modes are: 'db', 'subject'")
-    command += f" -evalue {evalue} -out {outfile} -outfmt '{BLASTN_OUTFMT}'"
+    command += f" -out {outfile} -outfmt '{BLASTN_OUTFMT}'"
+
+    if evalue:
+        command += f" -evalue {evalue}"
 
     if word_size:
         command += f" -word_size {word_size}"

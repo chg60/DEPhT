@@ -146,6 +146,7 @@ class Prophage:
         # Sets the prophage SeqFeature according to the stored start and end
         self.feature = SeqFeature(FeatureLocation(self.start, self.end),
                                   strand=self.strand, type="source")
+
         # Extracts the prophage sequence with the created prophage
         self.seq = self.feature.extract(self.parent_seq)
         self.length = len(self.seq)

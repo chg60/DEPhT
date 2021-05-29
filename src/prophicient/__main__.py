@@ -13,7 +13,7 @@ from datetime import datetime
 from Bio import SeqIO
 
 from prophicient import PACKAGE_DIR
-from prophicient.classes.prophage import Prophage
+from prophicient.classes.prophage import ANNOTATIONS, Prophage
 from prophicient.functions.annotation import annotate_contig, MIN_LENGTH
 from prophicient.functions.att import find_attachment_site
 from prophicient.functions.blastn import blastn
@@ -26,7 +26,7 @@ from prophicient.functions.visualization import prophage_diagram
 # GLOBAL VARIABLES
 # -----------------------------------------------------------------------------
 RUN_MODE_MAP = {"fast": 0, "normal": 1, "strict": 2}
-DEFAULT_RUN_MODE = "norm"
+DEFAULT_RUN_MODE = "normal"
 
 TMP_DIR = pathlib.Path("/tmp/prophicient")
 
@@ -66,6 +66,8 @@ def parse_args(arguments):
     parser.add_argument("--cpus", type=int, default=PHYSICAL_CORES,
                         help=f"number of processors to use [default: "
                              f"{PHYSICAL_CORES}]")
+    parser.add_argument("--dump_data", action="store_true",
+                        help="Choose whether to make data accessible")
     return parser.parse_args(arguments)
 
 
@@ -90,9 +92,14 @@ def main(arguments):
         print(f"'{str(outdir)}' does not exist - creating it...")
         outdir.mkdir(parents=True)
 
+    if not args.dump_data:
+        temp_dir = TMP_DIR
+    else:
+        temp_dir = outdir.joinpath("data")
+
     # Create temporary dir, if it doesn't exist.
-    if not TMP_DIR.is_dir():
-        TMP_DIR.mkdir()
+    if not temp_dir.is_dir():
+        temp_dir.mkdir()
 
     cpus = args.cpus
     verbose = args.verbose
@@ -101,12 +108,13 @@ def main(arguments):
 
     # Mark program start time
     mark = datetime.now()
-    find_prophages(infile, outdir, TMP_DIR, cpus, verbose, draw, EXTEND_BY,
+    find_prophages(infile, outdir, temp_dir, cpus, verbose, draw, EXTEND_BY,
                    mode)
     print(f"\nTotal runtime: {str(datetime.now() - mark)}")
 
-    # Clean up after ourselves
-    shutil.rmtree(TMP_DIR)
+    if not args.dump_data:
+        # Clean up after ourselves
+        shutil.rmtree(TMP_DIR)
 
 
 def find_prophages(fasta, outdir, tmp_dir, cpus, verbose, draw, extend_by,
@@ -193,8 +201,8 @@ def find_prophages(fasta, outdir, tmp_dir, cpus, verbose, draw, extend_by,
                           cpus)
             product_threshold = NORMAL_PRODUCT_THRESHOLD
 
-        prophages = load_initial_prophages(contigs, prophage_preds,
-                                           product_threshold=product_threshold)
+    prophages = load_initial_prophages(contigs, prophage_preds,
+                                       product_threshold=product_threshold)
 
     if verbose:
         print("\tSearching for attL/R...")
@@ -280,10 +288,10 @@ def get_reference_map_from_sequence(sequence, sequence_name,
     reference_map = dict()
     for blast_result in blast_results:
         # Checks to see if the sequence reference ID has already been stored
-        result_exists = reference_map.get(blast_result["sseqid"], False)
-
-        if not result_exists:
-            reference_map[blast_result["sseqid"]] = blast_result
+        results = reference_map.get(blast_result["sseqid"], list())
+ 
+        results.append(blast_result)
+        reference_map[blast_result["sseqid"]] = results
 
     return reference_map
 
@@ -308,122 +316,35 @@ def detect_att_sites(prophages, reference_db_path, extend_by,
         # Create prophage working directory within temp directory
         working_dir = tmp_dir.joinpath(prophage.id)
         if not working_dir.is_dir():
-            working_dir.mkdir()
+            working_dir.mkdir() 
 
-        # If the internal extend_by will cause the right and left regions
-        # to overlap, limit the external extend_by to half the region
         seq_len = len(prophage.seq)
         half_len = seq_len // 2
-        if extend_by > half_len:
-            extend_by = half_len
+ 
+        l_seq = str(prophage.seq[:half_len])
+        r_seq = str(prophage.seq[half_len:])
 
-        # BLASTn the left region against the reference database
-        left_seq = str(prophage.seq[:half_len])
-        left_name = f"{prophage.id}_left"
-        left_map = get_reference_map_from_sequence(
-            left_seq, left_name, reference_db_path, working_dir)
+        l_origin = extend_by
+        r_origin = len(prophage.seq) - extend_by
+        
+        l_name = f"{prophage.id}_left"
+        r_name = f"{prophage.id}_right"
 
-        # BLASTn the right region against the reference database
-        right_seq = str(prophage.seq[half_len:])
-        right_name = f"{prophage.id}_right"
-        right_map = get_reference_map_from_sequence(
-            right_seq, right_name, reference_db_path, working_dir)
+        att_data = find_attachment_site(
+                                prophage, l_seq, r_seq, l_origin, r_origin,
+                                reference_db_path, working_dir, sort_key,
+                                k=min_kmer_score, l_name=l_name, r_name=r_name)
 
-        # Find BLASTn reference genomes that both regions aligned to
-        ref_ids = list(set(left_map.keys()).intersection(right_map.keys()))
-
-        # Sort reference genomes by best cumulative E-value
-        ref_data = \
-            [(left_map[ref_id], right_map[ref_id]) for ref_id in ref_ids]
-        ref_data.sort(key=lambda x:
-                            (float(x[0][sort_key]) + float(x[1][sort_key])),
-                      reverse=True)
-
-        new_coords = None
-        for data_tuple in ref_data:
-            l_data = data_tuple[0]
-            r_data = data_tuple[1]
-
-            # Find the coordinate ranges of the aligned reference genome
-            left_ref_range = range(int(l_data["sstart"]),
-                                   int(l_data["send"]))
-            right_ref_range = range(int(r_data["sstart"]),
-                                    int(r_data["send"]))
-
-            # If the coordinates indicate overlap, determine the overlap length
-            overlap_range = set(left_ref_range).intersection(
-                                                    set(right_ref_range))
-            overlap_len = len(overlap_range)
-
-            # If the overlap length meets the minimum att length
-            # treat the sequence as a putative attB that we can use 
-            # as a reference to set the boundaries for the predicted prophage
-            if overlap_len >= min_kmer_score:
-                # Find the right coordinate of the putative attL
-                # in the aligned left region of the prophage 
-                l_qend = int(l_data["qend"])
-
-                # Find the left coordinate of the putative attR
-                # in the aligned right region of the prophage 
-                r_qstart = int(r_data["qstart"]) 
-
-                # Set the prophage start as the left coordinate of the attL
-                # of the putative prophage added to the start of the left
-                # region of the prophage in the bacterial sequence
-                new_start = (prophage.start + int(l_qend) - overlap_len)
-                # Set the prophage end as the right coordinate of the attR
-                # of the putative prophage added to the start of the right
-                # region of the prophage in the bacterial sequence
-                new_end = ((prophage.end - half_len) +
-                            int(r_qstart) + overlap_len)
-                
-                new_coords = (new_start, new_end)
-                att_len = overlap_len
-                break
-
-        if not new_coords:
-            # Sets the putative origin to the original model predictions
-            l_origin = extend_by
-            r_origin = extend_by
-            # If any part of the region aligned, use the last aligned
-            # coordinate as the origin
-            if ref_data:
-                data_tuple = ref_data[0]
-
-                l_end = int(data_tuple[0]["qend"])
-                if l_end < l_origin:
-                    l_origin = l_end
-
-                r_start = int(data_tuple[1]["qstart"])
-                if r_start > r_origin:
-                    r_origin = r_start
-            
-            # Attempts to find an attachment site by finding the longest
-            # sequence represented in both the left and right prophage regions,
-            # penalizing length with distance from the set origin coordinate
-            kmer_data = find_attachment_site(prophage, left_seq, right_seq,
-                                             l_origin, r_origin, working_dir,
-                                             l_name=left_name,
-                                             r_name=right_name,
-                                             k=min_kmer_score)
-
-            new_coords = (prophage.start, prophage.end)
-            att_len = 0
-            if kmer_data is not None:
-                if kmer_data[2] >= min_kmer_score:
-                    new_start = (prophage.start +
-                                 kmer_data[0].location.start)
-                    new_end = ((prophage.end - half_len) +
-                               kmer_data[1].location.end)
-                    new_coords = (new_start, new_end)
-                    att_len = len(kmer_data[3])
-
-        prophage.set_coordinates(*new_coords)
-        prophage.set_att_len(att_len)
+        if att_data is not None: 
+            prophage.set_coordinates(att_data[0], att_data[1])
+            prophage.set_att_len(len(att_data[3]))
         prophage.detect_orientation()
 
         prophage.update()
         prophage.clean_record()
+
+        prophage.parent_record.features.append(prophage.feature)
+        prophage.parent_record.features.sort(key=lambda x: x.location.start)
 
 
 def write_prophage_output(outdir, contigs, prophages, draw):
@@ -436,6 +357,14 @@ def write_prophage_output(outdir, contigs, prophages, draw):
     :param prophages: Identified prophages to be written to file
     :type prophages: list
     """
+    for contig in contigs:
+        name = contig.id
+        contig.annotations = ANNOTATIONS
+        
+        genbank_filename = outdir.joinpath(name).with_suffix(".gbk")
+
+        SeqIO.write(contig, genbank_filename, "genbank")
+    
     prophage_data_dicts = []
     for prophage in prophages:
         name = prophage.id
