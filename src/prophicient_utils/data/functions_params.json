@@ -1,0 +1,13 @@
+{
+    "LIKE": [
+                "terminase",
+                "major capsid protein",
+                "portal protein",
+                "lysin",
+                "integrase",
+                "immunity repressor"
+            ],
+    "NOT LIKE": [
+                "hypothetical protein"
+            ]
+}

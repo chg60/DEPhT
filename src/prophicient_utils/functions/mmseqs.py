@@ -1,6 +1,4 @@
-import pathlib
-
-from src.prophicient.functions.run import run
+from prophicient.functions.run import run
 
 
 def mmseqs_createdb(fasta, mmseqsdb):
