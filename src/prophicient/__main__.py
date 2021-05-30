@@ -34,6 +34,9 @@ BLASTN_DB = PACKAGE_DIR.joinpath("data/blastn/mycobacteria")
 ESSENTIAL_DB = PACKAGE_DIR.joinpath("data/hhsearch/essential/essential")
 EXTENDED_DB = PACKAGE_DIR.joinpath("data/hhsearch/extended/extended")
 
+PROPHAGE_PREFIX = "prophi"
+PROPHAGE_DELIMITER = "-"
+
 EXTEND_BY = 10000
 REF_BLAST_SORT_KEY = "bitscore"
 
@@ -51,21 +54,24 @@ def parse_args(arguments):
     """
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("infile", type=pathlib.Path,
-                        help="path to a FASTA nucleotide sequence file to "
+                        help="Path to a FASTA nucleotide sequence file to "
                              "scan for prophages")
     parser.add_argument("outdir", type=pathlib.Path,
-                        help="path where output files should be written")
+                        help="Path where output files should be written")
+
     parser.add_argument("--verbose", action="store_true",
-                        help="toggles verbosity of pipeline")
+                        help="Toggle on verbosity of pipeline")
     parser.add_argument("--no-draw", action="store_true",
-                        help="don't output genome map PDFs for identified "
+                        help="Toggle off genome map PDFs for identified "
                              "prophages")
+
     parser.add_argument("--mode", type=str,
                         choices=RUN_MODE_MAP.keys(), default=DEFAULT_RUN_MODE,
                         help="Choose run mode of the pipeline.")
     parser.add_argument("--cpus", type=int, default=PHYSICAL_CORES,
-                        help=f"number of processors to use [default: "
+                        help=f"Number of processors to use [default: "
                              f"{PHYSICAL_CORES}]")
+
     parser.add_argument("--dump_data", action="store_true",
                         help="Choose whether to make data accessible")
     return parser.parse_args(arguments)
@@ -224,7 +230,9 @@ def find_prophages(fasta, outdir, tmp_dir, cpus, verbose, draw, extend_by,
 # HELPER FUNCTIONS
 # -----------------------------------------------------------------------------
 def load_initial_prophages(contigs, prophage_predictions,
-                           product_threshold=NORMAL_PRODUCT_THRESHOLD):
+                           product_threshold=NORMAL_PRODUCT_THRESHOLD,
+                           prefix=PROPHAGE_PREFIX,
+                           delimiter=PROPHAGE_DELIMITER):
     """Creates Prophage objects from initial prophage prediction coordinates
     and their respective parent SeqRecord objects.
 
@@ -243,8 +251,8 @@ def load_initial_prophages(contigs, prophage_predictions,
         prophage_index = 0
         for prophage_coordinates in contig_predictions:
             # Create a prophage ID from the SeqRecord ID
-            prophage_id = "".join(["prophi", contig.id,
-                                   "-", str((prophage_index+1))])
+            prophage_id = "".join([prefix, contig.id,
+                                   delimiter, str((prophage_index+1))])
             start = prophage_coordinates[0]
             end = prophage_coordinates[1]
 
