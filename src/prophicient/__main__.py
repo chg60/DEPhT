@@ -61,7 +61,7 @@ def parse_args(arguments):
 
     parser.add_argument("--verbose", action="store_true",
                         help="Toggle on verbosity of pipeline")
-    parser.add_argument("--no-draw", action="store_true",
+    parser.add_argument("--no-draw", action="store_false", dest="draw",
                         help="Toggle off genome map PDFs for identified "
                              "prophages")
 
@@ -74,6 +74,15 @@ def parse_args(arguments):
 
     parser.add_argument("--dump_data", action="store_true",
                         help="Choose whether to make data accessible")
+
+    parser.add_argument("--prophage-prefix", type=str,
+                        default=PROPHAGE_PREFIX,
+                        help="Prefix to append to the beginning of the names "
+                             "given to detected prophages")
+    parser.add_argument("--prophage-delimiter", type=str,
+                        default=PROPHAGE_DELIMITER,
+                        help="Suffix delimiter to use to separate the names "
+                             "given to detected prophages and their number")
     return parser.parse_args(arguments)
 
 
@@ -107,15 +116,13 @@ def main(arguments):
     if not temp_dir.is_dir():
         temp_dir.mkdir()
 
-    cpus = args.cpus
-    verbose = args.verbose
-    draw = not args.no_draw
-    mode = RUN_MODE_MAP[args.mode]
-
     # Mark program start time
     mark = datetime.now()
-    find_prophages(infile, outdir, temp_dir, cpus, verbose, draw, EXTEND_BY,
-                   mode)
+    find_prophages(infile, outdir, temp_dir,
+                   cpus=args.cpus, verbose=args.verbose, draw=args.draw,
+                   extend_by=EXTEND_BY, run_mode=RUN_MODE_MAP[args.mode],
+                   prefix=args.prophage_prefix,
+                   delimiter=args.prophage_delimiter)
     print(f"\nTotal runtime: {str(datetime.now() - mark)}")
 
     if not args.dump_data:
@@ -123,8 +130,10 @@ def main(arguments):
         shutil.rmtree(TMP_DIR)
 
 
-def find_prophages(fasta, outdir, tmp_dir, cpus, verbose, draw, extend_by,
-                   run_mode):
+def find_prophages(fasta, outdir, tmp_dir, cpus=PHYSICAL_CORES,
+                   verbose=False, draw=True,
+                   prefix=PROPHAGE_PREFIX, delimiter=PROPHAGE_DELIMITER,
+                   extend_by=EXTEND_BY, run_mode=DEFAULT_RUN_MODE):
     """
     Runs through all steps of prophage prediction:
 
@@ -149,6 +158,10 @@ def find_prophages(fasta, outdir, tmp_dir, cpus, verbose, draw, extend_by,
     :type verbose: bool
     :param draw: should genome diagrams be created at the end?
     :type draw: bool
+    :param prefix: prefix for the names of predicted prophage regions
+    :type prefix: str
+    :param delimiter: delimiter for the prophage region names and numbers
+    :type delimiter: str
     :param extend_by: number of basepairs to extend predicted prophage regions
     :type extend_by: int
     :param run_mode: Run mode to operate the prophage identification process
@@ -208,7 +221,8 @@ def find_prophages(fasta, outdir, tmp_dir, cpus, verbose, draw, extend_by,
             product_threshold = NORMAL_PRODUCT_THRESHOLD
 
     prophages = load_initial_prophages(contigs, prophage_preds,
-                                       product_threshold=product_threshold)
+                                       product_threshold=product_threshold,
+                                       prefix=prefix, delimiter=delimiter)
 
     if verbose:
         print("\tSearching for attL/R...")
