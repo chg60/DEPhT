@@ -8,9 +8,9 @@ import pathlib
 import shutil
 import json
 
+from prophicient.functions import mmseqs
 from prophicient.functions.fasta import parse_fasta
 from prophicient_utils.classes.database import Database, Pham
-from prophicient_utils.functions import mmseqs
 
 
 def parse_phamerate_args(unparsed_args):
@@ -190,7 +190,6 @@ def execute_phamerate_pipeline(fasta, outdir, param_file):
 
     # Clean up temporary directory
     shutil.rmtree(tempdir)
-    pass
 
 
 def main(unparsed_args):
