@@ -8,6 +8,7 @@ from prophicient.functions.run_command import run_command
 
 HHSEARCH_EVALUE = 1E-04
 HHSEARCH_PROB = 90
+HHSEARCH_COV = 50
 
 
 def hhsearch(query, outfile, db, evalue=HHSEARCH_EVALUE):
@@ -28,7 +29,8 @@ def hhsearch(query, outfile, db, evalue=HHSEARCH_EVALUE):
     run_command(command)
 
 
-def find_single_homologs(header, sequence, db, tmp_dir, prob=HHSEARCH_PROB):
+def find_single_homologs(header, sequence, db, tmp_dir, prob=HHSEARCH_PROB,
+                         cov=HHSEARCH_COV):
     """
     Runs hhsearch to find functionally annotated homolog(s) for a
     single protein sequence in the indicated database.
@@ -64,7 +66,9 @@ def find_single_homologs(header, sequence, db, tmp_dir, prob=HHSEARCH_PROB):
 
     # Cull low-probability matches
     hhresult.matches = [match for match in hhresult.matches if
-                        float(match.probability) > prob]
+                        (float(match.probability) >= prob) and
+                        ((float(match.match_cols) / float(match.hit_length))
+                         * 100 >= cov)]
     if hhresult.matches:
         # Best match is the one with the highest bit-score
         hhresult.matches.sort(key=lambda x: float(x.score), reverse=True)

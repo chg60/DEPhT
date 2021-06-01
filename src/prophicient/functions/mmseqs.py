@@ -1,6 +1,4 @@
-import pathlib
-
-from src.prophicient.functions.run import run
+from prophicient.functions.run_command import run_command
 
 
 def mmseqs_createdb(fasta, mmseqsdb):
@@ -14,7 +12,7 @@ def mmseqs_createdb(fasta, mmseqsdb):
     :return:
     """
     c = f"mmseqs createdb {fasta} {mmseqsdb} -v 3"
-    run(c)
+    run_command(c)
 
 
 def mmseqs_cluster(sequence_db, cluster_db, tmp_dir, clustermode, clustersteps,
@@ -45,7 +43,7 @@ def mmseqs_cluster(sequence_db, cluster_db, tmp_dir, clustermode, clustersteps,
     c = f"mmseqs cluster {str(sequence_db)} {str(cluster_db)} {str(tmp_dir)} -v 3 " \
         f"--max-seqs 1000 --cluster-mode {clustermode} --cluster-steps {clustersteps} " \
         f"-s {sensitivity} --min-seq-id {minseqid} -c {coverage} -e {evalue}"
-    run(c)
+    run_command(c)
 
 
 def mmseqs_result2profile(sequence_db, cluster_db, profile_db):
@@ -61,7 +59,7 @@ def mmseqs_result2profile(sequence_db, cluster_db, profile_db):
     :return:
     """
     c = f"mmseqs result2profile {str(sequence_db)} {str(sequence_db)} {str(cluster_db)} {str(profile_db)} -v 3"
-    run(c)
+    run_command(c)
 
 
 def mmseqs_profile2consensus(profile_db, consensus_db):
@@ -76,7 +74,7 @@ def mmseqs_profile2consensus(profile_db, consensus_db):
     :return:
     """
     c = f"mmseqs profile2consensus {profile_db} {consensus_db} -v 3"
-    run(c)
+    run_command(c)
 
 
 def mmseqs_search(profile_db, consensus_db, align_db, tmp_dir, minseqid, coverage, evalue):
@@ -103,7 +101,7 @@ def mmseqs_search(profile_db, consensus_db, align_db, tmp_dir, minseqid, coverag
     c = f"mmseqs search {profile_db} {consensus_db} {align_db} {tmp_dir} -v 3 " \
         f"--max-seqs 1000 --min-seq-id {minseqid} -c {coverage} --cov {coverage} " \
         f"-e {evalue} --e-profile {evalue} --add-self-matches"
-    run(c)
+    run_command(c)
 
 
 def mmseqs_clust(consensus_db, align_db, result_db):
@@ -119,7 +117,7 @@ def mmseqs_clust(consensus_db, align_db, result_db):
     :return:
     """
     c = f"mmseqs clust {consensus_db} {align_db} {result_db} -v 3"
-    run(c)
+    run_command(c)
 
 
 def mmseqs_createseqfiledb(sequence_db, cluster_db, sf_db):
@@ -135,7 +133,7 @@ def mmseqs_createseqfiledb(sequence_db, cluster_db, sf_db):
     :return:
     """
     c = f"mmseqs createseqfiledb {sequence_db} {cluster_db} {sf_db} -v 3"
-    run(c)
+    run_command(c)
 
 
 def mmseqs_result2flat(query_db, subject_db, result_db, output):
@@ -153,7 +151,7 @@ def mmseqs_result2flat(query_db, subject_db, result_db, output):
     :return:
     """
     c = f"mmseqs result2flat {query_db} {subject_db} {result_db} {output} -v 3"
-    run(c)
+    run_command(c)
 
 
 def parse_mmseqs(filepath):
