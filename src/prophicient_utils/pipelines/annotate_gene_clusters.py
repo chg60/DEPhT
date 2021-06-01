@@ -5,6 +5,9 @@ import sys
 from Bio import SeqIO
 
 from prophicient_utils.data.defaults import HHSUITEDB_DEFAULTS
+from prophicient_utils.functions.fileio import (
+                                        read_gene_index_file,
+                                        write_cluster_function_index_file)
 
 # GLOBAL VARIABLES
 DEFAULTS = {"name": HHSUITEDB_DEFAULTS["name"],
@@ -67,24 +70,6 @@ def annotate_gene_clusters(fasta_dir, index_file, output_dir,
     out_index_file = output_dir.joinpath(".".join([name, "ppi"]))
 
     write_cluster_function_index_file(gene_cluster_data, out_index_file)
-
-
-def read_gene_index_file(index_file):
-    gene_index = {}
-    with index_file.open(mode="r") as filehandle:
-        lines = filehandle.readlines()
-        for line in lines:
-            split_line = line.split("\t")
-            gene_index[split_line[0]] = {"locus_tag": split_line[1],
-                                         "product": split_line[2]}
-
-    return gene_index
-
-
-def write_cluster_function_index_file(gene_cluster_data, index_file):
-    with index_file.open(mode="w") as filehandle:
-        for gene_cluster in gene_cluster_data:
-            filehandle.write("\t".join(gene_cluster + ["\n"]))
 
 
 def main(unparsed_args):

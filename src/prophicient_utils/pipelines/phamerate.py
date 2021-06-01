@@ -53,10 +53,13 @@ def parse_param_file(param):
     first_iter = (a, b, c, d, e, f)
 
     second_iter_dict = param.get("second_iteration")
-    g = second_iter_dict.get("--min-seq-id")        # Define min-seq-id
-    h = second_iter_dict.get("-c")                  # Define coverage
-    j = second_iter_dict.get("-e")                  # Define e-value
-    second_iter = (g, h, j)
+    if second_iter_dict is None:
+        second_iter = None
+    else:
+        g = second_iter_dict.get("--min-seq-id")        # Define min-seq-id
+        h = second_iter_dict.get("-c")                  # Define coverage
+        j = second_iter_dict.get("-e")                  # Define e-value
+        second_iter = (g, h, j)
 
     return first_iter, second_iter
 
@@ -138,7 +141,7 @@ def phamerate(sequence_db, db, tmpdir, first_iter, second_iter=None):
             temp_phams.append(Pham(all_pham_geneids, all_pham_translations))
 
     else:
-        for pham_id, all_pham_geneids in first_iter_phams:
+        for pham_id, all_pham_geneids in first_iter_phams.items():
             all_pham_translations = [db.get_translation_from_geneid(x) for x in
                                      all_pham_geneids]
             temp_phams.append(Pham(all_pham_geneids, all_pham_translations))
