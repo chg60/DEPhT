@@ -23,7 +23,7 @@ EVALUE = 0.001
 # MAIN FUNCTIONS
 # -----------------------------------------------------------------------------
 def assemble_bacterial_mask(contigs, bacterial_fasta, gene_bit_value_path,
-                            outdir):
+                            working_dir):
     """Creates a binary mask for annotated coding regions in the input
     sequence contigs by using mmseqs2 clustering to identify bacterial-looking
     genes.
@@ -34,17 +34,15 @@ def assemble_bacterial_mask(contigs, bacterial_fasta, gene_bit_value_path,
     :type bacterial_fasta: pathlib.Path
     :param gene_bit_value_path: Path to a hexadecimal clade representation file
     :type gene_bit_value_path: pathlib.Path
-    :param outdir: Path to place created data files.
-    :type outdir: pathlib.Path
+    :param working_dir: Path to place created data files.
+    :type working_dir: pathlib.Path
     :return: A binary bacterial mask for each inputted sequence contig
     :rtype: list[list[int]]
     """
     # Parse hexadecimal clade representation file
     bacterial_gene_bit_values = parse_gene_bit_value_file(gene_bit_value_path)
   
-    # Create working directories and files
-    working_dir = outdir.joinpath(WORKING_DIR_NAME)
-    working_dir.mkdir(exist_ok=True) 
+    # Create working file
     fasta_path = working_dir.joinpath(FASTA_PATH_NAME).with_suffix(".fasta")
 
     # Write and index input genes and initialize bacterial mask
@@ -145,7 +143,7 @@ def cluster_bacterial_genes(fasta_path, working_dir):
     return clustering_results
 
 
-def assign_gene_bit_values(clustering_results, bacterial_gene_bit_values,
+def assign_gene_bit_values(clustering_map, bacterial_gene_bit_values,
                            gene_bit_values):
     """Assigns genes values contained in bit arrays depending on clade
     representation of reference bacterial genes.
@@ -243,13 +241,11 @@ def mark_bacterial_mask(bacterial_masks, gene_bit_values, clade_bit_mask):
             masked_bitarray = (gene_bitarray & clade_bit_mask)
 
             if masked_bitarray.count() > 0:
-                bacterial_mask[gene_i] = 0
+                bacterial_mask[gene_i] = 0 
 
 
 # HELPER FUNCTIONS
 # -----------------------------------------------------------------------------
-
-
 def equalize_bitarrays(a_bitarray, b_bitarray):
     length_disparity = len(a_bitarray) - len(b_bitarray)
 

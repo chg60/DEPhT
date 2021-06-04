@@ -1,5 +1,6 @@
 biopython~=1.77
 bitarray~=2.0.0
+dna-features-viewer==3.0.3
 matplotlib~=3.4.1
 mmh3~=3.0.0
 numpy~=1.20.2

@@ -19,6 +19,7 @@ from prophicient.functions.att import find_attachment_site
 from prophicient.functions.blastn import blastn
 from prophicient.functions.fasta import write_fasta
 from prophicient.functions.find_homologs import find_homologs
+from prophicient.functions.mmseqs import assemble_bacterial_mask
 from prophicient.functions.multiprocess import PHYSICAL_CORES
 from prophicient.functions.prophage_prediction import predict_prophage_coords
 from prophicient.functions.visualization import prophage_diagram
@@ -30,18 +31,26 @@ DEFAULT_RUN_MODE = "normal"
 
 TMP_DIR = pathlib.Path("/tmp/prophicient")
 
-BLASTN_DB = PACKAGE_DIR.joinpath("data/blastn/mycobacteria")
-ESSENTIAL_DB = PACKAGE_DIR.joinpath("data/hhsearch/essential/essential")
-EXTENDED_DB = PACKAGE_DIR.joinpath("data/hhsearch/extended/extended")
-
 PROPHAGE_PREFIX = "prophi"
 PROPHAGE_DELIMITER = "-"
 
-EXTEND_BY = 10000
+EXTEND_BY = 3000 
+MIN_SIZE = 10000
 REF_BLAST_SORT_KEY = "bitscore"
 
 NORMAL_PRODUCT_THRESHOLD = 3
 STRICT_PRODUCT_THRESHOLD = 10
+
+
+# DEFAULT FILE PATHS
+# -----------------------------------------------------------------------------
+BLASTN_DB = PACKAGE_DIR.joinpath("data/blastn/mycobacteria")
+
+ESSENTIAL_DB = PACKAGE_DIR.joinpath("data/hhsearch/essential/essential")
+EXTENDED_DB = PACKAGE_DIR.joinpath("data/hhsearch/extended/extended")
+
+BACTERIAL_REF_FASTA = PACKAGE_DIR.joinpath("data/mmseqs/bacterial_genes.fasta")
+BACTERIAL_REF_VALUES = PACKAGE_DIR.joinpath("data/mmseqs/bacterial_genes.pbv")
 
 
 def parse_args(arguments):
@@ -131,7 +140,7 @@ def main(arguments):
 
 
 def find_prophages(fasta, outdir, tmp_dir, cpus=PHYSICAL_CORES,
-                   verbose=False, draw=True,
+                   verbose=False, draw=True, min_size=MIN_SIZE,
                    prefix=PROPHAGE_PREFIX, delimiter=PROPHAGE_DELIMITER,
                    extend_by=EXTEND_BY, run_mode=DEFAULT_RUN_MODE):
     """
@@ -183,15 +192,36 @@ def find_prophages(fasta, outdir, tmp_dir, cpus=PHYSICAL_CORES,
 
     # Annotate CDS/tRNA/tmRNA features on contigs
     for contig in contigs:
-        annotate_contig(contig, annotation_dir)
+        annotate_contig(contig, annotation_dir) 
+
+    if verbose:
+        print("\tMasking conserved bacterial features...")
+
+    mmseqs_dir = tmp_dir.joinpath("mmseqs")
+    if not mmseqs_dir.is_dir():
+        mmseqs_dir.mkdir()
+
+    # Detect conserved bacterial genes for each contig
+    bacterial_masks = assemble_bacterial_mask(contigs, BACTERIAL_REF_FASTA,
+                                              BACTERIAL_REF_VALUES, mmseqs_dir)
 
     if verbose:
         print("\tLooking for high-probability prophage regions...")
 
     # Predict prophage coordinates for each contig
     prophage_preds = list()
-    for contig in contigs:
-        prophage_preds.append(predict_prophage_coords(contig, EXTEND_BY))
+    for contig_i, contig in enumerate(contigs):
+        contig_pred = predict_prophage_coords(contig, extend_by,
+                                              mask=bacterial_masks[contig_i])
+
+        filtered_contig_pred = []
+        for pred in contig_pred: 
+            if len(range(*pred)) < min_size:
+                continue
+            
+            filtered_contig_pred.append(pred)
+
+        prophage_preds.append(filtered_contig_pred)
 
     if all([not any(x) for x in prophage_preds]):
         if verbose:
@@ -225,7 +255,7 @@ def find_prophages(fasta, outdir, tmp_dir, cpus=PHYSICAL_CORES,
                                        prefix=prefix, delimiter=delimiter)
 
     if verbose:
-        print("\tSearching for attL/R...")
+        print("\tIdentifying attL/R...")
 
     # Set up directory where we can do attL/R detection
     att_dir = tmp_dir.joinpath("att_core")
