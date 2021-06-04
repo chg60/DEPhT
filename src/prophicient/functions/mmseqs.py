@@ -1,5 +1,266 @@
+from bitarray import bitarray, util as bit_util
+
+from prophicient.functions.fasta import parse_fasta, write_fasta
 from prophicient.functions.run_command import run_command
 
+# GLOBAL VARIABLES
+# -----------------------------------------------------------------------------
+ENDIANESS = "big"
+WORKING_DIR_NAME = "mmseqs"
+FASTA_PATH_NAME = "genes"
+
+
+# PHAMERATION DEFAULTS
+# -----------------------------------------------------------------------------
+CMODE = 0
+CSTEP = 1
+SENS = 8
+IDENT = 0.5
+COVER = 0.80
+EVALUE = 0.001
+
+
+# MAIN FUNCTIONS
+# -----------------------------------------------------------------------------
+def assemble_bacterial_mask(contigs, bacterial_fasta, gene_bit_value_path,
+                            working_dir):
+    """Creates a binary mask for annotated coding regions in the input
+    sequence contigs by using mmseqs2 clustering to identify bacterial-looking
+    genes.
+
+    :param contigs: Input sequence contig seqrecords
+    :type contigs: list[SeqRecord]
+    :param bacterial_fasta: Path to a fasta of reference bacterial genes
+    :type bacterial_fasta: pathlib.Path
+    :param gene_bit_value_path: Path to a hexadecimal clade representation file
+    :type gene_bit_value_path: pathlib.Path
+    :param working_dir: Path to place created data files.
+    :type working_dir: pathlib.Path
+    :return: A binary bacterial mask for each inputted sequence contig
+    :rtype: list[list[int]]
+    """
+    # Parse hexadecimal clade representation file
+    bacterial_gene_bit_values = parse_gene_bit_value_file(gene_bit_value_path)
+  
+    # Create working file
+    fasta_path = working_dir.joinpath(FASTA_PATH_NAME).with_suffix(".fasta")
+
+    # Write and index input genes and initialize bacterial mask
+    bacterial_masks, gene_bit_values = initialize_bacterial_mask(
+                                         contigs, bacterial_fasta, fasta_path)  
+
+    # Cluster genes (Phamerate)
+    clustering_map = cluster_bacterial_genes(fasta_path, working_dir)
+
+    # Assign a clade representation bit array to each input gene
+    assign_gene_bit_values(clustering_map, bacterial_gene_bit_values,
+                           gene_bit_values)
+
+    # Create a gene bit array mask from the value of the most represented clade
+    clade_bit_mask = assign_clade(gene_bit_values)
+
+    # Mark input genes well represented in the assigned clade
+    mark_bacterial_mask(bacterial_masks, gene_bit_values,
+                        clade_bit_mask) 
+
+    return bacterial_masks
+    
+
+def initialize_bacterial_mask(contigs, bacterial_fasta, out_path):
+    """Initialize a binary bacterial mask, index, and write each gene 
+    in the inputted sequence contigs.
+
+    :param contigs:  Input sequence contig seqrecords
+    :type contigs: list[SeqRecord]
+    :param b_gene_names: Reference bacterial gene names
+    :type b_gene_names: list[str]
+    :param b_gene_seqs: Reference bacterial gene sequences
+    """
+    # Parse reference bacterial gene multiple-sequence fasta
+    b_gene_names, b_gene_seqs = parse_fasta(bacterial_fasta)
+    b_gene_names = list(range(len(b_gene_names)))
+
+    # Initialize bacterial mask data structures
+    bacterial_masks = []
+    gene_bit_values = []
+    for contig_index, contig in enumerate(contigs):
+        feature_index = 0
+        for feature in contig.features:
+            if feature.type != "CDS":
+                continue
+
+            # Index input gene
+            b_gene_names.append(f"{contig_index}_{feature_index}")
+
+            # Add input gene translation
+            b_gene_seqs.append(str(feature.qualifiers["translation"][0]))
+
+            feature_index += 1
+
+        # Initialize default values for each input gene
+        bacterial_masks.append([1] * feature_index)
+        gene_bit_values.append([None] * feature_index)
+
+    # Write bacterial reference genes and input genome genes to file
+    write_fasta(b_gene_names, b_gene_seqs, out_path)
+
+    return bacterial_masks, gene_bit_values
+
+
+def cluster_bacterial_genes(fasta_path, working_dir):
+    """Clusters input genes with MMseqs2.
+
+    :param fasta_path: Path to a fasta with input and reference genes.
+    :type fasta_path: pathlib.Path
+    :param working_dir: Path to place created data files
+    :type working_dir: pathlib.Path
+    """
+    # Define mmseqs working file paths
+    sequence_db = working_dir.joinpath("sequenceDB")
+    cluster_db = working_dir.joinpath("clusterDB")  
+    seqfile_db = working_dir.joinpath("seqfileDB")
+    result_file = working_dir.joinpath("clustering_results.txt")
+    tmp_dir = working_dir.joinpath("tmp")
+    tmp_dir.mkdir(exist_ok=True)
+
+    # Create the initial mmseqs DB
+    mmseqs_createdb(fasta_path, sequence_db)
+
+    # Cluster bacterial genes in linear time
+    mmseqs_linclust(sequence_db, cluster_db, tmp_dir, CMODE,
+                    IDENT, COVER, EVALUE)
+
+    # Create a database from the clustering
+    mmseqs_createseqfiledb(sequence_db, cluster_db, seqfile_db)
+
+    # Write the clustering results to file
+    mmseqs_result2flat(sequence_db, sequence_db, seqfile_db,
+                       result_file)
+
+    # Parse the clustering output
+    clustering_results = parse_mmseqs(result_file)
+
+    return clustering_results
+
+
+def assign_gene_bit_values(clustering_map, bacterial_gene_bit_values,
+                           gene_bit_values):
+    """Assigns genes values contained in bit arrays depending on clade
+    representation of reference bacterial genes.
+
+    :param clustering_map: Cluster ID to cluster gene-member map
+    :type clustering_map: dict
+    :param bacterial_gene_bit_values: Bit arrays for bacterial reference genes.
+    :type bacterial_gene_bit_values: list
+    :param gene_bit_values: Initialized gene bit value list
+    :type gene_bit_values: list
+    """
+    for cluster, gene_names in clustering_map.items():
+        gois = []
+        cluster_bitarray = None
+        for gene_name in gene_names:
+            # Identify and store indexed input sequence genes
+            if "_" in gene_name:
+                gois.append(gene_name)
+                continue
+           
+            # Reidentify bacterial reference gene index
+            gene_index = int(gene_name)
+
+            # Initialize / combine bitarray(s) given reference gene values 
+            if cluster_bitarray is None:
+                cluster_bitarray = bacterial_gene_bit_values[gene_index]
+            else:
+                # Ensure input bitarrays are the same length
+                cluster_bitarray, b_gene_bitarray = equalize_bitarrays(
+                                        cluster_bitarray,
+                                        bacterial_gene_bit_values[gene_index])
+
+                # OR reference gene bitarrays
+                cluster_bitarray = (cluster_bitarray | b_gene_bitarray)
+
+        for goi in gois:
+            goi_split = goi.split("_")
+
+            # Retrieve contig and gene indicies from input gene name
+            contig_i = int(goi_split[0])
+            gene_i = int(goi_split[1])
+
+            # Assign input gene a value based on it's reference relatives
+            gene_bit_values[contig_i][gene_i] = cluster_bitarray
+
+
+def assign_clade(gene_bit_values):
+    """Assigns clade membership of the input sequences based on the majority
+    gene bit value
+
+    :param gene_bit_values: Bitarrays of the clade representation for each gene
+    :type gene_bit_values: list[bitarray]
+    :return: A bitarray mask for the majority-assigned clade
+    :rtype: bitarray
+    """
+    bit_count = list()
+    for contig_gene_bitarrays in gene_bit_values:
+        for gene_bitarray in contig_gene_bitarrays:
+            if gene_bitarray is None:
+                continue
+            
+            for index in range(len(gene_bitarray)):
+                bit = gene_bitarray[index]
+                if index >= len(bit_count):
+                    bit_count.append(0)
+
+                if bit:
+                    bit_count[index] += 1
+    
+    clade = bit_count.index(max(bit_count))
+
+    clade_bit_mask = bitarray([0] * len(bit_count), endian=ENDIANESS)
+    clade_bit_mask[clade] = 1
+
+    return clade_bit_mask
+   
+
+def mark_bacterial_mask(bacterial_masks, gene_bit_values, clade_bit_mask):
+    """Marks genes as bacterial with the given clade value bit mask.
+
+    :param bacterial_masks: Initialized binary bacterial mask list
+    :type bacterial_masks: list[list[int]]
+    :param gene_bit_values: Bitarrays of the clade representation for each gene
+    :type gene_bit_values: list[bitarray]
+    :param clade_bit_mask: Bitarray mask for the majority-asssigned clade
+    :type clade_bit_mask: bitarray
+    """
+    for contig_i, bacterial_mask in enumerate(bacterial_masks):
+        for gene_i in range(len(bacterial_mask)):
+            gene_bitarray = gene_bit_values[contig_i][gene_i]
+
+            if gene_bitarray is None:
+                continue
+
+            masked_bitarray = (gene_bitarray & clade_bit_mask)
+
+            if masked_bitarray.count() > 0:
+                bacterial_mask[gene_i] = 0 
+
+
+# HELPER FUNCTIONS
+# -----------------------------------------------------------------------------
+def equalize_bitarrays(a_bitarray, b_bitarray):
+    length_disparity = len(a_bitarray) - len(b_bitarray)
+
+    if length_disparity < 0:
+        for _ in range(abs(length_disparity)):
+            a_bitarray.append(0)
+    elif length_disparity > 0:
+        for _ in range(length_disparity):
+            b_bitarray.append(0)
+
+    return a_bitarray, b_bitarray
+
+
+# MMSEQS HELPER FUNCTIONS
+# -----------------------------------------------------------------------------
 
 def mmseqs_createdb(fasta, mmseqsdb):
     """
@@ -43,6 +304,34 @@ def mmseqs_cluster(sequence_db, cluster_db, tmp_dir, clustermode, clustersteps,
     c = f"mmseqs cluster {str(sequence_db)} {str(cluster_db)} {str(tmp_dir)} -v 3 " \
         f"--max-seqs 1000 --cluster-mode {clustermode} --cluster-steps {clustersteps} " \
         f"-s {sensitivity} --min-seq-id {minseqid} -c {coverage} -e {evalue}"
+    run_command(c)
+
+
+def mmseqs_linclust(sequence_db, cluster_db, tmp_dir, clustermode,
+                    minseqid, coverage, evalue):
+    """
+    Clusters an MMseqs2 sequence database using the given parameters in
+    linear time.
+
+    :param sequence_db: path to the MMseqs2 sequence database to cluster
+    :type sequence_db: pathlib.Path
+    :param cluster_db: path to the MMseqs2 output cluster database
+    :type cluster_db: pathlib.Path
+    :param tmp_dir: temporary directory that MMseqs2 can use
+    :type tmp_dir: pathlib.Path
+    :param clustermode: mmseqs cluster --cluster-mode
+    :type clustermode: int
+    :param minseqid: mmseqs cluster --min-seq-id
+    :type minseqid: float
+    :param coverage: mmseqs cluster -c
+    :type coverage: float
+    :param evalue: mmseqs cluster -e
+    :type evalue: float
+    :return:
+    """
+    c = (f"mmseqs linclust {sequence_db} {cluster_db} {tmp_dir} "
+         f"-v 3 --cluster-mode {clustermode} "
+         f"--min-seq-id {minseqid} -c {coverage} -e {evalue}")
     run_command(c)
 
 
@@ -154,6 +443,8 @@ def mmseqs_result2flat(query_db, subject_db, result_db, output):
     run_command(c)
 
 
+# FILEIO
+# -----------------------------------------------------------------------------
 def parse_mmseqs(filepath):
     """
     Parses the indicated MMseqs2 output into a dictionary mapping
@@ -193,3 +484,30 @@ def parse_mmseqs(filepath):
     phams.pop(0)  # 0th pham is placeholder
 
     return phams
+
+
+def parse_gene_bit_value_file(filepath):
+    """
+    Parses the gene bit value file for determining input genome clade
+    membership
+    
+    :param filepath: path to the gene bit value file
+    :type filepath: pathlib.Path
+    :return: Returns a list of bit arrays
+    :rtype: list[bitarray]
+    """
+    bacterial_gene_bit_values = []
+    with filepath.open(mode="rb") as filehandle:
+        line = filehandle.readline()
+
+        hex_values = line.split(b"_")
+
+        for hex_value in hex_values:
+            if hex_value == b"":
+                continue
+
+            b_gene_bitarray = bit_util.hex2ba(hex_value, endian=ENDIANESS)
+
+            bacterial_gene_bit_values.append(b_gene_bitarray)
+
+    return bacterial_gene_bit_values 

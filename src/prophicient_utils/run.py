@@ -3,14 +3,16 @@ import time
 
 from prophicient_utils.pipelines import (
                 annotate_gene_clusters, build_reference_db, build_functions_db,
-                curate_functions, index_functions, phamerate, pull_sequences)
+                curate_functions, index_functions, phamerate, pull_sequences,
+                screen_conserved_phams)
 
 
 # GLOBAL VARIABLES
 # -----------------------------------------------------------------------------
 PIPELINES = [
         "annotate_gene_clusters", "build_reference_db", "build_functions_db",
-        "curate_functions", "index_functions", "phamerate", "pull_sequences"]
+        "curate_functions", "index_functions", "phamerate", "pull_sequences",
+        "screen_conserved_phams"]
 
 
 def main(unparsed_args):
@@ -32,6 +34,8 @@ def main(unparsed_args):
         phamerate.main(unparsed_args[1:])
     elif args.pipeline == "pull_sequences":
         pull_sequences.main(unparsed_args[1:])
+    elif args.pipeline == "screen_conserved_phams":
+        screen_conserved_phams.main(unparsed_args[1:])
     else:
         raise NotImplementedError(
                    f"Prophicient Utility pipeline '{args.build_reference_db}' "

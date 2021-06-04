@@ -125,7 +125,7 @@ def calculate_feature_dict(contig):
     return gene_dict
 
 
-def smooth_by_averaging(values, window_size=25):
+def smooth_by_averaging(values, window_size=10):
     """
     Smooths values by averaging them with their `window_size`
     upstream and downstream neighbors.
@@ -154,7 +154,8 @@ def smooth_by_averaging(values, window_size=25):
     return smoothed_values
 
 
-def predict_prophage_genes(contig, model_path=MODEL_PATH, alpha=0.25):
+def predict_prophage_genes(contig, model_path=MODEL_PATH, alpha=0.25,
+                           mask=None, iterations=3, amp=1.5):
     """
     Calculates the gene attributes used by the model to predict
     prophage vs bacterial genes. Then uses the classifier from
@@ -175,20 +176,31 @@ def predict_prophage_genes(contig, model_path=MODEL_PATH, alpha=0.25):
         classifier = pickle.load(model_reader)
 
     predictions = [x[1] for x in classifier.predict_proba(dataframe)]
-
+    
     # Smooth the predictions once to get sharp peaks
-    predictions = smooth_by_averaging(predictions)
-
     # Smooth again to broaden the peaks - avoids chopping off lysins
-    predictions = smooth_by_averaging(predictions)
+
+    for _ in range(iterations):
+        predictions = smooth_by_averaging(predictions, window_size=25)
+
+        if mask is not None:
+            # Amplify gene predictions with conserved bacterial genes
+            for gene_i in range(len(predictions)):
+                predictions[gene_i] = (predictions[gene_i] * mask[gene_i] *
+                                       amp)
+
+    if mask is not None:
+        # Mask gene predictions with conserved bacterial genes
+        for gene_i in range(len(predictions)):
+            predictions[gene_i] = (predictions[gene_i] * mask[gene_i])
 
     # And one last time - avoids chopping off polymorphic toxins
-    predictions = smooth_by_averaging(predictions)
+    predictions = smooth_by_averaging(predictions, window_size=2)
 
     return [x >= alpha for x in predictions]
 
 
-def predict_prophage_coords(contig, extend_by=0):
+def predict_prophage_coords(contig, extend_by=0, mask=None):
     """
     Predicts prophage genes on the contig, then tries to approximate
     the coordinates associated with phage <-> bacterial transitions.
@@ -199,7 +211,7 @@ def predict_prophage_coords(contig, extend_by=0):
     :type extend_by: int
     :return: prophage_coords
     """
-    gene_predictions = predict_prophage_genes(contig)
+    gene_predictions = predict_prophage_genes(contig, mask=mask) 
 
     prophage_coords = list()
     left, right = None, None
