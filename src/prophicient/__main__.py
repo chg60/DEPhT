@@ -181,7 +181,7 @@ def find_prophages(fasta, outdir, tmp_dir, cpus=PHYSICAL_CORES,
         print("\tLoading FASTA file...")
 
     # Parse FASTA file - only keep contigs longer than MIN_LENGTH
-    contigs = [x for x in SeqIO.parse(fasta, "gb") if len(x) >= MIN_LENGTH]
+    contigs = [x for x in SeqIO.parse(fasta, "fasta") if len(x) >= MIN_LENGTH]
 
     if verbose:
         print("\tAnnotating CDS and t(m)RNA features...")
