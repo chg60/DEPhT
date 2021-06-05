@@ -125,7 +125,7 @@ def calculate_feature_dict(contig):
     return gene_dict
 
 
-def smooth_by_averaging(values, window_size=10):
+def smooth_by_averaging(values, window_size=25):
     """
     Smooths values by averaging them with their `window_size`
     upstream and downstream neighbors.
@@ -155,7 +155,7 @@ def smooth_by_averaging(values, window_size=10):
 
 
 def predict_prophage_genes(contig, model_path=MODEL_PATH, alpha=0.25,
-                           mask=None, iterations=3, amp=1.5):
+                           beta=0.05, mask=None, iterations=3):
     """
     Calculates the gene attributes used by the model to predict
     prophage vs bacterial genes. Then uses the classifier from
@@ -177,27 +177,20 @@ def predict_prophage_genes(contig, model_path=MODEL_PATH, alpha=0.25,
 
     predictions = [x[1] for x in classifier.predict_proba(dataframe)]
     
-    # Smooth the predictions once to get sharp peaks
-    # Smooth again to broaden the peaks - avoids chopping off lysins
-
     for _ in range(iterations):
         predictions = smooth_by_averaging(predictions, window_size=25)
 
         if mask is not None:
             # Amplify gene predictions with conserved bacterial genes
             for gene_i in range(len(predictions)):
-                predictions[gene_i] = (predictions[gene_i] * mask[gene_i] *
-                                       amp)
+                predictions[gene_i] = (predictions[gene_i] * mask[gene_i])
 
     if mask is not None:
-        # Mask gene predictions with conserved bacterial genes
-        for gene_i in range(len(predictions)):
-            predictions[gene_i] = (predictions[gene_i] * mask[gene_i])
+        predictions = smooth_by_averaging(predictions, window_size=3)
 
-    # And one last time - avoids chopping off polymorphic toxins
-    predictions = smooth_by_averaging(predictions, window_size=2)
-
-    return [x >= alpha for x in predictions]
+        return [x >= beta for x in predictions]
+    else:
+        return [x >= alpha for x in predictions]
 
 
 def predict_prophage_coords(contig, extend_by=0, mask=None):

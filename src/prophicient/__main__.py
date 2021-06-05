@@ -34,7 +34,8 @@ TMP_DIR = pathlib.Path("/tmp/prophicient")
 PROPHAGE_PREFIX = "prophi"
 PROPHAGE_DELIMITER = "-"
 
-EXTEND_BY = 3000 
+EXTEND_BY = 4000
+SEARCH_EXTEND_MULT = 2
 MIN_SIZE = 10000
 REF_BLAST_SORT_KEY = "bitscore"
 
