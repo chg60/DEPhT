@@ -16,6 +16,7 @@ ANNOTATIONS = {"molecule_type": "DNA", "topology": "linear",
 FEATURE_TYPES = ("CDS", "tRNA", "tmRNA")
 DEFAULT_PRODUCT = "hypothetical_protein"
 
+FEATURE_LENGTH_WEIGHT_EXP = 1.5
 
 def realign_subrecord(record, subrecord, subrecord_start, subrecord_end,
                       rev_orient=False):
@@ -121,7 +122,8 @@ class Prophage:
             if feature.type not in FEATURE_TYPES:
                 continue
 
-            orientation += int(feature.strand) * len(feature)
+            orientation += (int(feature.strand) *
+                            len(feature) ** FEATURE_LENGTH_WEIGHT_EXP)
 
         if orientation >= 0:
             self.strand = 1

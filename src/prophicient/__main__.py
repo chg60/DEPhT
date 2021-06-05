@@ -264,7 +264,8 @@ def find_prophages(fasta, outdir, tmp_dir, cpus=PHYSICAL_CORES,
         att_dir.mkdir()
 
     # Detect attachment sites, where possible, for the predicted prophage
-    detect_att_sites(prophages, BLASTN_DB, extend_by, att_dir)
+    search_space = extend_by * SEARCH_EXTEND_MULT
+    detect_att_sites(prophages, BLASTN_DB, search_space ,att_dir)
 
     if verbose:
         print("\tGenerating final reports...")
@@ -349,7 +350,7 @@ def get_reference_map_from_sequence(sequence, sequence_name,
     return reference_map
 
 
-def detect_att_sites(prophages, reference_db_path, extend_by,
+def detect_att_sites(prophages, reference_db_path, search_space,
                      tmp_dir, min_kmer_score=5, sort_key=REF_BLAST_SORT_KEY):
     """Detect attachment sites demarcating predicted prophage regions from
     the bacterial contig.
@@ -358,8 +359,8 @@ def detect_att_sites(prophages, reference_db_path, extend_by,
     :type prophages: list
     :param reference_db_path: Path to the database with reference sequences
     :type reference_db_path: pathlib.Path
-    :param extend_by: Internal length of the prophage to check for att sites
-    :type extend_by: int
+    :param search_space: Internal length of the prophage to check for att sites
+    :type search_space: int
     :param tmp_dir: Path to place result files.
     :type tmp_dir: pathlib.Path
     :param min_kmer_score: Minimum length threshold of attachment sites.
@@ -371,20 +372,14 @@ def detect_att_sites(prophages, reference_db_path, extend_by,
         if not working_dir.is_dir():
             working_dir.mkdir() 
 
-        seq_len = len(prophage.seq)
-        half_len = seq_len // 2
- 
-        l_seq = str(prophage.seq[:half_len])
-        r_seq = str(prophage.seq[half_len:])
+        l_seq = str(prophage.seq[:search_space])
+        r_seq = str(prophage.seq[-1*search_space:])
 
-        l_origin = extend_by
-        r_origin = len(prophage.seq) - extend_by
-        
         l_name = f"{prophage.id}_left"
         r_name = f"{prophage.id}_right"
 
         att_data = find_attachment_site(
-                                prophage, l_seq, r_seq, l_origin, r_origin,
+                                prophage, l_seq, r_seq,
                                 reference_db_path, working_dir, sort_key,
                                 k=min_kmer_score, l_name=l_name, r_name=r_name)
 
