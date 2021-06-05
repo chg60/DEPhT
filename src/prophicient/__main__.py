@@ -22,7 +22,7 @@ from prophicient.functions.find_homologs import find_homologs
 from prophicient.functions.mmseqs import assemble_bacterial_mask
 from prophicient.functions.multiprocess import PHYSICAL_CORES
 from prophicient.functions.prophage_prediction import predict_prophage_coords
-from prophicient.functions.visualization import prophage_diagram
+from prophicient.functions.visualization import draw_complete_diagram
 
 # GLOBAL VARIABLES
 # -----------------------------------------------------------------------------
@@ -181,7 +181,7 @@ def find_prophages(fasta, outdir, tmp_dir, cpus=PHYSICAL_CORES,
         print("\tLoading FASTA file...")
 
     # Parse FASTA file - only keep contigs longer than MIN_LENGTH
-    contigs = [x for x in SeqIO.parse(fasta, "fasta") if len(x) >= MIN_LENGTH]
+    contigs = [x for x in SeqIO.parse(fasta, "gb") if len(x) >= MIN_LENGTH]
 
     if verbose:
         print("\tAnnotating CDS and t(m)RNA features...")
@@ -193,7 +193,7 @@ def find_prophages(fasta, outdir, tmp_dir, cpus=PHYSICAL_CORES,
 
     # Annotate CDS/tRNA/tmRNA features on contigs
     for contig in contigs:
-        annotate_contig(contig, annotation_dir) 
+        annotate_contig(contig, annotation_dir)
 
     if verbose:
         print("\tMasking conserved bacterial features...")
@@ -216,10 +216,10 @@ def find_prophages(fasta, outdir, tmp_dir, cpus=PHYSICAL_CORES,
                                               mask=bacterial_masks[contig_i])
 
         filtered_contig_pred = []
-        for pred in contig_pred: 
+        for pred in contig_pred:
             if len(range(*pred)) < min_size:
                 continue
-            
+
             filtered_contig_pred.append(pred)
 
         prophage_preds.append(filtered_contig_pred)
@@ -242,7 +242,7 @@ def find_prophages(fasta, outdir, tmp_dir, cpus=PHYSICAL_CORES,
 
         # Search for phage gene remote homologs and
         # annotate the bacterial sequence
-        if run_mode >= 2: 
+        if run_mode >= 2:
             find_homologs(contigs, prophage_preds, EXTENDED_DB, hhsearch_dir,
                           cpus)
             product_threshold = STRICT_PRODUCT_THRESHOLD
@@ -265,12 +265,16 @@ def find_prophages(fasta, outdir, tmp_dir, cpus=PHYSICAL_CORES,
 
     # Detect attachment sites, where possible, for the predicted prophage
     search_space = extend_by * SEARCH_EXTEND_MULT
-    detect_att_sites(prophages, BLASTN_DB, search_space ,att_dir)
+    detect_att_sites(prophages, BLASTN_DB, search_space, att_dir)
 
     if verbose:
         print("\tGenerating final reports...")
 
-    write_prophage_output(outdir, contigs, prophages, draw)
+    draw_dir = tmp_dir.joinpath("draw")
+    if not draw_dir.is_dir():
+        draw_dir.mkdir()
+
+    write_prophage_output(outdir, contigs, prophages, draw_dir, draw)
 
 
 # HELPER FUNCTIONS
@@ -308,8 +312,6 @@ def load_initial_prophages(contigs, prophage_predictions,
             if len(prophage.products) < product_threshold:
                 continue
 
-
-            products = "\n\t".join(prophage.products)
             prophage_index += 1
             prophages.append(prophage)
 
@@ -343,7 +345,7 @@ def get_reference_map_from_sequence(sequence, sequence_name,
     for blast_result in blast_results:
         # Checks to see if the sequence reference ID has already been stored
         results = reference_map.get(blast_result["sseqid"], list())
- 
+
         results.append(blast_result)
         reference_map[blast_result["sseqid"]] = results
 
@@ -370,7 +372,7 @@ def detect_att_sites(prophages, reference_db_path, search_space,
         # Create prophage working directory within temp directory
         working_dir = tmp_dir.joinpath(prophage.id)
         if not working_dir.is_dir():
-            working_dir.mkdir() 
+            working_dir.mkdir()
 
         l_seq = str(prophage.seq[:search_space])
         r_seq = str(prophage.seq[-1*search_space:])
@@ -383,7 +385,7 @@ def detect_att_sites(prophages, reference_db_path, search_space,
                                 reference_db_path, working_dir, sort_key,
                                 k=min_kmer_score, l_name=l_name, r_name=r_name)
 
-        if att_data is not None: 
+        if att_data is not None:
             prophage.set_coordinates(att_data[0], att_data[1])
             prophage.set_att_len(len(att_data[3]))
         prophage.detect_orientation()
@@ -395,7 +397,7 @@ def detect_att_sites(prophages, reference_db_path, search_space,
         prophage.parent_record.features.sort(key=lambda x: x.location.start)
 
 
-def write_prophage_output(outdir, contigs, prophages, draw):
+def write_prophage_output(outdir, contigs, prophages, tmp_dir, draw):
     """Generates output structure and writes data to file
 
     :param outdir: Root directory the data will be written to
@@ -408,12 +410,12 @@ def write_prophage_output(outdir, contigs, prophages, draw):
     for contig in contigs:
         name = contig.id
         contig.annotations = ANNOTATIONS
-        
+
         genbank_filename = outdir.joinpath(name).with_suffix(".gbk")
 
         SeqIO.write(contig, genbank_filename, "genbank")
-    
-    prophage_data_dicts = []
+
+    prophage_records = []
     for prophage in prophages:
         name = prophage.id
         prophage_outdir = outdir.joinpath(name)
@@ -424,10 +426,12 @@ def write_prophage_output(outdir, contigs, prophages, draw):
 
         SeqIO.write(prophage.record, genbank_filename, "genbank")
         SeqIO.write(prophage.record, fasta_filename, "fasta")
-        if draw:
-            diagram_filename = prophage_outdir.joinpath(
-                                                    name).with_suffix(".pdf")
-            prophage_diagram(prophage.record, diagram_filename)
+
+        prophage_records.append(prophage.record)
+
+    if draw:
+        draw_complete_diagram(outdir, contigs, prophage_records, tmp_dir,
+                              name=outdir.stem)
 
 
 if __name__ == "__main__":
