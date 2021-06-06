@@ -16,8 +16,6 @@ from prophicient import PACKAGE_DIR
 from prophicient.classes.prophage import ANNOTATIONS, Prophage
 from prophicient.functions.annotation import annotate_contig, MIN_LENGTH
 from prophicient.functions.att import find_attachment_site
-from prophicient.functions.blastn import blastn
-from prophicient.functions.fasta import write_fasta
 from prophicient.functions.find_homologs import find_homologs
 from prophicient.functions.mmseqs import assemble_bacterial_mask
 from prophicient.functions.multiprocess import PHYSICAL_CORES
@@ -35,7 +33,7 @@ PROPHAGE_PREFIX = "prophi"
 PROPHAGE_DELIMITER = "-"
 
 EXTEND_BY = 4000
-SEARCH_EXTEND_MULT = 2
+ATT_SENSITIVITY = 7
 MIN_SIZE = 10000
 REF_BLAST_SORT_KEY = "bitscore"
 
@@ -81,6 +79,9 @@ def parse_args(arguments):
     parser.add_argument("--cpus", type=int, default=PHYSICAL_CORES,
                         help=f"Number of processors to use [default: "
                              f"{PHYSICAL_CORES}]")
+    parser.add_argument("--att_sensitivity", type=int,
+                        default=ATT_SENSITIVITY,
+                        help="Sensitivity parameter for att site detection.")
 
     parser.add_argument("--dump_data", action="store_true",
                         help="Choose whether to make data accessible")
@@ -131,6 +132,7 @@ def main(arguments):
     find_prophages(infile, outdir, temp_dir,
                    cpus=args.cpus, verbose=args.verbose, draw=args.draw,
                    extend_by=EXTEND_BY, run_mode=RUN_MODE_MAP[args.mode],
+                   att_sensitivity=args.att_sensitivity,
                    prefix=args.prophage_prefix,
                    delimiter=args.prophage_delimiter)
     print(f"\nTotal runtime: {str(datetime.now() - mark)}")
@@ -143,7 +145,8 @@ def main(arguments):
 def find_prophages(fasta, outdir, tmp_dir, cpus=PHYSICAL_CORES, verbose=False,
                    draw=True, run_mode=RUN_MODE_MAP[DEFAULT_RUN_MODE],
                    prefix=PROPHAGE_PREFIX, delimiter=PROPHAGE_DELIMITER,
-                   extend_by=EXTEND_BY, min_size=MIN_SIZE):
+                   extend_by=EXTEND_BY, min_size=MIN_SIZE,
+                   att_sensitivity=ATT_SENSITIVITY):
     """
     Runs through all steps of prophage prediction:
 
@@ -264,7 +267,7 @@ def find_prophages(fasta, outdir, tmp_dir, cpus=PHYSICAL_CORES, verbose=False,
         att_dir.mkdir()
 
     # Detect attachment sites, where possible, for the predicted prophage
-    search_space = extend_by * SEARCH_EXTEND_MULT
+    search_space = extend_by * att_sensitivity
     detect_att_sites(prophages, BLASTN_DB, search_space, att_dir)
 
     if verbose:
@@ -318,40 +321,6 @@ def load_initial_prophages(contigs, prophage_predictions,
     return prophages
 
 
-def get_reference_map_from_sequence(sequence, sequence_name,
-                                    reference_db_path, tmp_dir):
-    """Maps sequence BLASTn aligned reference genome IDs to their respective
-    alignment result data.
-
-    :param sequence: Query sequence to be aligned to the reference database
-    :type sequence: str
-    :param sequence_name: Name of the query sequence to be aligned
-    :type sequence_name: str
-    :param reference_db_path: Path to the database of references to search
-    :type reference_db_path: pathlib.Path
-    :param tmp_dir: Working directory to place BLASTn inputs and outputs
-    :type tmp_dir: pathlib.Path
-    :return: A map of aligned reference genome IDs to alignment result data
-    """
-    sequence_path = tmp_dir.joinpath(".".join([sequence_name, "fasta"]))
-
-    # Write the sequence to a fasta file in the temp directory
-    write_fasta([sequence_name], [sequence], sequence_path)
-
-    # Try to retrieve reference results for the sequence to the references
-    blast_results = blastn(sequence_path, reference_db_path, tmp_dir)
-
-    reference_map = dict()
-    for blast_result in blast_results:
-        # Checks to see if the sequence reference ID has already been stored
-        results = reference_map.get(blast_result["sseqid"], list())
-
-        results.append(blast_result)
-        reference_map[blast_result["sseqid"]] = results
-
-    return reference_map
-
-
 def detect_att_sites(prophages, reference_db_path, search_space,
                      tmp_dir, min_kmer_score=5, sort_key=REF_BLAST_SORT_KEY):
     """Detect attachment sites demarcating predicted prophage regions from
@@ -373,6 +342,10 @@ def detect_att_sites(prophages, reference_db_path, search_space,
         working_dir = tmp_dir.joinpath(prophage.id)
         if not working_dir.is_dir():
             working_dir.mkdir()
+
+        half_len = len(prophage.seq) // 2
+        if search_space > half_len:
+            search_space = half_len
 
         l_seq = str(prophage.seq[:search_space])
         r_seq = str(prophage.seq[-1*search_space:])
