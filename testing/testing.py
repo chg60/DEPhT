@@ -2,6 +2,7 @@
 
 from Bio import SeqIO
 from pathlib import Path
+import sys
 
 import csv
 import argparse
@@ -112,8 +113,6 @@ def collect_stats(filepath):
     false_negative = 0  # the bp of
     length_manual = 0
     length_test = 0
-    manual_ends = {}  # {name: (start, stop)}
-    testing_ends = {}
     statistics = {}
 
     statistics["TRUE_POSITIVE"] = 0
@@ -121,40 +120,48 @@ def collect_stats(filepath):
     statistics["FALSE_NEGATIVE"] = 0
     statistics["TRUE_NEGATIVE"] = 0
 
+    manual_data_dicts = {}
+    testing_data_dicts = {}
     with filepath.open(mode="r") as filehandle:
-
         csv_reader = csv.reader(filehandle, delimiter=",", quotechar='"')
 
-        for strain in GENOME_LENGTHS:
-            for row in csv_reader:
-                # for manual data
-                if row[1] == "manual" and row[0] == strain:
-                    manual_ends[row[2]] = row[3]
-                    # convert to tuple
-                    ends_tuple = eval(manual_ends.get(row[2]))
-                    # check forward or reverse
-                    if ends_tuple[1] - ends_tuple[0] < 0:
-                        length_manual += ends_tuple[0] - ends_tuple[1]
-                    else:
-                        length_manual += ends_tuple[1] - ends_tuple[0]
-                # for software data - same logic as above
-                if row[1] == filepath.stem.split(
-                        "_")[0] and row[0] == strain:
-                    testing_ends[row[2]] = row[3]
-                    # convert to tuple
-                    test_ends = eval(testing_ends.get(row[2]))
-                    if test_ends[1] - test_ends[0] < 0:
-                        length_test += test_ends[0] - test_ends[1]
-                    else:
-                        length_test += test_ends[1] - test_ends[0]
+        for row in csv_reader:
+            # for manual_data
+            if row[1] == "manual":
+                data_dict = manual_data_dicts.get(row[0], dict())
+                data_dict[row[2]] = row[3]
+                manual_data_dicts[row[0]] = data_dict
+            elif row[1] == filepath.stem.split("_")[0]:
+                data_dict = testing_data_dicts.get(row[0], dict())
+                data_dict[row[2]] = row[3]
+                testing_data_dicts[row[0]] = data_dict
 
-            per_phage = stats(manual_ends, testing_ends)
-            true_positive += per_phage.get("TRUE_POSITIVE")
-            false_positive += per_phage.get("FALSE_POSITIVE")
-            false_negative += per_phage.get("FALSE_NEGATIVE")
+    for strain in GENOME_LENGTHS:
+        manual_data_dict = manual_data_dicts.get(strain, dict())
+        testing_data_dict = testing_data_dicts.get(strain, dict())
 
-            true_negative += GENOME_LENGTHS[strain] - \
-                length_manual - false_positive
+        for prophage_id, ends_tuple in manual_data_dict.items():
+            ends_tuple = eval(ends_tuple)
+            # check forward or reverse
+            if ends_tuple[1] - ends_tuple[0] < 0:
+                length_manual += ends_tuple[0] - ends_tuple[1]
+            else:
+                length_manual += ends_tuple[1] - ends_tuple[0]
+
+        for prophage_id, ends_tuple in testing_data_dict.items():
+            test_ends = eval(ends_tuple)
+            if test_ends[1] - test_ends[0] < 0:
+                length_test += test_ends[0] - test_ends[1]
+            else:
+                length_test += test_ends[1] - test_ends[0]
+
+        per_phage = stats(manual_data_dict, testing_data_dict)
+        true_positive += per_phage.get("TRUE_POSITIVE")
+        false_positive += per_phage.get("FALSE_POSITIVE")
+        false_negative += per_phage.get("FALSE_NEGATIVE")
+        true_negative += GENOME_LENGTHS[strain] - \
+            length_manual - false_positive
+
     statistics["TRUE_POSITIVE"] += true_positive
     statistics["FALSE_POSITIVE"] += false_positive
     statistics["FALSE_NEGATIVE"] += false_negative
@@ -324,7 +331,7 @@ def print_data(stats, metrics):
           f"\t{metrics['ppv']}\t\t{metrics['accuracy']}\t\t{metrics['mcc']}")
 
 
-def get_args():
+def get_args(unparsed_args):
     """Parse the argument list.
 
     :return: Working directory where the sequences are located
@@ -338,15 +345,15 @@ def get_args():
     parser.add_argument("dir", type=Path, help=dir_help)
     parser.add_argument("manual", type=str, help=manual_help)
     parser.add_argument("software", type=str, help=software_help)
-    args = parser.parse_args()
+    args = parser.parse_args(unparsed_args)
 
     return args
 
 
-def main():
+def main(unparsed_args):
     """Run the testing module."""
     # 3 args: reference path, manual path, software path
-    args = get_args()
+    args = get_args(unparsed_args)
 
     print(f"\n{args.software}")     # print software name
 
@@ -354,4 +361,4 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    main(sys.argv[1:])

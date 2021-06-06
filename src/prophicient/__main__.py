@@ -140,10 +140,10 @@ def main(arguments):
         shutil.rmtree(TMP_DIR)
 
 
-def find_prophages(fasta, outdir, tmp_dir, cpus=PHYSICAL_CORES,
-                   verbose=False, draw=True, min_size=MIN_SIZE,
+def find_prophages(fasta, outdir, tmp_dir, cpus=PHYSICAL_CORES, verbose=False,
+                   draw=True, run_mode=RUN_MODE_MAP[DEFAULT_RUN_MODE],
                    prefix=PROPHAGE_PREFIX, delimiter=PROPHAGE_DELIMITER,
-                   extend_by=EXTEND_BY, run_mode=DEFAULT_RUN_MODE):
+                   extend_by=EXTEND_BY, min_size=MIN_SIZE):
     """
     Runs through all steps of prophage prediction:
 

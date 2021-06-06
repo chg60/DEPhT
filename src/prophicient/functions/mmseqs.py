@@ -214,7 +214,6 @@ def assign_clade(gene_bit_values):
                     bit_count[index] += 1
 
     if len(bit_count) <= 0:
-        print("WHAT")
         return bitarray([0])
 
     clade = bit_count.index(max(bit_count))
