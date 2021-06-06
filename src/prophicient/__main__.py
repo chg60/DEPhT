@@ -9,6 +9,7 @@ import pathlib
 import shutil
 import sys
 from datetime import datetime
+from tempfile import mkdtemp
 
 from Bio import SeqIO
 
@@ -26,8 +27,8 @@ from prophicient.functions.visualization import prophage_diagram
 
 # GLOBAL VARIABLES
 # -----------------------------------------------------------------------------
-RUN_MODE_MAP = {"fast": 0, "normal": 1, "strict": 2}
-DEFAULT_RUN_MODE = "normal"
+# RUN_MODE_MAP = {"fast": 0, "normal": 1, "strict": 2}
+# DEFAULT_RUN_MODE = "normal"
 
 TMP_DIR = pathlib.Path("/tmp/prophicient")
 
@@ -61,38 +62,33 @@ def parse_args(arguments):
     :type arguments: list
     :return: parsed_args
     """
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("infile", type=pathlib.Path,
-                        help="Path to a FASTA nucleotide sequence file to "
-                             "scan for prophages")
-    parser.add_argument("outdir", type=pathlib.Path,
-                        help="Path where output files should be written")
+    p = argparse.ArgumentParser(description=__doc__)
+    p.add_argument("-i", "--infile",
+                   type=pathlib.Path, nargs="+", required=True,
+                   help="path to genome file(s) to scan for prophages")
+    p.add_argument("-f", "--input-format",
+                   choices=("fasta", "genbank"), default="fasta", type=str,
+                   help="input which format your input file(s) are in")
+    p.add_argument("-o", "--outdir",
+                   type=pathlib.Path, required=True,
+                   help="path where outputs can be written")
+    p.add_argument("-c", "--cpus",
+                   default=PHYSICAL_CORES, type=int,
+                   help=f"number of CPU cores to use [default: "
+                        f"{PHYSICAL_CORES}]")
+    p.add_argument("-n", "--no-draw",
+                   action="store_false", dest="draw",
+                   help="don't draw genome diagrams for identified prophage(s)")
+    p.add_argument("-m", "--mode",
+                   choices=("fast", "normal", "strict"), default="normal",
+                   help="select a runmode that favors speed or accuracy")
+    p.add_argument("-d", "--dump-data", action="store_true",
+                   help="dump all support data to outdir")
+    p.add_argument("-v", "--verbose",
+                   action="store_true",
+                   help="print progress messages as the program runs")
 
-    parser.add_argument("--verbose", action="store_true",
-                        help="Toggle on verbosity of pipeline")
-    parser.add_argument("--no-draw", action="store_false", dest="draw",
-                        help="Toggle off genome map PDFs for identified "
-                             "prophages")
-
-    parser.add_argument("--mode", type=str,
-                        choices=RUN_MODE_MAP.keys(), default=DEFAULT_RUN_MODE,
-                        help="Choose run mode of the pipeline.")
-    parser.add_argument("--cpus", type=int, default=PHYSICAL_CORES,
-                        help=f"Number of processors to use [default: "
-                             f"{PHYSICAL_CORES}]")
-
-    parser.add_argument("--dump_data", action="store_true",
-                        help="Choose whether to make data accessible")
-
-    parser.add_argument("--prophage-prefix", type=str,
-                        default=PROPHAGE_PREFIX,
-                        help="Prefix to append to the beginning of the names "
-                             "given to detected prophages")
-    parser.add_argument("--prophage-delimiter", type=str,
-                        default=PROPHAGE_DELIMITER,
-                        help="Suffix delimiter to use to separate the names "
-                             "given to detected prophages and their number")
-    return parser.parse_args(arguments)
+    return p.parse_args(arguments)
 
 
 def main(arguments):
@@ -105,170 +101,162 @@ def main(arguments):
     """
     args = parse_args(arguments)
 
-    # Verify that the input filepath is valid
-    infile = args.infile
-    if not infile.is_file():
-        print(f"'{str(infile)}' is not a valid input file - exiting...")
-        return
+    # Get input file(s) and format
+    infiles, fmt = args.infile, args.input_format
 
-    outdir = args.outdir
+    # Are we going to draw genome diagrams?
+    draw = args.draw
+
+    # Are we dumping data into outdir when done?
+    dump = args.dump_data
+
+    # What runmode are we using - never draw in fast runmode
+    runmode = args.mode
+    if runmode == "fast" and draw:
+        print("fast mode - turning off draw...")
+        draw = False
+
+    # Print verbse outputs?
+    verbose = args.verbose
+
+    # How many physical cores can we use?
+    cpus = args.cpus
+
+    # Get output dir and make sure it's a valid path
+    outdir = pathlib.Path(args.outdir).resolve()
     if not outdir.is_dir():
-        print(f"'{str(outdir)}' does not exist - creating it...")
+        print(f"'{str(outdir)} does not exist - creating it...")
         outdir.mkdir(parents=True)
 
-    if not args.dump_data:
-        temp_dir = TMP_DIR
-    else:
-        temp_dir = outdir.joinpath("data")
-
-    # Create temporary dir, if it doesn't exist.
-    if not temp_dir.is_dir():
-        temp_dir.mkdir()
+    # Refresh the temporary directory
+    if TMP_DIR.is_dir():
+        shutil.rmtree(TMP_DIR)
+    TMP_DIR.mkdir(parents=True)
 
     # Mark program start time
     mark = datetime.now()
-    find_prophages(infile, outdir, temp_dir,
-                   cpus=args.cpus, verbose=args.verbose, draw=args.draw,
-                   extend_by=EXTEND_BY, run_mode=RUN_MODE_MAP[args.mode],
-                   prefix=args.prophage_prefix,
-                   delimiter=args.prophage_delimiter)
-    print(f"\nTotal runtime: {str(datetime.now() - mark)}")
 
-    if not args.dump_data:
-        # Clean up after ourselves
-        shutil.rmtree(TMP_DIR)
+    # OK, let's go!
+    for infile in infiles:
+        # Make sure filepath exists - skip if it doesn't
+        if not infile.is_file():
+            print(f"'{str(infile)}' does not exist - skipping it...")
+            continue
 
+        # Set up temporary directory for this genome
+        tmp_dir = pathlib.Path(mkdtemp(dir=TMP_DIR))
+        if not tmp_dir.is_dir():
+            tmp_dir.mkdir()
 
-def find_prophages(fasta, outdir, tmp_dir, cpus=PHYSICAL_CORES,
-                   verbose=False, draw=True, min_size=MIN_SIZE,
-                   prefix=PROPHAGE_PREFIX, delimiter=PROPHAGE_DELIMITER,
-                   extend_by=EXTEND_BY, run_mode=DEFAULT_RUN_MODE):
-    """
-    Runs through all steps of prophage prediction:
-
-    * auto-annotation with Pyrodigal (skip if gff3)
-    * predict prophage genes using binary classifier
-    * identify prophage regions
-    * identify phage genes in prophage regions
-    * detect attL/attR
-    * extract final prophage sequences
-
-    :param fasta: the path to a fasta nucleotide sequence file
-    containing a mycobacterial genome to find prophages in
-    :type fasta: pathlib.Path
-    :param outdir: the path to a directory where output files should
-    be written
-    :type outdir: pathlib.Path
-    :param tmp_dir: path where temporary files can go
-    :type tmp_dir: pathlib.Path
-    :param cpus: the maximum number of processors to use
-    :type cpus: int
-    :param verbose: should progress messages be printed along the way?
-    :type verbose: bool
-    :param draw: should genome diagrams be created at the end?
-    :type draw: bool
-    :param prefix: prefix for the names of predicted prophage regions
-    :type prefix: str
-    :param delimiter: delimiter for the prophage region names and numbers
-    :type delimiter: str
-    :param extend_by: number of basepairs to extend predicted prophage regions
-    :type extend_by: int
-    :param run_mode: Run mode to operate the prophage identification process
-    :type run_mode:
-    """
-    if verbose:
-        print("\tLoading FASTA file...")
-
-    # Parse FASTA file - only keep contigs longer than MIN_LENGTH
-    contigs = [x for x in SeqIO.parse(fasta, "fasta") if len(x) >= MIN_LENGTH]
-
-    if verbose:
-        print("\tAnnotating CDS and t(m)RNA features...")
-
-    # Set up directory where we can do annotation
-    annotation_dir = tmp_dir.joinpath("annotation")
-    if not annotation_dir.is_dir():
-        annotation_dir.mkdir()
-
-    # Annotate CDS/tRNA/tmRNA features on contigs
-    for contig in contigs:
-        annotate_contig(contig, annotation_dir) 
-
-    if verbose:
-        print("\tMasking conserved bacterial features...")
-
-    mmseqs_dir = tmp_dir.joinpath("mmseqs")
-    if not mmseqs_dir.is_dir():
-        mmseqs_dir.mkdir()
-
-    # Detect conserved bacterial genes for each contig
-    bacterial_masks = assemble_bacterial_mask(contigs, BACTERIAL_REF_FASTA,
-                                              BACTERIAL_REF_VALUES, mmseqs_dir)
-
-    if verbose:
-        print("\tLooking for high-probability prophage regions...")
-
-    # Predict prophage coordinates for each contig
-    prophage_preds = list()
-    for contig_i, contig in enumerate(contigs):
-        contig_pred = predict_prophage_coords(contig, extend_by,
-                                              mask=bacterial_masks[contig_i])
-
-        filtered_contig_pred = []
-        for pred in contig_pred: 
-            if len(range(*pred)) < min_size:
-                continue
-            
-            filtered_contig_pred.append(pred)
-
-        prophage_preds.append(filtered_contig_pred)
-
-    if all([not any(x) for x in prophage_preds]):
+        # Parse all contigs of annotation-worthy length
         if verbose:
-            print(f"\tNo complete prophages found in {str(fasta)}. PHASTER "
-                  f"may be able to find partial (dead) prophages.")
-        return
+            print(f"\nparsing '{str(infile)}'...")
+        contigs = [x for x in SeqIO.parse(infile, fmt) if len(x) >= MIN_LENGTH]
 
-    product_threshold = 0
-    if run_mode >= 1:
-        if verbose:
-            print("\tSearching for phage gene homologs...")
+        # Annotate contigs if format is "fasta"
+        if fmt == "fasta":
+            if verbose:
+                print(f"annotating t(m)RNA and CDS genes de novo...")
 
-        # Set up directory where we can do hhsearch
-        hhsearch_dir = tmp_dir.joinpath("hhsearch")
-        if not hhsearch_dir.is_dir():
-            hhsearch_dir.mkdir()
+            annotate_dir = tmp_dir.joinpath("annotate")
+            if not annotate_dir.is_dir():
+                annotate_dir.mkdir()
 
-        # Search for phage gene remote homologs and
-        # annotate the bacterial sequence
-        if run_mode >= 2: 
-            find_homologs(contigs, prophage_preds, EXTENDED_DB, hhsearch_dir,
-                          cpus)
-            product_threshold = STRICT_PRODUCT_THRESHOLD
+            for contig in contigs:
+                annotate_contig(contig, annotate_dir)
+
         else:
-            find_homologs(contigs, prophage_preds, ESSENTIAL_DB, hhsearch_dir,
-                          cpus)
-            product_threshold = NORMAL_PRODUCT_THRESHOLD
+            if verbose:
+                print(f"using flat file annotation...")
 
-    prophages = load_initial_prophages(contigs, prophage_preds,
-                                       product_threshold=product_threshold,
-                                       prefix=prefix, delimiter=delimiter)
+        if verbose:
+            print("masking conserved bacterial features...")
 
-    if verbose:
-        print("\tIdentifying attL/R...")
+        mmseqs_dir = tmp_dir.joinpath("mmseqs")
+        if not mmseqs_dir.is_dir():
+            mmseqs_dir.mkdir()
 
-    # Set up directory where we can do attL/R detection
-    att_dir = tmp_dir.joinpath("att_core")
-    if not att_dir.is_dir():
-        att_dir.mkdir()
+        # Detect conserved bacterial genes for each contig
+        bacterial_masks = assemble_bacterial_mask(contigs, BACTERIAL_REF_FASTA,
+                                                  BACTERIAL_REF_VALUES,
+                                                  mmseqs_dir)
 
-    # Detect attachment sites, where possible, for the predicted prophage
-    detect_att_sites(prophages, BLASTN_DB, extend_by, att_dir)
+        if verbose:
+            print("looking for high-probability prophage regions...")
 
-    if verbose:
-        print("\tGenerating final reports...")
+        # Predict prophage coordinates for each contig
+        prophage_preds = list()
+        for i, contig in enumerate(contigs):
+            contig_pred = predict_prophage_coords(contig, EXTEND_BY,
+                                                  mask=bacterial_masks[i])
 
-    write_prophage_output(outdir, contigs, prophages, draw)
+            filtered_contig_pred = []
+            for pred in contig_pred:
+                if len(range(*pred)) < MIN_SIZE:
+                    continue
+
+                filtered_contig_pred.append(pred)
+
+            prophage_preds.append(filtered_contig_pred)
+
+        if all([not any(x) for x in prophage_preds]):
+            if verbose:
+                print(f"\nNo complete prophages found in {str(infile)}. "
+                      f"PHASTER may be able to find partial (dead) prophages.")
+            continue
+
+        product_threshold = 0
+        if runmode in ("normal", "strict"):
+            if verbose:
+                print("searching for phage gene homologs...")
+
+            # Set up directory where we can do hhsearch
+            hhsearch_dir = tmp_dir.joinpath("hhsearch")
+            if not hhsearch_dir.is_dir():
+                hhsearch_dir.mkdir()
+
+            # Search for phage gene remote homologs and
+            # annotate the bacterial sequence
+            if runmode == "strict":
+                find_homologs(contigs, prophage_preds, EXTENDED_DB,
+                              hhsearch_dir, cpus)
+                product_threshold = STRICT_PRODUCT_THRESHOLD
+            else:
+                find_homologs(contigs, prophage_preds, ESSENTIAL_DB,
+                              hhsearch_dir,
+                              cpus)
+                product_threshold = NORMAL_PRODUCT_THRESHOLD
+
+        prophages = load_initial_prophages(contigs, prophage_preds,
+                                           product_threshold=product_threshold,
+                                           prefix=PROPHAGE_PREFIX,
+                                           delimiter=PROPHAGE_DELIMITER)
+
+        if verbose:
+            print("searching for attL/R...")
+
+        # Set up directory where we can do attL/R detection
+        att_dir = tmp_dir.joinpath("att_core")
+        if not att_dir.is_dir():
+            att_dir.mkdir()
+
+        # Detect attachment sites, where possible, for the predicted prophage
+        detect_att_sites(prophages, BLASTN_DB, EXTEND_BY, att_dir)
+
+        if verbose:
+            print("generating final reports...")
+
+        genome_outdir = outdir.joinpath(f"{infile.stem}")
+        if not genome_outdir.is_dir():
+            genome_outdir.mkdir(parents=False)
+
+        write_prophage_output(genome_outdir, contigs, prophages, draw)
+
+        if dump:
+            destination = genome_outdir.joinpath("tmp_data")
+            shutil.copytree(tmp_dir, destination)
+
+    print(f"\nTotal runtime: {str(datetime.now() - mark)}")
 
 
 # HELPER FUNCTIONS
