@@ -2,6 +2,7 @@
 
 from Bio import SeqIO
 from pathlib import Path
+import sys
 
 import csv
 import argparse
@@ -98,7 +99,7 @@ def stats(manual_data, testing_data):
     return statistics
 
 
-def collect_stats(filepath):
+def collect_stats(filepath, per_strain=False):
     """Compile raw bp values of TP,FP,TN,FN.
 
     :param filepath: Filepath of the csv file with data entries
@@ -106,14 +107,14 @@ def collect_stats(filepath):
     :return: Dictionary containing TP, TN, FP, FN
     :rtype: dict
     """
+    testing_data_title = filepath.stem.split("_")[0]
+
     true_positive = 0  # the bp of true positives
     true_negative = 0  # the bp of true negatives
     false_positive = 0  # the bp of false positives
     false_negative = 0  # the bp of
     length_manual = 0
     length_test = 0
-    manual_ends = {}  # {name: (start, stop)}
-    testing_ends = {}
     statistics = {}
 
     statistics["TRUE_POSITIVE"] = 0
@@ -121,40 +122,56 @@ def collect_stats(filepath):
     statistics["FALSE_NEGATIVE"] = 0
     statistics["TRUE_NEGATIVE"] = 0
 
+    manual_data_dicts = {}
+    testing_data_dicts = {}
     with filepath.open(mode="r") as filehandle:
-
         csv_reader = csv.reader(filehandle, delimiter=",", quotechar='"')
 
-        for strain in GENOME_LENGTHS:
-            for row in csv_reader:
-                # for manual data
-                if row[1] == "manual" and row[0] == strain:
-                    manual_ends[row[2]] = row[3]
-                    # convert to tuple
-                    ends_tuple = eval(manual_ends.get(row[2]))
-                    # check forward or reverse
-                    if ends_tuple[1] - ends_tuple[0] < 0:
-                        length_manual += ends_tuple[0] - ends_tuple[1]
-                    else:
-                        length_manual += ends_tuple[1] - ends_tuple[0]
-                # for software data - same logic as above
-                if row[1] == filepath.stem.split(
-                        "_")[0] and row[0] == strain:
-                    testing_ends[row[2]] = row[3]
-                    # convert to tuple
-                    test_ends = eval(testing_ends.get(row[2]))
-                    if test_ends[1] - test_ends[0] < 0:
-                        length_test += test_ends[0] - test_ends[1]
-                    else:
-                        length_test += test_ends[1] - test_ends[0]
+        for row in csv_reader:
+            # for manual_data
+            if row[1] == "manual":
+                data_dict = manual_data_dicts.get(row[0], dict())
+                data_dict[row[2]] = row[3]
+                manual_data_dicts[row[0]] = data_dict
+            elif row[1] == testing_data_title:
+                data_dict = testing_data_dicts.get(row[0], dict())
+                data_dict[row[2]] = row[3]
+                testing_data_dicts[row[0]] = data_dict
 
-            per_phage = stats(manual_ends, testing_ends)
-            true_positive += per_phage.get("TRUE_POSITIVE")
-            false_positive += per_phage.get("FALSE_POSITIVE")
-            false_negative += per_phage.get("FALSE_NEGATIVE")
+    for strain in GENOME_LENGTHS:
+        manual_data_dict = manual_data_dicts.get(strain, dict())
+        testing_data_dict = testing_data_dicts.get(strain, dict())
 
-            true_negative += GENOME_LENGTHS[strain] - \
-                length_manual - false_positive
+        for prophage_id, ends_tuple in manual_data_dict.items():
+            ends_tuple = eval(ends_tuple)
+            # check forward or reverse
+            if ends_tuple[1] - ends_tuple[0] < 0:
+                length_manual += ends_tuple[0] - ends_tuple[1]
+            else:
+                length_manual += ends_tuple[1] - ends_tuple[0]
+
+        for prophage_id, ends_tuple in testing_data_dict.items():
+            test_ends = eval(ends_tuple)
+            if test_ends[1] - test_ends[0] < 0:
+                length_test += test_ends[0] - test_ends[1]
+            else:
+                length_test += test_ends[1] - test_ends[0]
+
+        per_phage = stats(manual_data_dict, testing_data_dict)
+        true_positive += per_phage.get("TRUE_POSITIVE")
+        false_positive += per_phage.get("FALSE_POSITIVE")
+        false_negative += per_phage.get("FALSE_NEGATIVE")
+
+        per_phage["TRUE_NEGATIVE"] = (GENOME_LENGTHS[strain] -
+                                      length_manual - false_positive)
+        true_negative += per_phage.get("TRUE_NEGATIVE")
+
+        if per_strain:
+            per_strain_metrics = metrics(per_phage)
+
+            strain_title = ": ".join([testing_data_title, strain])
+            print_data(per_phage, per_strain_metrics, strain_title)
+
     statistics["TRUE_POSITIVE"] += true_positive
     statistics["FALSE_POSITIVE"] += false_positive
     statistics["FALSE_NEGATIVE"] += false_negative
@@ -219,7 +236,7 @@ def get_child_ends(prophage_filepath, parent_contigs):
     return child_tuples
 
 
-def comparison(dir, manual_name, software_name):
+def comparison(dir, manual_name, software_name, per_strain=False):
     """Compare the data.
 
     :param dir: Path to working directory
@@ -298,12 +315,15 @@ def comparison(dir, manual_name, software_name):
                         writer.writerow(dict)
         csv_file.close()    # close csv file
 
-        stats = collect_stats(csv_path)     # collect the statistics
+        # collect the statistics
+        stats = collect_stats(csv_path, per_strain=per_strain)
         metric_data = metrics(stats)        # metrics
-        print_data(stats, metric_data)      # print all the relevant data
+
+        # print all the relevant data
+        print_data(stats, metric_data, software_name)
 
 
-def print_data(stats, metrics):
+def print_data(stats, metrics, title):
     """Print the stats and metric data.
 
     :param stats: Statistics for the software
@@ -311,6 +331,9 @@ def print_data(stats, metrics):
     :param metrics: Metrics for the software
     :type metrics: dict
     """
+    print("\n\n")
+    print("==============================================================")
+    print(f"{title}:")
     print("--------------------------------------------------------------")
     print("TRUE POSITIVE\tFALSE POSITIVE\tTRUE NEGATIVE\tFALSE NEGATIVE")
     print("--------------------------------------------------------------")
@@ -322,9 +345,10 @@ def print_data(stats, metrics):
     print("-----------------------------------------------------------")
     print(f"{metrics['sensitivity']}\t",
           f"\t{metrics['ppv']}\t\t{metrics['accuracy']}\t\t{metrics['mcc']}")
+    print("==============================================================")
 
 
-def get_args():
+def get_args(unparsed_args):
     """Parse the argument list.
 
     :return: Working directory where the sequences are located
@@ -335,23 +359,29 @@ def get_args():
     manual_help = "Name of directory with manually annotated prophages"
     software_help = "Name of the software being tested"
 
+    per_strain_help = "Print per-genome metrics"
+
     parser.add_argument("dir", type=Path, help=dir_help)
     parser.add_argument("manual", type=str, help=manual_help)
     parser.add_argument("software", type=str, help=software_help)
-    args = parser.parse_args()
+
+    parser.add_argument("--per_strain", action="store_true",
+                        help=per_strain_help)
+
+    args = parser.parse_args(unparsed_args)
 
     return args
 
 
-def main():
+def main(unparsed_args):
     """Run the testing module."""
     # 3 args: reference path, manual path, software path
-    args = get_args()
+    args = get_args(unparsed_args)
 
-    print(f"\n{args.software}")     # print software name
-
-    comparison(args.dir, args.manual, args.software)    # run comparison
+    # run comparison
+    comparison(args.dir, args.manual, args.software,
+               per_strain=args.per_strain)
 
 
 if __name__ == '__main__':
-    main()
+    main(sys.argv[1:])

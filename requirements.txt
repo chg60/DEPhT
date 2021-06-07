@@ -1,5 +1,6 @@
 biopython~=1.77
 bitarray~=2.0.0
+bokeh==2.2.2
 dna-features-viewer==3.0.3
 bokeh~=2.3.1
 matplotlib~=3.4.1
@@ -11,3 +12,4 @@ pyrodigal~=0.4.7
 reportlab~=3.5.67
 sklearn~=0.0
 scikit-learn~=0.24.1
+tabulate==0.8.9
