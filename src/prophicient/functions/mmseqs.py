@@ -41,13 +41,13 @@ def assemble_bacterial_mask(contigs, bacterial_fasta, gene_bit_value_path,
     """
     # Parse hexadecimal clade representation file
     bacterial_gene_bit_values = parse_gene_bit_value_file(gene_bit_value_path)
-  
+
     # Create working file
     fasta_path = working_dir.joinpath(FASTA_PATH_NAME).with_suffix(".fasta")
 
     # Write and index input genes and initialize bacterial mask
     bacterial_masks, gene_bit_values = initialize_bacterial_mask(
-                                         contigs, bacterial_fasta, fasta_path)  
+                                         contigs, bacterial_fasta, fasta_path)
 
     # Cluster genes (Phamerate)
     clustering_map = cluster_bacterial_genes(fasta_path, working_dir)
@@ -61,10 +61,10 @@ def assemble_bacterial_mask(contigs, bacterial_fasta, gene_bit_value_path,
 
     # Mark input genes well represented in the assigned clade
     mark_bacterial_mask(bacterial_masks, gene_bit_values,
-                        clade_bit_mask) 
+                        clade_bit_mask)
 
     return bacterial_masks
-    
+
 
 def initialize_bacterial_mask(contigs, bacterial_fasta, out_path):
     """Initialize a binary bacterial mask, index, and write each gene 
@@ -204,7 +204,7 @@ def assign_clade(gene_bit_values):
         for gene_bitarray in contig_gene_bitarrays:
             if gene_bitarray is None:
                 continue
-            
+
             for index in range(len(gene_bitarray)):
                 bit = gene_bitarray[index]
                 if index >= len(bit_count):
@@ -212,14 +212,17 @@ def assign_clade(gene_bit_values):
 
                 if bit:
                     bit_count[index] += 1
-    
+
+    if len(bit_count) <= 0:
+        return bitarray([0])
+
     clade = bit_count.index(max(bit_count))
 
     clade_bit_mask = bitarray([0] * len(bit_count), endian=ENDIANESS)
     clade_bit_mask[clade] = 1
 
     return clade_bit_mask
-   
+
 
 def mark_bacterial_mask(bacterial_masks, gene_bit_values, clade_bit_mask):
     """Marks genes as bacterial with the given clade value bit mask.

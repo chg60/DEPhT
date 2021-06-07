@@ -16,6 +16,8 @@ ANNOTATIONS = {"molecule_type": "DNA", "topology": "linear",
 FEATURE_TYPES = ("CDS", "tRNA", "tmRNA")
 DEFAULT_PRODUCT = "hypothetical_protein"
 
+FEATURE_LENGTH_WEIGHT_EXP = 1.5
+
 
 def realign_subrecord(record, subrecord, subrecord_start, subrecord_end,
                       rev_orient=False):
@@ -72,9 +74,9 @@ class Prophage:
         self.id = seq_id
 
         self.start = start
-        self.end = end 
+        self.end = end
         self.strand = strand
-        
+
         self.length = 0
         self.feature = None
         self.seq = None
@@ -98,7 +100,7 @@ class Prophage:
         """
         self.start = start
         self.end = end
-        
+
     def set_strand(self, strand):
         """Sets the strand orientation of the prophage in the sequence
 
@@ -121,7 +123,8 @@ class Prophage:
             if feature.type not in FEATURE_TYPES:
                 continue
 
-            orientation += int(feature.strand) * len(feature)
+            orientation += (int(feature.strand) *
+                            len(feature) ** FEATURE_LENGTH_WEIGHT_EXP)
 
         if orientation >= 0:
             self.strand = 1
@@ -146,6 +149,7 @@ class Prophage:
         # Sets the prophage SeqFeature according to the stored start and end
         self.feature = SeqFeature(FeatureLocation(self.start, self.end),
                                   strand=self.strand, type="source")
+        self.feature.qualifiers["locus_tag"] = [self.id]
 
         # Extracts the prophage sequence with the created prophage
         self.seq = self.feature.extract(self.parent_seq)
@@ -249,4 +253,3 @@ class Prophage:
         self.record.features.append(source_feature)
         
         self.record.features.sort(key=lambda x: x.location.start) 
-

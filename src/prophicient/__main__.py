@@ -15,27 +15,27 @@ from Bio import SeqIO
 
 from prophicient import PACKAGE_DIR
 from prophicient.classes.prophage import ANNOTATIONS, Prophage
-from prophicient.functions.annotation import annotate_contig, MIN_LENGTH
+from prophicient.functions.annotation import annotate_contig, MIN_LENGTH, \
+                                             MIN_CDS_FEATURES
 from prophicient.functions.att import find_attachment_site
-from prophicient.functions.blastn import blastn
-from prophicient.functions.fasta import write_fasta
 from prophicient.functions.find_homologs import find_homologs
 from prophicient.functions.mmseqs import assemble_bacterial_mask
 from prophicient.functions.multiprocess import PHYSICAL_CORES
 from prophicient.functions.prophage_prediction import predict_prophage_coords
-from prophicient.functions.visualization import prophage_diagram
+from prophicient.functions.visualization import draw_complete_diagram
 
 # GLOBAL VARIABLES
 # -----------------------------------------------------------------------------
-# RUN_MODE_MAP = {"fast": 0, "normal": 1, "strict": 2}
-# DEFAULT_RUN_MODE = "normal"
+RUN_MODE_MAP = {"fast": 0, "normal": 1, "strict": 2}
+DEFAULT_RUN_MODE = "normal"
 
 TMP_DIR = pathlib.Path("/tmp/prophicient")
 
 PROPHAGE_PREFIX = "prophi"
 PROPHAGE_DELIMITER = "-"
 
-EXTEND_BY = 3000 
+EXTEND_BY = 4000
+ATT_SENSITIVITY = 7
 MIN_SIZE = 10000
 REF_BLAST_SORT_KEY = "bitscore"
 
@@ -66,22 +66,29 @@ def parse_args(arguments):
     p.add_argument("-i", "--infile",
                    type=pathlib.Path, nargs="+", required=True,
                    help="path to genome file(s) to scan for prophages")
-    p.add_argument("-f", "--input-format",
-                   choices=("fasta", "genbank"), default="fasta", type=str,
-                   help="input which format your input file(s) are in")
     p.add_argument("-o", "--outdir",
                    type=pathlib.Path, required=True,
                    help="path where outputs can be written")
+    p.add_argument("-f", "--input-format",
+                   choices=("fasta", "genbank"), default="fasta",
+                   type=str,
+                   help="input which format your input file(s) are in")
+
     p.add_argument("-c", "--cpus",
                    default=PHYSICAL_CORES, type=int,
                    help=f"number of CPU cores to use [default: "
                         f"{PHYSICAL_CORES}]")
     p.add_argument("-n", "--no-draw",
                    action="store_false", dest="draw",
-                   help="don't draw genome diagrams for identified prophage(s)")
+                   help=("don't draw genome diagrams "
+                         "for identified prophage(s)"))
     p.add_argument("-m", "--mode",
-                   choices=("fast", "normal", "strict"), default="normal",
+                   choices=RUN_MODE_MAP.keys(), default=DEFAULT_RUN_MODE,
                    help="select a runmode that favors speed or accuracy")
+    p.add_argument("-aS", "--att_sensitivity", type=int,
+                   default=ATT_SENSITIVITY,
+                   help="sensitivity parameter for att site detection.")
+
     p.add_argument("-d", "--dump-data", action="store_true",
                    help="dump all support data to outdir")
     p.add_argument("-v", "--verbose",
@@ -116,12 +123,6 @@ def main(arguments):
         print("fast mode - turning off draw...")
         draw = False
 
-    # Print verbse outputs?
-    verbose = args.verbose
-
-    # How many physical cores can we use?
-    cpus = args.cpus
-
     # Get output dir and make sure it's a valid path
     outdir = pathlib.Path(args.outdir).resolve()
     if not outdir.is_dir():
@@ -132,6 +133,56 @@ def main(arguments):
     if TMP_DIR.is_dir():
         shutil.rmtree(TMP_DIR)
     TMP_DIR.mkdir(parents=True)
+
+    temp_dir = TMP_DIR
+
+    find_prophages(infiles, outdir, temp_dir,
+                   cpus=args.cpus, verbose=args.verbose, draw=draw,
+                   extend_by=EXTEND_BY, run_mode=RUN_MODE_MAP[args.mode],
+                   fmt=fmt, dump=dump, att_sensitivity=args.att_sensitivity)
+
+
+def find_prophages(infiles, outdir, tmp_dir, cpus=PHYSICAL_CORES,
+                   verbose=False, draw=True, fmt="fasta", dump=False,
+                   run_mode=RUN_MODE_MAP[DEFAULT_RUN_MODE],
+                   prefix=PROPHAGE_PREFIX, delimiter=PROPHAGE_DELIMITER,
+                   extend_by=EXTEND_BY, min_size=MIN_SIZE,
+                   att_sensitivity=ATT_SENSITIVITY):
+    """
+    Runs through all steps of prophage prediction:
+
+    * auto-annotation with Pyrodigal (skip if gff3)
+    * predict prophage genes using binary classifier
+    * identify prophage regions
+    * identify phage genes in prophage regions
+    * detect attL/attR
+    * extract final prophage sequences
+
+    :param fasta: the path to a fasta nucleotide sequence file
+    containing a mycobacterial genome to find prophages in
+    :type fasta: pathlib.Path
+    :param outdir: the path to a directory where output files should
+    be written
+    :type outdir: pathlib.Path
+    :param tmp_dir: path where temporary files can go
+    :type tmp_dir: pathlib.Path
+    :param cpus: the maximum number of processors to use
+    :type cpus: int
+    :param verbose: should progress messages be printed along the way?
+    :type verbose: bool
+    :param draw: should genome diagrams be created at the end?
+    :type draw: bool
+    :param prefix: prefix for the names of predicted prophage regions
+    :type prefix: str
+    :param delimiter: delimiter for the prophage region names and numbers
+    :type delimiter: str
+    :param extend_by: number of basepairs to extend predicted prophage regions
+    :type extend_by: int
+    :param run_mode: Run mode to operate the prophage identification process
+    :type run_mode:
+    """
+    if verbose:
+        print("\tLoading FASTA file...")
 
     # Mark program start time
     mark = datetime.now()
@@ -153,10 +204,15 @@ def main(arguments):
             print(f"\nparsing '{str(infile)}'...")
         contigs = [x for x in SeqIO.parse(infile, fmt) if len(x) >= MIN_LENGTH]
 
+        if not contigs:
+            print("\nNo input "
+                  f"{fmt} formatted sequences detected in input file(s).")
+            return
+
         # Annotate contigs if format is "fasta"
         if fmt == "fasta":
             if verbose:
-                print(f"annotating t(m)RNA and CDS genes de novo...")
+                print("annotating t(m)RNA and CDS genes de novo...")
 
             annotate_dir = tmp_dir.joinpath("annotate")
             if not annotate_dir.is_dir():
@@ -167,7 +223,25 @@ def main(arguments):
 
         else:
             if verbose:
-                print(f"using flat file annotation...")
+                print("using flat file annotation...")
+
+            for contig in contigs:
+                for feature in contig.features:
+                    if feature.type != "CDS":
+                        continue
+
+                    if not feature.qualifiers.get("translation"):
+                        dna = feature.extract(contig.seq)
+                        translation = dna.translate(to_stop=True, table=11)
+                        feature.qualifiers["translation"] = [str(translation)]
+
+        contigs = [contig for contig in contigs
+                   if (len([x for x in contig.features if x.type == "CDS"]) >=
+                       MIN_CDS_FEATURES)]
+
+        if not contigs:
+            print("\nNo input sequence met the requisite feature count.")
+            return
 
         if verbose:
             print("masking conserved bacterial features...")
@@ -206,7 +280,7 @@ def main(arguments):
             continue
 
         product_threshold = 0
-        if runmode in ("normal", "strict"):
+        if run_mode >= 1:
             if verbose:
                 print("searching for phage gene homologs...")
 
@@ -217,7 +291,7 @@ def main(arguments):
 
             # Search for phage gene remote homologs and
             # annotate the bacterial sequence
-            if runmode == "strict":
+            if run_mode >= 2:
                 find_homologs(contigs, prophage_preds, EXTENDED_DB,
                               hhsearch_dir, cpus)
                 product_threshold = STRICT_PRODUCT_THRESHOLD
@@ -233,7 +307,7 @@ def main(arguments):
                                            delimiter=PROPHAGE_DELIMITER)
 
         if verbose:
-            print("searching for attL/R...")
+            print("identifying attachment sites")
 
         # Set up directory where we can do attL/R detection
         att_dir = tmp_dir.joinpath("att_core")
@@ -241,7 +315,8 @@ def main(arguments):
             att_dir.mkdir()
 
         # Detect attachment sites, where possible, for the predicted prophage
-        detect_att_sites(prophages, BLASTN_DB, EXTEND_BY, att_dir)
+        search_space = extend_by * att_sensitivity
+        detect_att_sites(prophages, BLASTN_DB, search_space, att_dir)
 
         if verbose:
             print("generating final reports...")
@@ -250,7 +325,12 @@ def main(arguments):
         if not genome_outdir.is_dir():
             genome_outdir.mkdir(parents=False)
 
-        write_prophage_output(genome_outdir, contigs, prophages, draw)
+        draw_dir = tmp_dir.joinpath("draw")
+        if not draw_dir.is_dir():
+            draw_dir.mkdir()
+
+        write_prophage_output(genome_outdir, contigs, prophages, draw_dir,
+                              draw)
 
         if dump:
             destination = genome_outdir.joinpath("tmp_data")
@@ -285,8 +365,14 @@ def load_initial_prophages(contigs, prophage_predictions,
             # Create a prophage ID from the SeqRecord ID
             prophage_id = "".join([prefix, contig.id,
                                    delimiter, str((prophage_index+1))])
+
             start = prophage_coordinates[0]
+            if start < 0:
+                start = 0
+
             end = prophage_coordinates[1]
+            if end >= len(contig.seq):
+                end = len(contig.seq) - 1
 
             prophage = Prophage(contig, prophage_id, start=start, end=end)
             prophage.update()
@@ -294,49 +380,13 @@ def load_initial_prophages(contigs, prophage_predictions,
             if len(prophage.products) < product_threshold:
                 continue
 
-
-            products = "\n\t".join(prophage.products)
             prophage_index += 1
             prophages.append(prophage)
 
     return prophages
 
 
-def get_reference_map_from_sequence(sequence, sequence_name,
-                                    reference_db_path, tmp_dir):
-    """Maps sequence BLASTn aligned reference genome IDs to their respective
-    alignment result data.
-
-    :param sequence: Query sequence to be aligned to the reference database
-    :type sequence: str
-    :param sequence_name: Name of the query sequence to be aligned
-    :type sequence_name: str
-    :param reference_db_path: Path to the database of references to search
-    :type reference_db_path: pathlib.Path
-    :param tmp_dir: Working directory to place BLASTn inputs and outputs
-    :type tmp_dir: pathlib.Path
-    :return: A map of aligned reference genome IDs to alignment result data
-    """
-    sequence_path = tmp_dir.joinpath(".".join([sequence_name, "fasta"]))
-
-    # Write the sequence to a fasta file in the temp directory
-    write_fasta([sequence_name], [sequence], sequence_path)
-
-    # Try to retrieve reference results for the sequence to the references
-    blast_results = blastn(sequence_path, reference_db_path, tmp_dir)
-
-    reference_map = dict()
-    for blast_result in blast_results:
-        # Checks to see if the sequence reference ID has already been stored
-        results = reference_map.get(blast_result["sseqid"], list())
- 
-        results.append(blast_result)
-        reference_map[blast_result["sseqid"]] = results
-
-    return reference_map
-
-
-def detect_att_sites(prophages, reference_db_path, extend_by,
+def detect_att_sites(prophages, reference_db_path, search_space,
                      tmp_dir, min_kmer_score=5, sort_key=REF_BLAST_SORT_KEY):
     """Detect attachment sites demarcating predicted prophage regions from
     the bacterial contig.
@@ -345,8 +395,8 @@ def detect_att_sites(prophages, reference_db_path, extend_by,
     :type prophages: list
     :param reference_db_path: Path to the database with reference sequences
     :type reference_db_path: pathlib.Path
-    :param extend_by: Internal length of the prophage to check for att sites
-    :type extend_by: int
+    :param search_space: Internal length of the prophage to check for att sites
+    :type search_space: int
     :param tmp_dir: Path to place result files.
     :type tmp_dir: pathlib.Path
     :param min_kmer_score: Minimum length threshold of attachment sites.
@@ -356,26 +406,24 @@ def detect_att_sites(prophages, reference_db_path, extend_by,
         # Create prophage working directory within temp directory
         working_dir = tmp_dir.joinpath(prophage.id)
         if not working_dir.is_dir():
-            working_dir.mkdir() 
+            working_dir.mkdir()
 
-        seq_len = len(prophage.seq)
-        half_len = seq_len // 2
- 
-        l_seq = str(prophage.seq[:half_len])
-        r_seq = str(prophage.seq[half_len:])
+        half_len = len(prophage.seq) // 2
+        if search_space > half_len:
+            search_space = half_len
 
-        l_origin = extend_by
-        r_origin = len(prophage.seq) - extend_by
-        
+        l_seq = str(prophage.seq[:search_space])
+        r_seq = str(prophage.seq[-1*search_space:])
+
         l_name = f"{prophage.id}_left"
         r_name = f"{prophage.id}_right"
 
         att_data = find_attachment_site(
-                                prophage, l_seq, r_seq, l_origin, r_origin,
+                                prophage, l_seq, r_seq,
                                 reference_db_path, working_dir, sort_key,
                                 k=min_kmer_score, l_name=l_name, r_name=r_name)
 
-        if att_data is not None: 
+        if att_data is not None:
             prophage.set_coordinates(att_data[0], att_data[1])
             prophage.set_att_len(len(att_data[3]))
         prophage.detect_orientation()
@@ -387,7 +435,7 @@ def detect_att_sites(prophages, reference_db_path, extend_by,
         prophage.parent_record.features.sort(key=lambda x: x.location.start)
 
 
-def write_prophage_output(outdir, contigs, prophages, draw):
+def write_prophage_output(outdir, contigs, prophages, tmp_dir, draw):
     """Generates output structure and writes data to file
 
     :param outdir: Root directory the data will be written to
@@ -400,12 +448,12 @@ def write_prophage_output(outdir, contigs, prophages, draw):
     for contig in contigs:
         name = contig.id
         contig.annotations = ANNOTATIONS
-        
+
         genbank_filename = outdir.joinpath(name).with_suffix(".gbk")
 
         SeqIO.write(contig, genbank_filename, "genbank")
-    
-    prophage_data_dicts = []
+
+    prophage_records = []
     for prophage in prophages:
         name = prophage.id
         prophage_outdir = outdir.joinpath(name)
@@ -416,10 +464,12 @@ def write_prophage_output(outdir, contigs, prophages, draw):
 
         SeqIO.write(prophage.record, genbank_filename, "genbank")
         SeqIO.write(prophage.record, fasta_filename, "fasta")
-        if draw:
-            diagram_filename = prophage_outdir.joinpath(
-                                                    name).with_suffix(".pdf")
-            prophage_diagram(prophage.record, diagram_filename)
+
+        prophage_records.append(prophage.record)
+
+    if draw:
+        draw_complete_diagram(outdir, contigs, prophage_records, tmp_dir,
+                              name=outdir.stem)
 
 
 if __name__ == "__main__":

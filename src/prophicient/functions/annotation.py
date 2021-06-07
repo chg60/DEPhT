@@ -13,6 +13,7 @@ from prophicient.functions.fasta import parse_fasta
 from prophicient.functions.run_command import run_command
 
 MIN_LENGTH = 20000      # Don't annotate short contigs
+MIN_CDS_FEATURES = 51
 META_LENGTH = 100000    # Medium-length contigs -> use metagenomic mode
 
 DEFAULT_PRODUCT = "hypothetical_protein"
