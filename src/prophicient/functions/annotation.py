@@ -5,6 +5,9 @@ tRNA/tmRNA genes on bacterial contigs.
 
 import pathlib
 from tempfile import mkstemp
+from subprocess import Popen, DEVNULL
+import shlex
+import time
 
 from Bio import SeqIO
 from Bio.SeqFeature import SeqFeature, FeatureLocation
@@ -16,7 +19,7 @@ MIN_LENGTH = 20000      # Don't annotate short contigs
 MIN_CDS_FEATURES = 51
 META_LENGTH = 100000    # Medium-length contigs -> use metagenomic mode
 
-DEFAULT_PRODUCT = "hypothetical_protein"
+DEFAULT_PRODUCT = "hypothetical protein"
 
 
 def prodigal(infile, outfile, meta=False):
@@ -48,7 +51,7 @@ def aragorn(infile, outfile):
     :param outfile: the output file where predicted t(m)RNAs should go
     :type outfile: pathlib.Path
     """
-    command = f"aragorn -gcbact -c -d -wa -o {outfile} {infile}"
+    command = f"aragorn -gcbact -l -d -wa -o {outfile} {infile}"
     run_command(command)
 
 
@@ -124,7 +127,7 @@ def aragorn_reader(filepath):
             yield ftr
 
 
-def annotate_contig(contig, tmp_dir, no_trna=False):
+def annotate_contig(contig, tmp_dir, trna=True):
     """
     Uses Prodigal to predict protein-coding genes, and Aragorn to
     predict t(m)RNA genes on bacterial contigs. All resultant features
@@ -134,8 +137,8 @@ def annotate_contig(contig, tmp_dir, no_trna=False):
     :type contig: Bio.SeqRecord.SeqRecord
     :param tmp_dir: temporary directory where files can go
     :type tmp_dir: pathlib.Path
-    :param no_trna: don't annotate tRNAs
-    :type no_trna: bool
+    :param trna: don't annotate tRNAs
+    :type trna: bool
     """
     # Set up to run Prodigal
     infile = mkstemp(suffix=".fna", prefix=f"{contig.id}_", dir=tmp_dir)[-1]
@@ -144,21 +147,34 @@ def annotate_contig(contig, tmp_dir, no_trna=False):
     with infile.open("w") as prodigal_writer:
         SeqIO.write(contig, prodigal_writer, "fasta")
 
+    aragorn_out = infile.with_suffix(".txt")
     prodigal_out = infile.with_suffix(".faa")
 
-    # Run Prodigal
-    meta = len(contig) < META_LENGTH
-    prodigal(infile, prodigal_out, meta)
+    # Set up to run Aragorn, and launch first since it will finish first
+    if trna:
+        command = f"aragorn -gcbact -l -d -wa -o {aragorn_out} {infile}"
+        command = shlex.split(command)
+        aragorn_process = Popen(command, stdout=DEVNULL, stderr=DEVNULL)
+
+    # Set up to run Prodigal - launch so we can read tRNAs while Prodigal runs
+    command = f"prodigal -a {prodigal_out} -i {infile} -n -c"
+    if len(contig) < META_LENGTH:
+        command += " -p meta"
+    command = shlex.split(command)
+    prodigal_process = Popen(command, stdout=DEVNULL, stderr=DEVNULL)
+
+    # If we ran Aragorn, wait until it finishes to start parsing tRNAs
+    if trna:
+        while aragorn_process.poll() is None:
+            time.sleep(0.5)
+        for ftr in aragorn_reader(aragorn_out):
+            contig.features.append(ftr)
+
+    while prodigal_process.poll() is None:
+        time.sleep(0.5)
 
     for ftr in prodigal_reader(prodigal_out):
         contig.features.append(ftr)
 
-    if not no_trna:
-        # Set up to run Aragorn
-        aragorn_out = infile.with_suffix(".txt")
-
-        # Run Aragorn
-        aragorn(infile, aragorn_out)
-
-        for ftr in aragorn_reader(aragorn_out):
-            contig.features.append(ftr)
+    # Sort contig features on start position
+    contig.features.sort(key=lambda x: x.location.start)
