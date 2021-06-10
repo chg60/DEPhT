@@ -172,8 +172,9 @@ def predict_prophage_genes(contig, model_path=MODEL_PATH, alpha=0.25,
     feature_dict = calculate_feature_dict(contig)
     dataframe = pd.DataFrame(feature_dict)
 
-    with model_path.open("rb") as model_reader:
-        classifier = pickle.load(model_reader)
+    model_reader = open(model_path, "rb")
+    classifier = pickle.load(model_reader)
+    model_reader.close()
 
     predictions = [x[1] for x in classifier.predict_proba(dataframe)]
     

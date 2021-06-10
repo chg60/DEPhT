@@ -1,14 +1,12 @@
 from Bio import SeqIO
-from Bio.Graphics import GenomeDiagram
 from bokeh.embed import file_html
 from bokeh.resources import CDN
 from dna_features_viewer import CircularGraphicRecord
-from reportlab.lib import colors
 from tabulate import tabulate
 
 from prophicient.classes.file_translator import (
-                                        CircularSourceFeatureTranslator,
-                                        LinearFeatureTranslator)
+    CircularSourceFeatureTranslator,
+    LinearFeatureTranslator)
 
 # GLOBAL VARIABLES
 # -----------------------------------------------------------------------------
@@ -56,30 +54,31 @@ def draw_complete_diagram(outdir, contigs, prophage_records, tmp_dir,
 
     filepath = outdir.joinpath(name).with_suffix(".html")
 
-    with filepath.open(mode="w") as filehandle:
-        for i in range(len(contigs)):
-            graph = host_graphic_resources[i]
-            table = host_metadata[i]
+    filehandle = open(filepath, "w")
+    for i in range(len(contigs)):
+        graph = host_graphic_resources[i]
+        table = host_metadata[i]
 
-            img_html = ("".join(["<img src = \"",
-                                 str(graph.relative_to(outdir)),
-                                 "\"style=\"height:750px\">"]))
-            filehandle.write(img_html)
+        img_html = ("".join(["<img src = \"",
+                             str(graph.relative_to(outdir)),
+                             "\"style=\"height:750px\">"]))
+        filehandle.write(img_html)
 
-            table_html = ("".join(["<br>", table, "<br>"]))
-            filehandle.write(table_html)
+        table_html = ("".join(["<br>", table, "<br>"]))
+        filehandle.write(table_html)
 
-        for i in range(len(prophage_records)):
-            title = str(prophage_records[i].id)
+    for i in range(len(prophage_records)):
+        title = str(prophage_records[i].id)
 
-            title_html = "".join(["<h2_style = \"font-family: monospace\">",
-                                  title, "</h2>"])
-            filehandle.write(title_html)
+        title_html = "".join(["<h2_style = \"font-family: monospace\">",
+                              title, "</h2>"])
+        filehandle.write(title_html)
 
-            plot = embedded_prophage_plots[i]
-            filehandle.write(plot)
+        plot = embedded_prophage_plots[i]
+        filehandle.write(plot)
 
-            filehandle.write("<br><br>")
+        filehandle.write("<br><br>")
+    filehandle.close()
 
 
 def scrub_host_records(contigs, tmp_dir):
@@ -103,7 +102,9 @@ def scrub_host_records(contigs, tmp_dir):
         record_path = tmp_dir.joinpath(str(contig.id)).with_suffix(".gbk")
         host_record_paths.append(record_path)
 
+        record_writer = open(record_path, "w")
         SeqIO.write(contig, record_path, "genbank")
+        record_writer.close()
 
     return host_record_paths
 
@@ -181,56 +182,3 @@ def embed_prophage_genomes(prophage_records):
         embedded_prophage_plots.append(embedded_plot)
 
     return embedded_prophage_plots
-
-
-# REPORTLAB FUNCTIONS
-# -----------------------------------------------------------------------------
-def prophage_diagram(record, filepath):
-    """
-    Plots a linear genome diagram of the given record, and saves it
-    in the indicated file.
-
-    :param record: the record to plot
-    :type record: Bio.SeqRecord.SeqRecord
-    :param filepath: the file to store the genome diagram in
-    :type filepath: pathlib.Path
-    """
-    diagram = GenomeDiagram.Diagram(f"{record.id}")
-    track = diagram.new_track(track_level=1, name=f"{filepath.stem}",
-                              greytrack=True, greytrack_labels=1,
-                              scale_smalltick_interval=1000,
-                              scale_largetick_interval=5000)
-    track_features = track.new_set()
-
-    for feature in record.features:
-        add_track_feature(track_features, feature)
-
-    diagram.draw(format="linear", orientation="landscape",
-                 pagesize="A4", fragments=8, start=0, end=len(record)-1)
-    diagram.write(str(filepath), "PDF")
-
-
-def add_track_feature(feature_set, feature):
-    if feature.type not in ("CDS", "tRNA", "tmRNA"):
-        return
-
-    if feature.type == "CDS":
-        sigil = "ARROW"
-        name = feature.qualifiers["product"][0]
-        if name == "hypothetical protein":
-            name = ""
-    elif feature.type == "tRNA":
-        sigil, color = "BOX", colors.blue
-        name = feature.qualifiers["note"][0]
-    else:
-        sigil, color = "BOX", colors.gold
-        name = feature.type
-
-    if feature.location.strand == 1:
-        color, angle = colors.green, 45
-    else:
-        color, angle = colors.red, 225
-
-    feature_set.add_feature(feature, color=color, label=True, name=name,
-                            labelsize=3, label_angle=angle, sigil=sigil,
-                            label_position="middle")

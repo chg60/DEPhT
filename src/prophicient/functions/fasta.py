@@ -12,21 +12,25 @@ def parse_fasta(filepath):
     """
     headers, sequences = list(), list()
 
-    with open(filepath, "r") as fasta_reader:
-        cache = list()
-        for line in fasta_reader:
-            # If header line, flush the cache and store header
-            if line.startswith(">"):
-                sequences.append("".join(cache))
-                cache = list()
-                headers.append(line.lstrip(">").rstrip())
-            # Otherwise, append to the cache
-            else:
-                cache.append(line.rstrip())
+    fasta_reader = open(filepath, "r")
 
-        # Flush the last sequence out of the cache, and pop empty sequence
-        sequences.append("".join(cache))
-        sequences.pop(0)
+    cache = list()
+    for line in fasta_reader:
+        # If header line, flush the cache and store header
+        if line.startswith(">"):
+            sequences.append("".join(cache))
+            cache = list()
+            headers.append(line.lstrip(">").rstrip())
+        # Otherwise, append to the cache
+        else:
+            cache.append(line.rstrip())
+
+    # Flush the last sequence out of the cache, and pop empty sequence
+    sequences.append("".join(cache))
+    sequences.pop(0)
+
+    # Close the file handle
+    fasta_reader.close()
 
     return headers, sequences
 
@@ -47,9 +51,13 @@ def write_fasta(headers, sequences, filepath, width=80):
     if not isinstance(headers, list) or not isinstance(sequences, list):
         raise TypeError(f"headers and sequences should be lists of strings")
 
-    with open(filepath, "w") as fasta_writer:
-        for header, sequence in zip(headers, sequences):
-            fasta_writer.write(f">{header}\n")
-            # Use string slicing to split the sequence to satisfy width param
-            for i in range(0, len(sequence), width):
-                fasta_writer.write(f"{sequence[i:i + width]}\n")
+    fasta_writer = open(filepath, "w")
+
+    for header, sequence in zip(headers, sequences):
+        fasta_writer.write(f">{header}\n")
+        # Use string slicing to split the sequence to satisfy width param
+        for i in range(0, len(sequence), width):
+            fasta_writer.write(f"{sequence[i:i + width]}\n")
+
+    # Close the file handle
+    fasta_writer.close()

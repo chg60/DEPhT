@@ -32,8 +32,11 @@ def blastn(query, target, tmp_dir, mode="db", evalue=BLASTN_EVALUE,
     :type evalue: float
     :param word_size: specify a word size (>=4) to use with blastn
     :type word_size: int or None
-    :return:
+    :return: results
     """
+    # Store any results here
+    results = list()
+
     # Create output filepath
     outfile = tmp_dir.joinpath(f"{query.stem}_blastn_results.csv")
 
@@ -57,10 +60,15 @@ def blastn(query, target, tmp_dir, mode="db", evalue=BLASTN_EVALUE,
     # Return parsed hits as list of dictionaries
     fields = BLASTN_OUTFMT.split()[1:]
     try:
-        blastn_reader = csv.DictReader(open(outfile, "r"), fieldnames=fields)
-        return [row for row in blastn_reader]
+        blastn_reader = open(outfile, "r")
+        csv_reader = csv.DictReader(blastn_reader, fieldnames=fields)
+        for row in csv_reader:
+            results.append(row)
+        blastn_reader.close()
     except FileNotFoundError:
-        return []
+        pass
+
+    return results
 
 
 def locate_subsequence(query, subject, tmp_dir):

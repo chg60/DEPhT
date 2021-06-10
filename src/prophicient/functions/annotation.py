@@ -13,7 +13,6 @@ from Bio import SeqIO
 from Bio.SeqFeature import SeqFeature, FeatureLocation
 
 from prophicient.functions.fasta import parse_fasta
-from prophicient.functions.run_command import run_command
 
 MIN_LENGTH = 20000      # Don't annotate short contigs
 MIN_CDS_FEATURES = 51
@@ -110,43 +109,49 @@ def parse_aragorn(outfile):
     """
     features = list()
 
-    with open(outfile, "r") as aragorn_reader:
-        # Skip header lines
-        for _ in range(2):
-            next(aragorn_reader)
+    aragorn_reader = open(outfile, "r")
 
-        for row in aragorn_reader:
-            row = row.rstrip().split()[1:]  # tokenize line, skip index
+    # Skip the 2 header lines
+    for _ in range(2):
+        next(aragorn_reader)
 
-            # Get coordinates
-            if row[1].startswith("c"):
-                strand = -1  # reverse oriented
-                coords = row[1][2:-1].split(",")
+    # Now parse the remaining lines into Bio.SeqFeature.SeqFeature objects
+    for row in aragorn_reader:
+        # Tokenize the line; skip the tRNA number, which is meaningless
+        row = row.rstrip().split()[1:]
+
+        # Get coordinates
+        if row[1].startswith("c"):
+            strand = -1  # reverse oriented
+            coords = row[1][2:-1].split(",")
+        else:
+            strand = 1  # forward oriented
+            coords = row[1][1:-1].split(",")
+        start, end = int(coords[0]), int(coords[1])
+
+        # Check if this is a tRNA or tmRNA
+        if row[0] == "tmRNA":
+            ftr = SeqFeature(location=FeatureLocation(start - 1, end),
+                             type="tmRNA", strand=strand)
+            ftr.qualifiers["gene"] = [""]
+            ftr.qualifiers["locus_tag"] = [""]
+            tag_peptide = row[-1].rstrip("*")
+            ftr.qualifiers["note"] = [f"tag peptide: {tag_peptide}"]
+        else:
+            ftr = SeqFeature(location=FeatureLocation(start - 1, end),
+                             type="tRNA", strand=strand)
+            ftr.qualifiers["gene"] = [""]
+            ftr.qualifiers["locus_tag"] = [""]
+            ftr.qualifiers["note"] = [f"{row[0]}{row[-1]}"]
+            if "?" in row[0] or "SeC" in row[0] or "Pyl" in row[0]:
+                ftr.qualifiers["product"] = ["tRNA-OTHER"]
             else:
-                strand = 1  # forward oriented
-                coords = row[1][1:-1].split(",")
-            start, end = int(coords[0]), int(coords[1])
+                ftr.qualifiers["product"] = [f"{row[0]}"]
 
-            # Check if this is a tRNA or tmRNA
-            if row[0] == "tmRNA":
-                ftr = SeqFeature(location=FeatureLocation(start - 1, end),
-                                 type="tmRNA", strand=strand)
-                ftr.qualifiers["gene"] = [""]
-                ftr.qualifiers["locus_tag"] = [""]
-                tag_peptide = row[-1].rstrip("*")
-                ftr.qualifiers["note"] = [f"tag peptide: {tag_peptide}"]
-            else:
-                ftr = SeqFeature(location=FeatureLocation(start - 1, end),
-                                 type="tRNA", strand=strand)
-                ftr.qualifiers["gene"] = [""]
-                ftr.qualifiers["locus_tag"] = [""]
-                ftr.qualifiers["note"] = [f"{row[0]}{row[-1]}"]
-                if "?" in row[0] or "SeC" in row[0] or "Pyl" in row[0]:
-                    ftr.qualifiers["product"] = ["tRNA-OTHER"]
-                else:
-                    ftr.qualifiers["product"] = [f"{row[0]}"]
+        features.append(ftr)
 
-            features.append(ftr)
+    # Close the file handle
+    aragorn_reader.close()
 
     return features
 
@@ -164,13 +169,15 @@ def annotate_contig(contig, tmp_dir, trna=True):
     :param trna: don't annotate tRNAs
     :type trna: bool
     """
-    # Set up to run Prodigal
+    # Set up to run Prodigal and Aragorn
     infile = mkstemp(suffix=".fna", prefix=f"{contig.id}_", dir=tmp_dir)[-1]
     infile = pathlib.Path(infile)
 
-    with infile.open("w") as prodigal_writer:
-        SeqIO.write(contig, prodigal_writer, "fasta")
+    infile_writer = infile.open("w")
+    SeqIO.write(contig, infile_writer, "fasta")
+    infile_writer.close()
 
+    # Name the output files
     aragorn_out = infile.with_suffix(".txt")
     prodigal_out = infile.with_suffix(".faa")
 
