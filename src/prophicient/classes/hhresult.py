@@ -140,13 +140,16 @@ class HHResult:
     def parse_result(self):
         """Parses HHsuite result file.
         """
-        with open(self.__filepath__, "r") as filehandle:
-            self.__lcounter = 0
-            self._parse_header(filehandle)
-            match_index_map = self._parse_table(filehandle)
-            self._parse_body(filehandle, match_index_map)
+        filehandle = open(self.__filepath__, "r")
 
-            self.matches = list(match_index_map.values())
+        self.__lcounter = 0
+        self._parse_header(filehandle)
+        match_index_map = self._parse_table(filehandle)
+        self._parse_body(filehandle, match_index_map)
+
+        filehandle.close()
+
+        self.matches = list(match_index_map.values())
 
     def _parse_header(self, filehandle):
         """Parses HHsuite result file header.
