@@ -50,11 +50,11 @@ def find_attachment_site(prophage, l_seq, r_seq,
     :rtype: tuple
     """
     # Write the putative attL region to file
-    l_seq_path = tmp_dir.joinpath(l_name).with_suffix(".fasta")
+    l_seq_path = tmp_dir.joinpath(f"{l_name}.fasta")
     write_fasta([l_name], [l_seq], l_seq_path)
 
     # Write the putative attR region to file
-    r_seq_path = tmp_dir.joinpath(r_name).with_suffix(".fasta")
+    r_seq_path = tmp_dir.joinpath(f"{r_name}.fasta")
     write_fasta([r_name], [r_seq], r_seq_path)
     # Calculate and store right region's coordinate start for easy access
     r_seq_start = prophage.end - len(r_seq)
@@ -138,7 +138,7 @@ def blast_attachment_site(l_seq_path, r_seq_path, tmp_dir, k=KMER_SIZE,
     for result in blast_results:
         # Append the contig and its positions to the list
         kmer_contig = (result["qseq"],
-                       int(result["qstart"]), int(result["send"]),
+                       int(result["qstart"]) - 1, int(result["send"]),
                        float(result["bitscore"]))
         kmer_contigs.append(kmer_contig)
 

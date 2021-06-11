@@ -143,7 +143,7 @@ def main():
 
         # Skip .DS_Store files
         if infile.name == ".DS_Store":
-            print(f"skipping .DS_Store file...")
+            print("skipping .DS_Store file...")
             continue
 
         # Set up a temporary directory for this genome
@@ -165,7 +165,7 @@ def main():
         # Annotate contigs if format is "fasta"
         if fmt == "fasta":
             if verbose:
-                print(f"annotating t(m)RNA and CDS genes de novo...")
+                print("annotating t(m)RNA and CDS genes de novo...")
 
             annotate_dir = tmp_dir.joinpath("annotate")
             if not annotate_dir.is_dir():
@@ -176,7 +176,7 @@ def main():
 
         else:
             if verbose:
-                print(f"using flat file annotation...")
+                print("using flat file annotation...")
 
             for contig in contigs:
                 for feature in contig.features:
@@ -286,7 +286,8 @@ def main():
         draw_dir = tmp_dir.joinpath("draw_diagram")
         if not draw_dir.is_dir():
             draw_dir.mkdir()
-        write_prophage_output(genome_outdir, contigs, prophages, draw_dir, draw)
+        write_prophage_output(genome_outdir, contigs, prophages, draw_dir,
+                              draw)
 
         if dump:
             destination = genome_outdir.joinpath("tmp_data")
