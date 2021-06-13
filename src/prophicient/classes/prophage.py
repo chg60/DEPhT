@@ -14,7 +14,7 @@ ANNOTATIONS = {"molecule_type": "DNA", "topology": "linear",
                "organism": "", "taxonomy": [],
                "comment": [""]}
 FEATURE_TYPES = ("CDS", "tRNA", "tmRNA")
-DEFAULT_PRODUCT = "hypothetical_protein"
+DEFAULT_PRODUCT = "hypothetical protein"
 
 FEATURE_LENGTH_WEIGHT_EXP = 1.5
 
@@ -23,7 +23,7 @@ def realign_subrecord(record, subrecord, subrecord_start, subrecord_end,
                       rev_orient=False):
     """Adds and start-aligns features in the parent record to a subrecord
     given subrecord coordinates with respect to the parent record.
-    
+
     :param record: Parent record to draw features from.
     :type record: Bio.SeqRecord.SeqRecord
     :param subrecord: Record to place and align features into.
@@ -159,7 +159,7 @@ class Prophage:
 
         realign_subrecord(self.parent_record, self.record,
                           self.start, self.end,
-                          rev_orient=(self.strand != 1) )
+                          rev_orient=(self.strand != 1))
 
     def update_att_attributes(self):
         """Sets prophage attL and attR attributes based on the object's
@@ -169,17 +169,16 @@ class Prophage:
             return
 
         left_location = FeatureLocation(0, self.att_len)
-        right_location  = FeatureLocation(self.length-self.att_len,
-                                          self.length)
-        
+        right_location = FeatureLocation(self.length-self.att_len,
+                                         self.length)
+
         if self.strand == 1:
             attL_location = left_location
             attR_location = right_location
-            strand = 1
         if self.strand == -1:
             attL_location = right_location
             attR_location = left_location
-        
+
         self.attL = SeqFeature(attL_location,
                                strand=self.strand, type="misc_recomb")
         self.attL.qualifiers["note"] = [" ".join([self.id, "attL"])]
@@ -203,11 +202,12 @@ class Prophage:
         product_set = set()
         for feature in self.record.features:
             if feature.type != "CDS":
-                continue 
+                continue
 
             product_qualifiers = feature.qualifiers.get("product", None)
             if not product_qualifiers:
-                continue
+                feature.qualifiers["product"] = [DEFAULT_PRODUCT]
+                product_qualifiers = feature.qualifiers["product"]
 
             product = product_qualifiers[0]
             if product == DEFAULT_PRODUCT:
@@ -228,7 +228,7 @@ class Prophage:
     def clean_record(self):
         """Add quality-of-life features and tidy prophage extraction artifacts.
         """
-        self.record.features.sort(key=lambda x: x.location.start) 
+        self.record.features.sort(key=lambda x: x.location.start)
 
         gene_counter = 0
         gene_features = []
@@ -238,7 +238,7 @@ class Prophage:
 
             gene_counter += 1
 
-            locus_tag = "_".join([self.id, str(gene_counter)])   
+            locus_tag = "_".join([self.id, str(gene_counter)])
             feature.qualifiers["locus_tag"] = [locus_tag]
 
             gene_feature = SeqFeature(feature.location,
@@ -251,5 +251,5 @@ class Prophage:
 
         self.record.features = self.record.features + gene_features
         self.record.features.append(source_feature)
-        
-        self.record.features.sort(key=lambda x: x.location.start) 
+
+        self.record.features.sort(key=lambda x: x.location.start)

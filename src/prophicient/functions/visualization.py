@@ -1,25 +1,26 @@
-from Bio import SeqIO
+from bokeh import plotting
 from bokeh.embed import file_html
+from bokeh.models import Range1d, HoverTool
 from bokeh.resources import CDN
 from dna_features_viewer import CircularGraphicRecord
-from tabulate import tabulate
+from matplotlib import pyplot
+import pandas
+import pretty_html_table
 
 from prophicient.classes.file_translator import (
-    CircularSourceFeatureTranslator,
-    LinearFeatureTranslator)
+    CircularSourceFeatureTranslator, LinearFeatureTranslator,
+    DEFAULT_FONT_FAMILY)
+from prophicient.classes.prophage import DEFAULT_PRODUCT
+
 
 # GLOBAL VARIABLES
 # -----------------------------------------------------------------------------
 DEFAULT_NAME = "cartoon"
 
-# PRESETS
-# -----------------------------------------------------------------------------
-tabulate.PRESERVE_WHITESPACE = True
-
 
 # BOKEH/DNAFEATUREVIEWER FUNCTIONS
 # -----------------------------------------------------------------------------
-def draw_complete_diagram(outdir, contigs, prophage_records, tmp_dir,
+def draw_complete_diagram(outdir, contigs, prophages, tmp_dir,
                           name=DEFAULT_NAME):
     """
     Plots a circular genome diagram of the host bacterial record(s), linear
@@ -37,52 +38,53 @@ def draw_complete_diagram(outdir, contigs, prophage_records, tmp_dir,
     """
     # Scrub each bacterial record contig of non-source features
     # and write to file
-    host_record_paths = scrub_host_records(contigs, tmp_dir)
-
-    resources_dir = outdir.joinpath("resources")
-    resources_dir.mkdir(exist_ok=True)
+    scrub_host_records(contigs)
 
     # Scrape metadata from each genome contig record
-    host_metadata = scrape_and_tabulate_host_metadata(host_record_paths)
+    host_metadata = scrape_and_tabulate_host_metadata(contigs)
 
     # Create a circular image resource for each genome contig record
     host_graphic_resources = create_host_graphic_resources(contigs,
-                                                           resources_dir)
+                                                           tmp_dir)
 
-    # Embed prophage plots
-    embedded_prophage_plots = embed_prophage_genomes(prophage_records)
+    contig_prophage_map = {}
+    for prophage in prophages:
+        prophage_records = contig_prophage_map.get(prophage.parent_record.id,
+                                                   list())
+        prophage_records.append(prophage.record)
+        contig_prophage_map[prophage.parent_record.id] = prophage_records
 
     filepath = outdir.joinpath(name).with_suffix(".html")
 
     filehandle = open(filepath, "w")
     for i in range(len(contigs)):
+        contig = contigs[i]
+        if not contig.features:
+            continue
+
         graph = host_graphic_resources[i]
         table = host_metadata[i]
 
-        img_html = ("".join(["<img src = \"",
-                             str(graph.relative_to(outdir)),
-                             "\"style=\"height:750px\">"]))
-        filehandle.write(img_html)
+        filehandle.write(graph)
 
-        table_html = ("".join(["<br>", table, "<br>"]))
+        table_html = ("".join([table, "<br>"]))
         filehandle.write(table_html)
 
-    for i in range(len(prophage_records)):
-        title = str(prophage_records[i].id)
+        prophage_records = contig_prophage_map.get(contig.id, list())
 
-        title_html = "".join(["<h2_style = \"font-family: monospace\">",
-                              title, "</h2>"])
-        filehandle.write(title_html)
+        # Embed prophage plots
+        embedded_prophage_plots = embed_prophage_genomes(prophage_records)
 
-        plot = embedded_prophage_plots[i]
-        filehandle.write(plot)
+        for i in range(len(prophage_records)):
+            plot = embedded_prophage_plots[i]
+            filehandle.write(plot)
 
-        filehandle.write("<br><br>")
+            filehandle.write("<br><br>")
+
     filehandle.close()
 
 
-def scrub_host_records(contigs, tmp_dir):
-    host_record_paths = []
+def scrub_host_records(contigs):
     for contig in contigs:
         source_features = []
 
@@ -99,17 +101,8 @@ def scrub_host_records(contigs, tmp_dir):
 
         contig.features = source_features
 
-        record_path = tmp_dir.joinpath(str(contig.id)).with_suffix(".gbk")
-        host_record_paths.append(record_path)
 
-        record_writer = open(record_path, "w")
-        SeqIO.write(contig, record_path, "genbank")
-        record_writer.close()
-
-    return host_record_paths
-
-
-def scrape_and_tabulate_host_metadata(host_record_paths):
+def scrape_and_tabulate_host_metadata(contigs):
     """
     Put features of a prophage feature files into dictionaries.
 
@@ -119,17 +112,19 @@ def scrape_and_tabulate_host_metadata(host_record_paths):
     :rtype: list
     """
     host_metadata = []
-    for host_record_path in host_record_paths:
-        info = {
-            "Prophage Name\t": [],
-            "Left Coordinate": [],
-            "Right Coordinate": [],
-            "Length": [],
-            "Orientation": []}
-        data = SeqIO.read(host_record_path, "gb")
-        for feature in data.features:
+    for contig in contigs:
+        keys = ["Prophage Name", "Left Coordinate", "Right Coordinate",
+                "Length"]
+        fwd_info = {key: list() for key in keys}
+        rvs_info = {key: list() for key in keys}
+
+        for feature in contig.features:
+            if feature.location.strand == -1:
+                info = rvs_info
+            else:
+                info = fwd_info
             # add the name
-            info.get("Prophage Name\t").append(
+            info.get("Prophage Name").append(
                 feature.qualifiers.get("locus_tag")[0])
             # add the location Left Coordinates
             info.get("Left Coordinate").append(feature.location.nofuzzy_start)
@@ -139,11 +134,30 @@ def scrape_and_tabulate_host_metadata(host_record_paths):
             info.get("Length").append(
                 feature.location.nofuzzy_end -
                 feature.location.nofuzzy_start)
-            # add orientation
-            info.get("Orientation").append(feature.location.strand)
 
-        table = tabulate(info, headers="keys", tablefmt="html")
-        host_metadata.append(table)
+        fwd_table = pandas.DataFrame(fwd_info)
+        rvs_table = pandas.DataFrame(rvs_info)
+
+        if len(fwd_table) > 0:
+            fwd_table_html = pretty_html_table.build_table(
+                                            fwd_table, "green_light",
+                                            font_size="14px",
+                                            text_align="center",
+                                            font_family=DEFAULT_FONT_FAMILY)
+        else:
+            fwd_table_html = ""
+
+        if len(rvs_table) > 0:
+            rvs_table_html = pretty_html_table.build_table(
+                                            rvs_table, "red_light",
+                                            font_size="14px",
+                                            text_align="center",
+                                            font_family=DEFAULT_FONT_FAMILY)
+        else:
+            rvs_table_html = ""
+
+        table_html = "\n".join([fwd_table_html, rvs_table_html])
+        host_metadata.append(table_html)
 
     return host_metadata
 
@@ -157,13 +171,24 @@ def create_host_graphic_resources(contigs, resources_dir):
                                             contig,
                                             record_class=CircularGraphicRecord)
 
-        ax, _ = graphic_record.plot(figure_width=10)
+        ax, _ = graphic_record.plot(figure_width=10, with_ruler=True)
+
+        ax.text(0, -1 * graphic_record.radius // 2, contig.id,
+                horizontalalignment="center", verticalalignment="center",
+                fontfamily="monospace", fontsize=24, fontweight="demibold")
 
         resource_filepath = resources_dir.joinpath(contig.id).with_suffix(
                                                                         ".svg")
-
         ax.figure.savefig(resource_filepath, bbox_inches="tight")
-        host_graphic_resources.append(resource_filepath)
+        pyplot.close(ax.figure)
+
+        filehandle = open(resource_filepath, "r")
+
+        lines = filehandle.readlines()
+        lines = "".join(lines)
+        host_graphic_resources.append(lines)
+
+        filehandle.close()
 
     return host_graphic_resources
 
@@ -173,12 +198,121 @@ def embed_prophage_genomes(prophage_records):
 
     embedded_prophage_plots = []
     for record in prophage_records:
-        prophage_translation = translator.translate_record(record)
-        bokeh_plot = prophage_translation.plot_with_bokeh(figure_width=100,
-                                                          figure_height="auto",
-                                                          tools="auto")
+        graphic_record = translator.translate_record(record)
+        bokeh_plot = plot_with_bokeh(graphic_record, figure_width=100,
+                                     figure_height="auto", tools="auto",
+                                     label_link_width=0,
+                                     label_text_font=DEFAULT_FONT_FAMILY)
+
+        bokeh_plot.title.text = record.id
+        bokeh_plot.title.align = "left"
+        bokeh_plot.title.text_font = DEFAULT_FONT_FAMILY
+        bokeh_plot.title.text_font_size = "18px"
 
         embedded_plot = file_html(bokeh_plot, CDN, record.id)
         embedded_prophage_plots.append(embedded_plot)
 
     return embedded_prophage_plots
+
+
+# BOKEH HELPER OVERRIDE
+# -----------------------------------------------------------------------------
+
+# If you're wondering why there's a redundant function here,
+# ask why dna_features_viewer.GraphicRecord.plot_with_bokeh hard codes so much
+def plot_with_bokeh(graphic_record, figure_width=100, figure_height="auto",
+                    title=None, tools="auto", feature_box_color="#000000",
+                    label_link_color="#000000", label_text_font="arial",
+                    label_text_font_size="12px",
+                    label_text_font_style="normal", label_link_width=0.5):
+    """Plots the graphic record using Bokeh"""
+    if tools == "auto":
+        tools = "xpan,xwheel_zoom,reset,tap"
+
+    # Scrape matplotlib plot info
+
+    ax, (features_levels, plot_data) = graphic_record.plot(
+                                                figure_width=figure_width,
+                                                annotate_inline=False)
+    width, height = [int(100 * e) for e in ax.figure.get_size_inches()]
+    pyplot.close(ax.figure)
+
+    if figure_height == "auto":
+        height = int(0.5 * height)
+    else:
+        height = 100 * figure_height
+
+    # Ensures that height of the plot is 185 or greater, the minimal height
+    # to see all icons
+    height = max(height, 185)
+
+    max_y = max(
+                [data["annotation_y"] for f, data in plot_data.items()]
+                + list(features_levels.values()))
+
+    # Build the Bokeh plot
+    plot = plotting.figure(plot_width=width, plot_height=height, tools=tools,
+                           x_range=Range1d(0, graphic_record.sequence_length),
+                           y_range=Range1d(-1, max_y + 1))
+
+    # Define different hovertools
+    orf_tooltips = [("product", "@product")]
+    orf_hovertool = HoverTool(tooltips=orf_tooltips, mode="mouse",
+                              names=["orf"])
+    plot.add_tools(orf_hovertool)
+
+    # Set up patches source
+    bokeh_feature_patches = list()
+    for feature, level in features_levels.items():
+        product = feature.label
+        if product is None:
+            product = DEFAULT_PRODUCT
+
+        bokeh_feature_patch = graphic_record.bokeh_feature_patch(
+                                    feature.start, feature.end, feature.strand,
+                                    figure_width=figure_width, level=level,
+                                    color=feature.color, label=feature.label,
+                                    product=product)
+        bokeh_feature_patches.append(bokeh_feature_patch)
+
+    patches_source = plotting.ColumnDataSource(pandas.DataFrame.from_records(
+                                                    bokeh_feature_patches))
+    plot.patches(xs="xs", ys="ys", color="color", name="orf",
+                 line_color=feature_box_color, source=patches_source)
+
+    # Set up floating label and connector source
+    bokeh_floating_labels = list()
+    bokeh_label_segments = list()
+    for feature, pdata in plot_data.items():
+        bokeh_floating_label = dict(
+                                x=feature.x_center, y=pdata["annotation_y"],
+                                text=feature.label, color=feature.color)
+        bokeh_floating_labels.append(bokeh_floating_label)
+
+        bokeh_segment = dict(x0=feature.x_center, x1=feature.x_center,
+                             y0=pdata["annotation_y"], y1=pdata["feature_y"])
+        bokeh_label_segments.append(bokeh_segment)
+
+    if plot_data != {}:
+        labels_source = plotting.ColumnDataSource(
+                                        pandas.DataFrame.from_records(
+                                                    bokeh_floating_labels))
+        plot.text(x="x", y="y", text="text", text_align="center",
+                  text_font_size=label_text_font_size,
+                  text_font=label_text_font,
+                  text_font_style=label_text_font_style,
+                  source=labels_source)
+
+        segments_source = plotting.ColumnDataSource(
+                                        pandas.DataFrame.from_records(
+                                                    bokeh_label_segments))
+        plot.segment(x0="x0", x1="x1", y0="y0", y1="y1",
+                     line_width=label_link_width, color=label_link_color,
+                     source=segments_source)
+
+    plot.yaxis.visible = False
+    plot.outline_line_color = None
+    plot.grid.grid_line_color = None
+    plot.toolbar.logo = None
+
+    return plot

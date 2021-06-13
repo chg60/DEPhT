@@ -1,4 +1,8 @@
-from dna_features_viewer import BiopythonTranslator, CircularGraphicRecord
+from dna_features_viewer import BiopythonTranslator
+
+# GLOBAL VARIABLES
+# -----------------------------------------------------------------------------
+DEFAULT_FONT_FAMILY = "monospace"
 
 
 class CircularSourceFeatureTranslator(BiopythonTranslator):
@@ -29,6 +33,10 @@ class CircularSourceFeatureTranslator(BiopythonTranslator):
         else:
             return feature.qualifiers.get("locus_tag")[0]
 
+    def compute_feature_fontdict(self, feature):
+        """Compute a  font dict for this feature."""
+        return {"family": DEFAULT_FONT_FAMILY}
+
     def compute_feature_box_linewidth(self, feature):
         """Compute a box_linewidth for this feature."""
         return 1.0
@@ -53,6 +61,7 @@ class LinearFeatureTranslator(BiopythonTranslator):
     # feature.location.strand
 
     hyp = ["Hypothetical Protein", "hypothetical protein"]
+    att_types = ["attL", "attR"]
     ignored_features_types = ["source", "gene"]
     label_fields = ["product", "note", "gene"]
 
@@ -77,8 +86,21 @@ class LinearFeatureTranslator(BiopythonTranslator):
 
         if label in self.hyp:
             label = None
+        elif feature.type == "misc_recomb":
+            for att_type in self.att_types:
+                if att_type in label:
+                    label = att_type
+                    break
 
         return label
+
+    def compute_feature_fontdict(self, feature):
+        """Compute a  font dict for this feature."""
+        return {"family": DEFAULT_FONT_FAMILY}
+
+    def compute_feature_label_link_color(self, feature):
+        """Compute the color of the  line linking the label to its feature"""
+        return None
 
     def compute_feature_legend_text(self, feature):
         """Compute the feature legend text."""
