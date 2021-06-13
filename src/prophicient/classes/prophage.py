@@ -237,12 +237,14 @@ class Prophage:
                 continue
 
             gene_counter += 1
-
             locus_tag = "_".join([self.id, str(gene_counter)])
+
             feature.qualifiers["locus_tag"] = [locus_tag]
+            feature.qualifiers["gene"] = [gene_counter]
 
             gene_feature = SeqFeature(feature.location,
                                       type="gene")
+            gene_feature.qualifiers["gene"] = [gene_counter]
             gene_feature.qualifiers["locus_tag"] = [locus_tag]
             gene_features.append(gene_feature)
 
