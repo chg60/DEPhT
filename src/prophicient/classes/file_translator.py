@@ -1,5 +1,7 @@
 from dna_features_viewer import BiopythonTranslator
 
+from prophicient.classes.prophage import DEFAULT_PRODUCT
+
 # GLOBAL VARIABLES
 # -----------------------------------------------------------------------------
 DEFAULT_FONT_FAMILY = "monospace"
@@ -63,7 +65,7 @@ class LinearFeatureTranslator(BiopythonTranslator):
     hyp = ["Hypothetical Protein", "hypothetical protein"]
     att_types = ["attL", "attR"]
     ignored_features_types = ["source", "gene"]
-    label_fields = ["product", "note", "gene"]
+    label_fields = ["product", "name", "gene", "note"]
 
     def compute_feature_box_linewidth(self, feature):
         """Compute a box_linewidth for this feature."""
@@ -93,6 +95,36 @@ class LinearFeatureTranslator(BiopythonTranslator):
                     break
 
         return label
+
+    def compute_feature_html(self, feature):
+        """Compute the tooltip display text of the feature"""
+        label = self.compute_feature_label(feature)
+        properties = {"gb_type": feature.type}
+
+        if feature.type == "CDS":
+            gene = str(feature.qualifiers["gene"][0])
+            translation = feature.qualifiers["translation"][0]
+            if label is None:
+                label = DEFAULT_PRODUCT
+
+            properties["gene"] = gene
+            properties["product"] = label
+            properties["translation"] = translation
+
+        elif feature.type == "misc_recomb":
+            sequence = feature.qualifiers["note"][0]
+
+            properties["name"] = label
+            properties["sequence"] = sequence
+
+        elif feature.type in ("tRNA", "tmRNA"):
+            if label is None:
+                label = ""
+
+            properties["product"] = label
+            properties["codon"] = feature.qualifiers["note"][0]
+
+        return properties
 
     def compute_feature_fontdict(self, feature):
         """Compute a  font dict for this feature."""

@@ -1,6 +1,6 @@
 from bokeh import plotting
 from bokeh.embed import file_html
-from bokeh.models import Range1d, HoverTool
+from bokeh.models import HoverTool, Range1d, Title
 from bokeh.resources import CDN
 from dna_features_viewer import CircularGraphicRecord
 from matplotlib import pyplot
@@ -10,7 +10,6 @@ import pretty_html_table
 from prophicient.classes.file_translator import (
     CircularSourceFeatureTranslator, LinearFeatureTranslator,
     DEFAULT_FONT_FAMILY)
-from prophicient.classes.prophage import DEFAULT_PRODUCT
 
 
 # GLOBAL VARIABLES
@@ -49,10 +48,10 @@ def draw_complete_diagram(outdir, contigs, prophages, tmp_dir,
 
     contig_prophage_map = {}
     for prophage in prophages:
-        prophage_records = contig_prophage_map.get(prophage.parent_record.id,
+        contig_prophages = contig_prophage_map.get(prophage.parent_record.id,
                                                    list())
-        prophage_records.append(prophage.record)
-        contig_prophage_map[prophage.parent_record.id] = prophage_records
+        contig_prophages.append(prophage)
+        contig_prophage_map[prophage.parent_record.id] = contig_prophages
 
     filepath = outdir.joinpath(name).with_suffix(".html")
 
@@ -70,15 +69,13 @@ def draw_complete_diagram(outdir, contigs, prophages, tmp_dir,
         table_html = ("".join([table, "<br>"]))
         filehandle.write(table_html)
 
-        prophage_records = contig_prophage_map.get(contig.id, list())
+        contig_prophages = contig_prophage_map.get(contig.id, list())
 
         # Embed prophage plots
-        embedded_prophage_plots = embed_prophage_genomes(prophage_records)
+        embedded_prophage_plots = embed_prophage_genomes(contig_prophages)
 
-        for i in range(len(prophage_records)):
-            plot = embedded_prophage_plots[i]
-            filehandle.write(plot)
-
+        for prophage_plot in embedded_prophage_plots:
+            filehandle.write(prophage_plot)
             filehandle.write("<br><br>")
 
     filehandle.close()
@@ -173,9 +170,16 @@ def create_host_graphic_resources(contigs, resources_dir):
 
         ax, _ = graphic_record.plot(figure_width=10, with_ruler=True)
 
-        ax.text(0, -1 * graphic_record.radius // 2, contig.id,
+        # Write center label
+        ax.text(0, -1, contig.id,
                 horizontalalignment="center", verticalalignment="center",
-                fontfamily="monospace", fontsize=24, fontweight="demibold")
+                fontfamily="monospace", fontsize=30, fontweight="demibold")
+
+        # Write center bp
+        ax.text(0, -1.1,
+                " ".join([str(len(contig)), "bp"]),
+                horizontalalignment="center", verticalalignment="center",
+                fontfamily="monospace", fontsize=12, fontweight="normal")
 
         resource_filepath = resources_dir.joinpath(contig.id).with_suffix(
                                                                         ".svg")
@@ -193,23 +197,35 @@ def create_host_graphic_resources(contigs, resources_dir):
     return host_graphic_resources
 
 
-def embed_prophage_genomes(prophage_records):
+def embed_prophage_genomes(prophages):
     translator = LinearFeatureTranslator()
 
     embedded_prophage_plots = []
-    for record in prophage_records:
-        graphic_record = translator.translate_record(record)
+    for prophage in prophages:
+        graphic_record = translator.translate_record(prophage.record)
         bokeh_plot = plot_with_bokeh(graphic_record, figure_width=100,
                                      figure_height="auto", tools="auto",
                                      label_link_width=0,
                                      label_text_font=DEFAULT_FONT_FAMILY)
 
-        bokeh_plot.title.text = record.id
+        # Format primary title
+        bokeh_plot.title.text = prophage.id
         bokeh_plot.title.align = "left"
         bokeh_plot.title.text_font = DEFAULT_FONT_FAMILY
         bokeh_plot.title.text_font_size = "18px"
 
-        embedded_plot = file_html(bokeh_plot, CDN, record.id)
+        # Add secondary location title
+        location_prefix = ""
+        if prophage.strand == -1:
+            location_prefix = "complement"
+
+        location = "".join([location_prefix, "(", str(prophage.start),
+                            "..", str(prophage.end), ")"])
+        bokeh_plot.add_layout(Title(text=location, align="left",
+                                    text_font_size="12px",
+                                    text_font=DEFAULT_FONT_FAMILY), "above")
+
+        embedded_plot = file_html(bokeh_plot, CDN, prophage.id)
         embedded_prophage_plots.append(embedded_plot)
 
     return embedded_prophage_plots
@@ -256,29 +272,76 @@ def plot_with_bokeh(graphic_record, figure_width=100, figure_height="auto",
                            y_range=Range1d(-1, max_y + 1))
 
     # Define different hovertools
-    orf_tooltips = [("product", "@product")]
-    orf_hovertool = HoverTool(tooltips=orf_tooltips, mode="mouse",
-                              names=["orf"])
-    plot.add_tools(orf_hovertool)
+    cds_tooltips = [("gene", "@gene"), ("product", "@product"),
+                    ("location", "@location")]
+    cds_hovertool = HoverTool(tooltips=cds_tooltips, mode="mouse",
+                              names=["cds"])
+    plot.add_tools(cds_hovertool)
+
+    att_tooltips = [("name", "@name"), ("sequence", "@sequence")]
+    att_hovertool = HoverTool(tooltips=att_tooltips, mode="mouse",
+                              names=["att"])
+    plot.add_tools(att_hovertool)
+
+    trna_tooltips = [("product", "@product"), ("codon", "@codon"),
+                     ("location", "@location")]
+    trna_hovertool = HoverTool(tooltips=trna_tooltips, mode="mouse",
+                               names=["tRNA", "tmRNA"])
+    plot.add_tools(trna_hovertool)
 
     # Set up patches source
-    bokeh_feature_patches = list()
+    cds_feature_patches = list()
+    att_feature_patches = list()
+    trna_feature_patches = list()
     for feature, level in features_levels.items():
-        product = feature.label
-        if product is None:
-            product = DEFAULT_PRODUCT
-
         bokeh_feature_patch = graphic_record.bokeh_feature_patch(
                                     feature.start, feature.end, feature.strand,
                                     figure_width=figure_width, level=level,
-                                    color=feature.color, label=feature.label,
-                                    product=product)
-        bokeh_feature_patches.append(bokeh_feature_patch)
+                                    color=feature.color, label=feature.label)
 
-    patches_source = plotting.ColumnDataSource(pandas.DataFrame.from_records(
-                                                    bokeh_feature_patches))
-    plot.patches(xs="xs", ys="ys", color="color", name="orf",
-                 line_color=feature_box_color, source=patches_source)
+        location_prefix = ""
+        if feature.strand == -1:
+            location_prefix = "complement"
+
+        location = "".join([location_prefix, "(", str(feature.start),
+                            "..", str(feature.end), ")"])
+
+        html_data = feature.html
+        if html_data["gb_type"] == "CDS":
+            bokeh_feature_patch["gene"] = html_data["gene"]
+            bokeh_feature_patch["product"] = html_data["product"]
+            bokeh_feature_patch["location"] = location
+            cds_feature_patches.append(bokeh_feature_patch)
+        elif feature.html["gb_type"] == "misc_recomb":
+            bokeh_feature_patch["name"] = html_data["name"]
+            bokeh_feature_patch["sequence"] = html_data["sequence"]
+            att_feature_patches.append(bokeh_feature_patch)
+        elif feature.html["gb_type"] in ("tRNA", "tmRNA"):
+            bokeh_feature_patch["product"] = html_data["product"]
+            bokeh_feature_patch["codon"] = html_data["codon"]
+            bokeh_feature_patch["location"] = location
+            trna_feature_patches.append(bokeh_feature_patch)
+
+    if cds_feature_patches:
+        cds_patches_source = plotting.ColumnDataSource(
+                                            pandas.DataFrame.from_records(
+                                                    cds_feature_patches))
+        plot.patches(xs="xs", ys="ys", color="color", name="cds",
+                     line_color=feature_box_color, source=cds_patches_source)
+
+    if att_feature_patches:
+        att_patches_source = plotting.ColumnDataSource(
+                                            pandas.DataFrame.from_records(
+                                                    att_feature_patches))
+        plot.patches(xs="xs", ys="ys", color="color", name="att",
+                     line_color=feature_box_color, source=att_patches_source)
+
+    if trna_feature_patches:
+        trna_patches_source = plotting.ColumnDataSource(
+                                            pandas.DataFrame.from_records(
+                                                    trna_feature_patches))
+        plot.patches(xs="xs", ys="ys", color="color", name="tRNA",
+                     line_color=feature_box_color, source=trna_patches_source)
 
     # Set up floating label and connector source
     bokeh_floating_labels = list()

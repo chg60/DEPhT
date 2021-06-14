@@ -181,11 +181,13 @@ class Prophage:
 
         self.attL = SeqFeature(attL_location,
                                strand=self.strand, type="misc_recomb")
-        self.attL.qualifiers["note"] = [" ".join([self.id, "attL"])]
+        self.attL.qualifiers["name"] = [" ".join([self.id, "attL"])]
+        self.attL.qualifiers["note"] = [str(self.attL.extract(self.seq))]
 
         self.attR = SeqFeature(attR_location,
                                strand=self.strand, type="misc_recomb")
-        self.attR.qualifiers["note"] = [" ".join([self.id, "attR"])]
+        self.attR.qualifiers["name"] = [" ".join([self.id, "attR"])]
+        self.attR.qualifiers["note"] = [str(self.attR.extract(self.seq))]
 
         self.record.features.append(self.attL)
         self.record.features.append(self.attR)
