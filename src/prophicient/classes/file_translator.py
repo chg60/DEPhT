@@ -65,7 +65,7 @@ class LinearFeatureTranslator(BiopythonTranslator):
     hyp = ["Hypothetical Protein", "hypothetical protein"]
     att_types = ["attL", "attR"]
     ignored_features_types = ["source", "gene"]
-    label_fields = ["product", "name", "gene", "note"]
+    label_fields = ["product", "name", "note", "gene"]
 
     def compute_feature_box_linewidth(self, feature):
         """Compute a box_linewidth for this feature."""
@@ -84,7 +84,7 @@ class LinearFeatureTranslator(BiopythonTranslator):
                 break
 
         if isinstance(label, list):
-            label = "|".join(label)
+            label = "|".join([str(x) for x in label])
 
         if label in self.hyp:
             label = None
