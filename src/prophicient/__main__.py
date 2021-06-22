@@ -14,7 +14,7 @@ from tempfile import mkdtemp
 from Bio import SeqIO
 
 from prophicient import PACKAGE_DIR
-from prophicient.classes.prophage import ANNOTATIONS, Prophage
+from prophicient.classes.prophage import ANNOTATIONS, DEFAULT_PRODUCT, Prophage
 from prophicient.functions.annotation import annotate_contig, MIN_LENGTH, \
                                              MIN_CDS_FEATURES
 from prophicient.functions.att import find_attachment_site
@@ -36,7 +36,7 @@ ATT_SENSITIVITY = 7
 MIN_SIZE = 10000
 REF_BLAST_SORT_KEY = "bitscore"
 
-NORMAL_PRODUCT_THRESHOLD = 3
+NORMAL_PRODUCT_THRESHOLD = 5
 STRICT_PRODUCT_THRESHOLD = 10
 
 
@@ -77,7 +77,7 @@ def parse_args():
     p.add_argument("-m", "--mode",
                    choices=("fast", "normal", "strict"), default="normal",
                    help="select a runmode that favors speed or accuracy")
-    p.add_argument("-s", "--att_sensitivity", type=int,
+    p.add_argument("-s", "--att_sensitivity", type=float,
                    default=ATT_SENSITIVITY,
                    help="sensitivity parameter for att site detection.")
     p.add_argument("-d", "--dump-data", action="store_true",
@@ -108,8 +108,10 @@ def main():
     # What runmode are we using - never draw in fast runmode
     runmode = args.mode
     if runmode == "fast" and draw:
-        print("fast mode - turning off draw...")
-        draw = False
+        # Why do we want to turn off draw?
+        # print("fast mode - turning off draw...")
+        # draw = False
+        pass
 
     # Print verbose outputs?
     verbose = args.verbose
@@ -143,7 +145,7 @@ def main():
 
         # Skip .DS_Store files
         if infile.name == ".DS_Store":
-            print(f"skipping .DS_Store file...")
+            print("skipping .DS_Store file...")
             continue
 
         # Set up a temporary directory for this genome
@@ -165,7 +167,7 @@ def main():
         # Annotate contigs if format is "fasta"
         if fmt == "fasta":
             if verbose:
-                print(f"annotating t(m)RNA and CDS genes de novo...")
+                print("annotating t(m)RNA and CDS genes de novo...")
 
             annotate_dir = tmp_dir.joinpath("annotate")
             if not annotate_dir.is_dir():
@@ -176,17 +178,9 @@ def main():
 
         else:
             if verbose:
-                print(f"using flat file annotation...")
+                print("using flat file annotation...")
 
-            for contig in contigs:
-                for feature in contig.features:
-                    if feature.type != "CDS":
-                        continue
-
-                    if not feature.qualifiers.get("translation"):
-                        dna = feature.extract(contig.seq)
-                        translation = dna.translate(to_stop=True, table=11)
-                        feature.qualifiers["translation"] = [str(translation)]
+            load_flat_file_contigs(contigs)
 
         # Filter contigs that don't have enough CDS features
         contigs = [contig for contig in contigs
@@ -273,7 +267,7 @@ def main():
             att_dir.mkdir()
 
         # Detect attachment sites, where possible, for the predicted prophage
-        search_space = EXTEND_BY * att_sensitivity
+        search_space = int(EXTEND_BY * att_sensitivity)
         detect_att_sites(prophages, BLASTN_DB, search_space, att_dir)
 
         if verbose:
@@ -286,7 +280,8 @@ def main():
         draw_dir = tmp_dir.joinpath("draw_diagram")
         if not draw_dir.is_dir():
             draw_dir.mkdir()
-        write_prophage_output(genome_outdir, contigs, prophages, draw_dir, draw)
+        write_prophage_output(genome_outdir, contigs, prophages, draw_dir,
+                              draw)
 
         if dump:
             destination = genome_outdir.joinpath("tmp_data")
@@ -298,6 +293,26 @@ def main():
 
 # HELPER FUNCTIONS
 # -----------------------------------------------------------------------------
+def load_flat_file_contigs(contigs):
+    """Function to clean up and format SeqRecord sequence contigs created
+    from imported flat file annotations.
+
+    :param contigs: Imported sequence contigs
+    :type contigs: list
+    """
+    for contig in contigs:
+        for feature in contig.features:
+            if feature.type != "CDS":
+                continue
+
+            if not feature.qualifiers.get("translation"):
+                dna = feature.extract(contig.seq)
+                translation = dna.translate(to_stop=True, table=11)
+                feature.qualifiers["translation"] = [str(translation)]
+
+            feature.qualifiers["product"] = [DEFAULT_PRODUCT]
+
+
 def load_initial_prophages(contigs, prophage_predictions,
                            product_threshold=NORMAL_PRODUCT_THRESHOLD,
                            prefix=PROPHAGE_PREFIX,
@@ -410,7 +425,6 @@ def write_prophage_output(outdir, contigs, prophages, tmp_dir, draw):
 
         SeqIO.write(contig, genbank_filename, "genbank")
 
-    prophage_records = []
     for prophage in prophages:
         name = prophage.id
         prophage_outdir = outdir.joinpath(name)
@@ -422,10 +436,8 @@ def write_prophage_output(outdir, contigs, prophages, tmp_dir, draw):
         SeqIO.write(prophage.record, genbank_filename, "genbank")
         SeqIO.write(prophage.record, fasta_filename, "fasta")
 
-        prophage_records.append(prophage.record)
-
     if draw:
-        draw_complete_diagram(outdir, contigs, prophage_records, tmp_dir,
+        draw_complete_diagram(outdir, contigs, prophages, tmp_dir,
                               name=outdir.stem)
 
 

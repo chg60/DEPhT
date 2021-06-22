@@ -1,4 +1,10 @@
-from dna_features_viewer import BiopythonTranslator, CircularGraphicRecord
+from dna_features_viewer import BiopythonTranslator
+
+from prophicient.classes.prophage import DEFAULT_PRODUCT
+
+# GLOBAL VARIABLES
+# -----------------------------------------------------------------------------
+DEFAULT_FONT_FAMILY = "monospace"
 
 
 class CircularSourceFeatureTranslator(BiopythonTranslator):
@@ -29,6 +35,10 @@ class CircularSourceFeatureTranslator(BiopythonTranslator):
         else:
             return feature.qualifiers.get("locus_tag")[0]
 
+    def compute_feature_fontdict(self, feature):
+        """Compute a  font dict for this feature."""
+        return {"family": DEFAULT_FONT_FAMILY}
+
     def compute_feature_box_linewidth(self, feature):
         """Compute a box_linewidth for this feature."""
         return 1.0
@@ -53,8 +63,9 @@ class LinearFeatureTranslator(BiopythonTranslator):
     # feature.location.strand
 
     hyp = ["Hypothetical Protein", "hypothetical protein"]
+    att_types = ["attL", "attR"]
     ignored_features_types = ["source", "gene"]
-    label_fields = ["product", "note", "gene"]
+    label_fields = ["product", "name", "note", "gene"]
 
     def compute_feature_box_linewidth(self, feature):
         """Compute a box_linewidth for this feature."""
@@ -73,12 +84,55 @@ class LinearFeatureTranslator(BiopythonTranslator):
                 break
 
         if isinstance(label, list):
-            label = "|".join(label)
+            label = "|".join([str(x) for x in label])
 
         if label in self.hyp:
             label = None
+        elif feature.type == "misc_recomb":
+            for att_type in self.att_types:
+                if att_type in label:
+                    label = att_type
+                    break
 
         return label
+
+    def compute_feature_html(self, feature):
+        """Compute the tooltip display text of the feature"""
+        label = self.compute_feature_label(feature)
+        properties = {"gb_type": feature.type}
+
+        if feature.type == "CDS":
+            gene = str(feature.qualifiers["gene"][0])
+            translation = feature.qualifiers["translation"][0]
+            if label is None:
+                label = DEFAULT_PRODUCT
+
+            properties["gene"] = gene
+            properties["product"] = label
+            properties["translation"] = translation
+
+        elif feature.type == "misc_recomb":
+            sequence = feature.qualifiers["note"][0]
+
+            properties["name"] = label
+            properties["sequence"] = sequence
+
+        elif feature.type in ("tRNA", "tmRNA"):
+            if label is None:
+                label = ""
+
+            properties["product"] = label
+            properties["codon"] = feature.qualifiers["note"][0]
+
+        return properties
+
+    def compute_feature_fontdict(self, feature):
+        """Compute a  font dict for this feature."""
+        return {"family": DEFAULT_FONT_FAMILY}
+
+    def compute_feature_label_link_color(self, feature):
+        """Compute the color of the  line linking the label to its feature"""
+        return None
 
     def compute_feature_legend_text(self, feature):
         """Compute the feature legend text."""

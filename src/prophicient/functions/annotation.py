@@ -70,7 +70,7 @@ def parse_prodigal(outfile):
         ftr.qualifiers["locus_tag"] = [""]
         ftr.qualifiers["note"] = [f"rbs_motif: {motif}; rbs_spacer: {spacer}"]
         ftr.qualifiers["transl_table"] = [11]
-        ftr.qualifiers["product"] = [""]
+        ftr.qualifiers["product"] = [DEFAULT_PRODUCT]
         ftr.qualifiers["translation"] = [sequence.rstrip("*")]
 
         features.append(ftr)
@@ -182,7 +182,8 @@ def annotate_contig(contig, tmp_dir, trna=True):
     prodigal_out = infile.with_suffix(".faa")
 
     # Set up to run Prodigal first, since it takes the longest to run
-    prodigal_process = prodigal(infile, prodigal_out, len(contig) < META_LENGTH)
+    prodigal_process = prodigal(infile, prodigal_out,
+                                len(contig) < META_LENGTH)
 
     # Now kick off Aragorn - wait until it finishes, then begin parsing output
     if trna:
