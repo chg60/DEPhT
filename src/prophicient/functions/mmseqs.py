@@ -67,7 +67,7 @@ def assemble_bacterial_mask(contigs, bacterial_fasta, gene_bit_value_path,
 
 
 def initialize_bacterial_mask(contigs, bacterial_fasta, out_path):
-    """Initialize a binary bacterial mask, index, and write each gene 
+    """Initialize a binary bacterial mask, index, and write each gene
     in the inputted sequence contigs.
 
     :param contigs:  Input sequence contig seqrecords
@@ -117,7 +117,7 @@ def cluster_bacterial_genes(fasta_path, working_dir):
     """
     # Define mmseqs working file paths
     sequence_db = working_dir.joinpath("sequenceDB")
-    cluster_db = working_dir.joinpath("clusterDB")  
+    cluster_db = working_dir.joinpath("clusterDB")
     seqfile_db = working_dir.joinpath("seqfileDB")
     result_file = working_dir.joinpath("clustering_results.txt")
     tmp_dir = working_dir.joinpath("tmp")
@@ -163,11 +163,11 @@ def assign_gene_bit_values(clustering_map, bacterial_gene_bit_values,
             if "_" in gene_name:
                 gois.append(gene_name)
                 continue
-           
+
             # Reidentify bacterial reference gene index
             gene_index = int(gene_name)
 
-            # Initialize / combine bitarray(s) given reference gene values 
+            # Initialize / combine bitarray(s) given reference gene values
             if cluster_bitarray is None:
                 cluster_bitarray = bacterial_gene_bit_values[gene_index]
             else:
@@ -244,7 +244,7 @@ def mark_bacterial_mask(bacterial_masks, gene_bit_values, clade_bit_mask):
             masked_bitarray = (gene_bitarray & clade_bit_mask)
 
             if masked_bitarray.count() > 0:
-                bacterial_mask[gene_i] = 0 
+                bacterial_mask[gene_i] = 0
 
 
 # HELPER FUNCTIONS
@@ -269,7 +269,7 @@ def mmseqs_createdb(fasta, mmseqsdb):
     """
     Creates an MMseqs2 database at `mmseqsdb` using `fasta` as its input.
 
-    :param fasta: path to the FASTA file containing sequences to assemble into an MMseqs2 database
+    :param fasta: path to the FASTA file to assemble into an MMseqs2 database
     :type fasta: pathlib.Path
     :param mmseqsdb: path to the desired MMseqs2 database
     :type mmseqsdb: pathlib.Path
@@ -304,9 +304,10 @@ def mmseqs_cluster(sequence_db, cluster_db, tmp_dir, clustermode, clustersteps,
     :type evalue: float
     :return:
     """
-    c = f"mmseqs cluster {str(sequence_db)} {str(cluster_db)} {str(tmp_dir)} -v 3 " \
-        f"--max-seqs 1000 --cluster-mode {clustermode} --cluster-steps {clustersteps} " \
-        f"-s {sensitivity} --min-seq-id {minseqid} -c {coverage} -e {evalue}"
+    c = (f"mmseqs cluster {str(sequence_db)} {str(cluster_db)} {str(tmp_dir)} "
+         f"-v 3 --max-seqs 1000 --cluster-mode {clustermode} "
+         f"--cluster-steps {clustersteps} -s {sensitivity} "
+         "--min-seq-id {minseqid} -c {coverage} -e {evalue}")
     run_command(c)
 
 
@@ -342,7 +343,7 @@ def mmseqs_result2profile(sequence_db, cluster_db, profile_db):
     """
     Converts an MMseqs2 cluster output database to a profile database.
 
-    :param sequence_db: path to the MMseqs2 sequence database that was clustered
+    :param sequence_db: path to the clustered MMseqs2 sequence database
     :type sequence_db: pathlib.Path
     :param cluster_db: path to the MMseqs2 cluster database
     :type cluster_db: pathlib.Path
@@ -350,7 +351,8 @@ def mmseqs_result2profile(sequence_db, cluster_db, profile_db):
     :type profile_db: pathlib.Path
     :return:
     """
-    c = f"mmseqs result2profile {str(sequence_db)} {str(sequence_db)} {str(cluster_db)} {str(profile_db)} -v 3"
+    c = (f"mmseqs result2profile {str(sequence_db)} {str(sequence_db)} "
+         f"{str(cluster_db)} {str(profile_db)} -v 3")
     run_command(c)
 
 
@@ -361,7 +363,7 @@ def mmseqs_profile2consensus(profile_db, consensus_db):
 
     :param profile_db: path to the MMseqs2 profile database
     :type profile_db: pathlib.Path
-    :param consensus_db: path to the desired MMseqs2 consensus sequence database
+    :param consensus_db: path to a MMseqs2 consensus sequence database
     :type consensus_db: pathlib.Path
     :return:
     """
@@ -369,7 +371,8 @@ def mmseqs_profile2consensus(profile_db, consensus_db):
     run_command(c)
 
 
-def mmseqs_search(profile_db, consensus_db, align_db, tmp_dir, minseqid, coverage, evalue):
+def mmseqs_search(profile_db, consensus_db, align_db, tmp_dir, minseqid,
+                  coverage, evalue):
     """
     Searches an MMseqs2 profile database against an MMseqs2 profile consensus
     sequence database, for HMM-based clustering.
@@ -390,9 +393,10 @@ def mmseqs_search(profile_db, consensus_db, align_db, tmp_dir, minseqid, coverag
     :type evalue: float
     :return:
     """
-    c = f"mmseqs search {profile_db} {consensus_db} {align_db} {tmp_dir} -v 3 " \
-        f"--max-seqs 1000 --min-seq-id {minseqid} -c {coverage} --cov {coverage} " \
-        f"-e {evalue} --e-profile {evalue} --add-self-matches"
+    c = (f"mmseqs search {profile_db} {consensus_db} {align_db} {tmp_dir} "
+         f"-v 3 --max-seqs 1000 --min-seq-id {minseqid} -c {coverage} "
+         f"--cov {coverage} -e {evalue} --e-profile {evalue} "
+         "--add-self-matches")
     run_command(c)
 
 
@@ -416,7 +420,7 @@ def mmseqs_createseqfiledb(sequence_db, cluster_db, sf_db):
     """
     Creates an MMseqs2 seqfileDB from a clustering output database.
 
-    :param sequence_db: the path to the database used as the query in MMseqs2 clustering
+    :param sequence_db: the path to the query db in MMseqs2 clustering
     :type sequence_db: pathlib.Path
     :param cluster_db: the path to the MMseqs2 clustering result database
     :type cluster_db: pathlib.Path
@@ -493,24 +497,26 @@ def parse_gene_bit_value_file(filepath):
     """
     Parses the gene bit value file for determining input genome clade
     membership
-    
+
     :param filepath: path to the gene bit value file
     :type filepath: pathlib.Path
     :return: Returns a list of bit arrays
     :rtype: list[bitarray]
     """
     bacterial_gene_bit_values = []
-    with filepath.open(mode="rb") as filehandle:
-        line = filehandle.readline()
+    filehandle = open(filepath, "rb")
+    line = filehandle.readline()
 
-        hex_values = line.split(b"_")
+    hex_values = line.split(b"_")
 
-        for hex_value in hex_values:
-            if hex_value == b"":
-                continue
+    for hex_value in hex_values:
+        if hex_value == b"":
+            continue
 
-            b_gene_bitarray = bit_util.hex2ba(hex_value, endian=ENDIANESS)
+        b_gene_bitarray = bit_util.hex2ba(hex_value, endian=ENDIANESS)
 
-            bacterial_gene_bit_values.append(b_gene_bitarray)
+        bacterial_gene_bit_values.append(b_gene_bitarray)
 
-    return bacterial_gene_bit_values 
+    filehandle.close()
+
+    return bacterial_gene_bit_values
