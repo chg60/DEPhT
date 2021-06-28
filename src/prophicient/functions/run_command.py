@@ -18,12 +18,12 @@ def run_command(command, verbose=False):
     command = shlex.split(command)
     out, err = None, None
     if verbose:
-        with Popen(args=command, stdout=PIPE, stderr=PIPE) as p:
-            # Reading from stdout/stderr is blocking so don't need p.wait()
-            out = p.stdout.read().decode("utf-8")
-            err = p.stderr.read().decode("utf-8")
+        p = Popen(args=command, stdout=PIPE, stderr=PIPE, close_fds=True)
+        # Reading from stdout/stderr is blocking so don't need p.wait()
+        out = p.stdout.read().decode("utf-8")
+        err = p.stderr.read().decode("utf-8")
     else:
-        with Popen(args=command, stdout=DEVNULL, stderr=DEVNULL) as p:
-            # Not reading from stdout/stderr so we need to block using p.wait()
-            p.wait()
+        p = Popen(args=command, stdout=DEVNULL, stderr=DEVNULL, close_fds=True)
+        # Not reading from stdout/stderr so we need to block using p.wait()
+        p.wait()
     return out, err

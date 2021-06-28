@@ -4,10 +4,9 @@ tRNA/tmRNA genes on bacterial contigs.
 """
 
 import pathlib
-from tempfile import mkstemp
-from subprocess import Popen, DEVNULL
 import shlex
 import time
+from subprocess import Popen, DEVNULL
 
 from Bio import SeqIO
 from Bio.SeqFeature import SeqFeature, FeatureLocation
@@ -15,8 +14,9 @@ from Bio.SeqFeature import SeqFeature, FeatureLocation
 from prophicient.functions.fasta import parse_fasta
 
 MIN_LENGTH = 20000      # Don't annotate short contigs
-MIN_CDS_FEATURES = 51
 META_LENGTH = 100000    # Medium-length contigs -> use metagenomic mode
+
+MIN_CDS_FEATURES = 51
 
 DEFAULT_PRODUCT = "hypothetical protein"
 
@@ -40,7 +40,8 @@ def prodigal(infile, outfile, meta=False):
         if meta:
             command += " -p meta"
         command = shlex.split(command)
-        process_handle = Popen(args=command, stdout=DEVNULL, stderr=DEVNULL)
+        process_handle = Popen(args=command, stdout=DEVNULL, stderr=DEVNULL,
+                               close_fds=True)
     except OSError:
         raise RuntimeError("Unable to locate Prodigal")
     return process_handle
@@ -93,7 +94,8 @@ def aragorn(infile, outfile):
     try:
         command = f"aragorn -gcbact -l -d -wa -o {outfile} {infile}"
         command = shlex.split(command)
-        process_handle = Popen(args=command, stdout=DEVNULL, stderr=DEVNULL)
+        process_handle = Popen(args=command, stdout=DEVNULL, stderr=DEVNULL,
+                               close_fds=True)
     except OSError:
         raise RuntimeError("Unable to locate Aragorn")
     return process_handle
@@ -170,8 +172,7 @@ def annotate_contig(contig, tmp_dir, trna=True):
     :type trna: bool
     """
     # Set up to run Prodigal and Aragorn
-    infile = mkstemp(suffix=".fna", prefix=f"{contig.id}_", dir=tmp_dir)[-1]
-    infile = pathlib.Path(infile)
+    infile = tmp_dir.joinpath(f"{contig.id}.fna")
 
     infile_writer = infile.open("w")
     SeqIO.write(contig, infile_writer, "fasta")
