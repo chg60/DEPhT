@@ -1,4 +1,3 @@
-import tempfile
 import pathlib
 
 from prophicient.classes.hhresult import HHResult
@@ -11,7 +10,8 @@ HHSEARCH_PROB = 90
 HHSEARCH_COV = 50
 
 
-def hhsearch(query, outfile, db, evalue=HHSEARCH_EVALUE):
+def hhsearch(query, outfile, db, evalue=HHSEARCH_EVALUE, prob=HHSEARCH_PROB,
+             cov=HHSEARCH_COV):
     """
     Runs a single instance of hhsearch using the prescribed paths
     and e-value.
@@ -24,8 +24,13 @@ def hhsearch(query, outfile, db, evalue=HHSEARCH_EVALUE):
     :type db: pathlib.Path
     :param evalue: the e-value cutoff to use
     :type evalue: float
+    :param prob: the probability cutoff to use
+    :type prob: float
+    :param cov: the coverage cutoff to use
+    :type cov: float
     """
-    command = f"hhsearch -i {query} -d {db} -o {outfile} -e {evalue}"
+    command = f"hhsearch -i {query} -d {db} -o {outfile} -e {evalue} -E " \
+              f"{evalue} -p {prob} -cov {cov}"
     run_command(command)
 
 
@@ -52,8 +57,7 @@ def find_single_homologs(header, sequence, db, tmp_dir, prob=HHSEARCH_PROB,
     :return: hhresult
     """
     # Set up file paths
-    name = tempfile.mkstemp(suffix=".fasta", prefix=f"{header}_", dir=tmp_dir)
-    query_file = pathlib.Path(name[-1])
+    query_file = tmp_dir.joinpath(f"{header}.fasta")
     output_file = query_file.with_suffix(".hhr")
 
     # Write the fasta file, and run hhsearch
