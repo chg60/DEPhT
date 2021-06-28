@@ -173,18 +173,18 @@ class Prophage:
                                          self.length)
 
         if self.strand == 1:
-            attL_location = left_location
-            attR_location = right_location
-        if self.strand == -1:
-            attL_location = right_location
-            attR_location = left_location
+            att_l_location = left_location
+            att_r_location = right_location
+        else:
+            att_l_location = right_location
+            att_r_location = left_location
 
-        self.attL = SeqFeature(attL_location,
+        self.attL = SeqFeature(att_l_location,
                                strand=self.strand, type="misc_recomb")
         self.attL.qualifiers["name"] = [" ".join([self.id, "attL"])]
         self.attL.qualifiers["note"] = [str(self.attL.extract(self.seq))]
 
-        self.attR = SeqFeature(attR_location,
+        self.attR = SeqFeature(att_r_location,
                                strand=self.strand, type="misc_recomb")
         self.attR.qualifiers["name"] = [" ".join([self.id, "attR"])]
         self.attR.qualifiers["note"] = [str(self.attR.extract(self.seq))]
