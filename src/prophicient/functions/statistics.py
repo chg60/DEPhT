@@ -222,7 +222,8 @@ def transform(values, min_t=0, max_t=0):
 
     try:
         for i, value in enumerate(values):
-            values[i] = (max_t - min_t) * float(value - min_o)/(max_o - min_o) + min_t
+            v = (max_t - min_t) * float(value - min_o)/(max_o - min_o) + min_t
+            values[i] = v
     except ZeroDivisionError:
         raise ValueError(f"cannot transform to range [{min_t},{max_t}] because "
                          f"all values are identical")
