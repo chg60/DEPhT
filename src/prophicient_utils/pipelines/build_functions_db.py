@@ -35,7 +35,7 @@ def build_functions_db(input_dir, output_dir, name=DEFAULTS["name"],
     output_dir.mkdir(exist_ok=True, parents=True)
 
     hhsuitedb.create_hhsuitedb(input_dir, output_dir, name, cores=cores,
-                               use_mpi=use_mpi)
+                               use_mpi=use_mpi, verbose=verbose)
 
 
 def main(unparsed_args):
