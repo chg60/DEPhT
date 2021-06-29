@@ -10,7 +10,7 @@ from prophicient_utils.functions import clustalo
 
 
 # GLOBAL VARAIABLES
-DEFAULTS = {"cpus": 1}
+DEFAULTS = {"cpus": 1, "min_size": 10}
 
 
 # MAIN FUNCTIONS
@@ -28,6 +28,7 @@ def parse_curate_functions(unparsed_args):
     parser.add_argument("-np", "--cpus", type=int)
 
     parser.add_argument("-all", "--accept_all", action="store_true")
+    parser.add_argument("-ms", "--min_size", type=int)
 
     parser.set_defaults(**DEFAULTS)
     args = parser.parse_args(unparsed_args)
@@ -35,7 +36,8 @@ def parse_curate_functions(unparsed_args):
 
 
 def curate_functions(fasta_dir, index_file, functions_file, output_dir,
-                     accept_all=False, verbose=False, cores=1):
+                     accept_all=False, verbose=False, cores=1,
+                     min_size=10):
     cluster_functions = read_cluster_function_index_file(index_file)
     accept_list, ignore_list = read_functions_config_file(functions_file)
 
@@ -49,8 +51,8 @@ def curate_functions(fasta_dir, index_file, functions_file, output_dir,
                 ignore = True
                 break
 
-            if ignore:
-                continue
+        if ignore:
+            continue
 
         if not accept_all:
             for accepted_function in accept_list:
@@ -69,6 +71,10 @@ def curate_functions(fasta_dir, index_file, functions_file, output_dir,
         outpath = output_dir.joinpath(cluster)
 
         records = [record for record in SeqIO.parse(cluster_path, "fasta")]
+
+        if len(records) < min_size:
+            continue
+
         work_items.append((records, outpath, cluster_functions[cluster]))
 
     multiprocess.parallelize(work_items, cores, dump_named_alignment,
@@ -125,7 +131,7 @@ def main(unparsed_args):
     args = parse_curate_functions(unparsed_args)
     curate_functions(args.input_dir, args.index_file, args.functions_config,
                      args.output_dir, cores=args.cpus, verbose=args.verbose,
-                     accept_all=args.accept_all)
+                     accept_all=args.accept_all, min_size=args.min_size)
 
 
 if __name__ == "__main__":

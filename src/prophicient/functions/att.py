@@ -3,6 +3,7 @@ import math
 from networkx import DiGraph
 
 from prophicient.classes import kmers
+from prophicient.classes.prophage import DEFAULT_PRODUCT
 from prophicient.functions.blastn import blastn
 from prophicient.functions.fasta import write_fasta
 
@@ -309,34 +310,30 @@ def score_att_quality(bitscore, base=KMER_SIZE, weight=AQ_WEIGHT):
     return score
 
 
-def score_integrase_proximity(prophage, attL_pos, attR_pos, base=10,
+def score_integrase_proximity(prophage, attL_pos, attR_pos, base=100,
                               weight=IP_WEIGHT):
     int_dist = None
     for feature in prophage.record.features:
         if feature.type != "CDS":
             continue
 
-        products = feature.qualifiers.get("product", None)
+        product = feature.qualifiers.get("product", [DEFAULT_PRODUCT])[0]
 
-        if not products:
-            continue
+        if "integrase" in product:
+            left_int_dist = int(feature.location.start - attL_pos)
+            right_int_dist = int(attR_pos - feature.location.end)
 
-        for product in products:
-            if "integrase" in product:
-                left_int_dist = int(feature.location.start - attL_pos)
-                right_int_dist = int(attR_pos - feature.location.end)
+            if left_int_dist < 0 or right_int_dist < 0:
+                continue
 
-                if left_int_dist < 0 or right_int_dist < 0:
-                    continue
-
-                if int_dist is None:
+            if int_dist is None:
+                int_dist = left_int_dist
+            else:
+                if left_int_dist < int_dist:
                     int_dist = left_int_dist
-                else:
-                    if left_int_dist < int_dist:
-                        int_dist = left_int_dist
 
-                if right_int_dist < int_dist:
-                    int_dist = right_int_dist
+            if right_int_dist < int_dist:
+                int_dist = right_int_dist
 
     if int_dist is None:
         return 0.0

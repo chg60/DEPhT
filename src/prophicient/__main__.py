@@ -230,22 +230,24 @@ def main():
 
         product_threshold = 0
         if runmode in ("normal", "strict"):
-            if verbose:
-                print("searching for phage gene homologs...")
-
             hhsearch_dir = tmp_dir.joinpath("hhsearch")
             if not hhsearch_dir.is_dir():
                 hhsearch_dir.mkdir()
 
             # Search for phage gene remote homologs
+            if verbose:
+                print("searching for phage gene homologs...")
+
+            find_homologs(contigs, prophage_preds, ESSENTIAL_DB,
+                          hhsearch_dir, cpus)
+            product_threshold = NORMAL_PRODUCT_THRESHOLD
+
             if runmode == "strict":
+                if verbose:
+                    print("extending search for phage gene homologs...")
                 find_homologs(contigs, prophage_preds, EXTENDED_DB,
                               hhsearch_dir, cpus)
                 product_threshold = STRICT_PRODUCT_THRESHOLD
-            else:
-                find_homologs(contigs, prophage_preds, ESSENTIAL_DB,
-                              hhsearch_dir, cpus)
-                product_threshold = NORMAL_PRODUCT_THRESHOLD
 
         prophages = load_initial_prophages(contigs, prophage_preds,
                                            product_threshold,
