@@ -1,95 +1,132 @@
 import pickle
-
+import matplotlib.pyplot as plt
 import pandas as pd
 
 from prophicient import PACKAGE_DIR
+from prophicient.functions.sliding_window import *
 from prophicient.functions.statistics import average
 
-MODEL_PATH = PACKAGE_DIR.joinpath("data/prophage_model.pickle")
+MODEL_PATH = PACKAGE_DIR.joinpath("data/new.prophage_model.pickle")
+
+WINDOW = 51         # Number of CDS features to consider in a window
 
 BACTERIA = 0        # Gene prediction state - bacterial
 PROPHAGE = 1        # Gene prediction state - prophage
 
 
-def calculate_gene_density(lefts, rights, length, windows=(5, 10, 25)):
+def average_gene_size(starts, stops, length, window=WINDOW):
     """
-    Calculates genes per kilobase over sliding windows of different
-    numbers of genes to get a robust estimate of local gene density
-    for each gene.
+    Calculates and returns the average gene size in leading/centered/
+    lagging windows of genes.
 
-    :param lefts: gene left coordinates
-    :type lefts: list of int
-    :param rights: gene right coordinates
-    :type rights: list of int
-    :param length: contig length
+    :param starts: gene left coordinates
+    :type starts: list of int
+    :param stops: gene right coordinates
+    :type stops: list of int
+    :param length: contig length in nucleotides
     :type length: int
-    :param windows: windows to calculate gene density across
-    :type windows: tuple of int
-    :return: gene_densities
+    :param window: how many genes to average over
+    :type window: int
+    :return: leading_sizes, center_sizes, lagging_sizes
     """
-    num_genes = len(lefts)
-    gene_densities = dict()
-    for window_size in windows:
-        gene_densities[window_size] = list()
+    if not len(starts) == len(stops):
+        raise ValueError(f"len(starts) ({len(starts)}) != len(stops) ("
+                         f"{len(stops)})")
 
-    for i in range(num_genes):
-        for window_size in windows:
-            i_left, i_right = i - window_size, i + window_size
+    num_genes = len(starts)
 
-            # Make sure indices are in range(0, num_genes)
-            if i_left < 0:
-                i_left += num_genes
-            if i_right > num_genes - 1:
-                i_right -= num_genes
+    leading_sizes = list()
+    lagging_sizes = list()
+    center_sizes = list()
 
-            # Get left gene's left coordinate, right gene's right coordinate
-            left, right = lefts[i_left], rights[i_right]
-            if right < left:
-                right += length
+    for i_left, i, i_right in leading_window(window, num_genes):
+        if i_right >= num_genes:        # Avoid IndexError
+            i_right -= num_genes
 
-            numerator = right - left + 1
-            denominator = 2 * window_size + 1
+        right_coord = stops[i_right]
+        left_coord = starts[i_left]
 
-            gene_densities[window_size].append(float(numerator)/denominator)
+        if right_coord < left_coord:    # Avoid negative nucleotide distance
+            right_coord += length
 
-    return gene_densities
+        nucl_dist = right_coord - left_coord + 1
+        leading_sizes.append(round(float(nucl_dist)/window, 2))
+
+    for i_left, i, i_right in lagging_window(window, num_genes):
+        right_coord = stops[i_right]
+        left_coord = starts[i_left]
+
+        if right_coord < left_coord:
+            right_coord += length
+
+        nucl_dist = right_coord - left_coord + 1
+        lagging_sizes.append(round(float(nucl_dist)/window, 2))
+
+    for i_left, i, i_right in center_window(window, num_genes):
+        if i_right >= num_genes:        # Avoid IndexError
+            i_right -= num_genes
+
+        right_coord = stops[i_right]
+        left_coord = starts[i_left]
+
+        if right_coord < left_coord:
+            right_coord += length
+
+        nucl_dist = right_coord - left_coord + 1
+        center_sizes.append(round(float(nucl_dist)/window, 2))
+
+    return leading_sizes, center_sizes, lagging_sizes
 
 
-def calculate_strand_agreement(orientations, windows=(5, 10, 25)):
+def average_strand_changes(strands, window=WINDOW):
     """
-    Calculates percent strand agreement over sliding windows of
-    different numbers of genes to get a robust estimate of local
-    strand bias for each gene
+    Calculates and returns the average number of strand changes per
+    gene in leading/centered/lagging windows of genes.
 
-    :param orientations: per gene orientations (+1/-1)
-    :type orientations: list
-    :param windows: window sizes to calculate pct strand agreement over
-    :type windows: tuple of int
-    :return: strand_agreements
+    :param strands: gene orientations
+    :type strands: list of int
+    :param window: how many genes to average over
+    :type window: int
+    :return: leading_changes, centered_changes, lagging_changes
     """
-    num_genes = len(orientations)
-    strand_agreements = dict()
-    for window_size in windows:
-        strand_agreements[window_size] = list()
+    num_genes = len(strands)
 
-    for i, cursor_orient in enumerate(orientations):
-        for window_size in windows:
-            window_orients = list()
+    leading_changes = list()
+    lagging_changes = list()
+    center_changes = list()
 
-            i_left, i_right = i - window_size, i + window_size
-            for index in range(i_left, i_right + 1):
-                if index < 0:
-                    index += num_genes
-                elif index > num_genes - 1:
-                    index -= num_genes
-                window_orients.append(orientations[index])
+    for i_left, i, i_right in leading_window(window, num_genes):
+        cursor_strand = strands[i_left]
+        strand_changes = 0
+        for x in range(i_left, i_right + 1):
+            if x >= num_genes:
+                x -= num_genes
+            if strands[x] != cursor_strand:
+                strand_changes += 1
+                cursor_strand = strands[x]
+        leading_changes.append(round(float(strand_changes)/window, 3))
 
-            numerator = window_orients.count(cursor_orient)
-            denominator = 2 * window_size + 1
+    for i_left, i, i_right in lagging_window(window, num_genes):
+        cursor_strand = strands[i_left]
+        strand_changes = 0
+        for x in range(i_left, i_right + 1):
+            if strands[x] != cursor_strand:
+                strand_changes += 1
+                cursor_strand = strands[x]
+        lagging_changes.append(round(float(strand_changes)/window, 3))
 
-            strand_agreements[window_size].append(float(numerator)/denominator)
+    for i_left, i, i_right in center_window(window, num_genes):
+        cursor_strand = strands[i_left]
+        strand_changes = 0
+        for x in range(i_left, i_right + 1):
+            if x >= num_genes:
+                x -= num_genes
+            if strands[x] != cursor_strand:
+                strand_changes += 1
+                cursor_strand = strands[x]
+        center_changes.append(round(float(strand_changes)/window, 3))
 
-    return strand_agreements
+    return leading_changes, center_changes, lagging_changes
 
 
 def calculate_feature_dict(contig):
@@ -99,30 +136,32 @@ def calculate_feature_dict(contig):
 
     :param contig: a contig to analyze features from
     :type contig: Bio.SeqRecord.SeqRecord
-    :return: dataframe
+    :return: feature_dict
     """
     cds_features = [ftr for ftr in contig.features if ftr.type == "CDS"]
 
-    gene_dict = {}
+    feature_dict = {"leading_window": {"gene_size": [], "strand_change": []},
+                    "center_window": {"gene_size": [], "strand_change": []},
+                    "lagging_window": {"gene_size": [], "strand_change": []}}
 
     # These are the basis for gene density and strand bias calculations
     lefts, rights, strands = list(), list(), list()
-    for j, feature in enumerate(cds_features):
-        left, right = feature.location.start, feature.location.end
-        strand = feature.location.strand
-        lefts.append(left), rights.append(right), strands.append(strand)
+    for feature in cds_features:
+        lefts.append(feature.location.start)
+        rights.append(feature.location.end)
+        strands.append(feature.location.strand)
 
-    # Calculate gene density attributes (in rolling windows)
-    gene_densities = calculate_gene_density(lefts, rights, len(contig))
-    for key, values in gene_densities.items():
-        gene_dict[f"density{key}"] = values
+    lead_len, ctr_len, lag_len = average_gene_size(lefts, rights, len(contig))
+    lead_str, ctr_str, lag_str = average_strand_changes(strands)
 
-    # Calculate strand bias attributes (in rolling windows)
-    strand_biases = calculate_strand_agreement(strands)
-    for key, values in strand_biases.items():
-        gene_dict[f"strand{key}"] = values
+    feature_dict["leading_window"]["gene_size"] = lead_len
+    feature_dict["leading_window"]["strand_change"] = lead_str
+    feature_dict["center_window"]["gene_size"] = ctr_len
+    feature_dict["center_window"]["strand_change"] = ctr_str
+    feature_dict["lagging_window"]["gene_size"] = lag_len
+    feature_dict["lagging_window"]["strand_change"] = lag_str
 
-    return gene_dict
+    return feature_dict
 
 
 def smooth_by_averaging(values, window_size=25):
@@ -154,8 +193,7 @@ def smooth_by_averaging(values, window_size=25):
     return smoothed_values
 
 
-def predict_prophage_genes(contig, model_path=MODEL_PATH, alpha=0.25,
-                           beta=0.05, mask=None, iterations=3):
+def predict_prophage_genes(contig, model_path=MODEL_PATH, alpha=0.5, mask=None):
     """
     Calculates the gene attributes used by the model to predict
     prophage vs bacterial genes. Then uses the classifier from
@@ -167,31 +205,46 @@ def predict_prophage_genes(contig, model_path=MODEL_PATH, alpha=0.25,
     :type model_path: pathlib.Path
     :param alpha: probability above which to keep prophage prediction
     :type alpha: float
+    :param mask: bitwise and will mask known/theorized bacterial genes
+    :type mask: list of int
     :return: predictions
     """
     feature_dict = calculate_feature_dict(contig)
-    dataframe = pd.DataFrame(feature_dict)
+
+    lead_df = pd.DataFrame(feature_dict["leading_window"])
+    center_df = pd.DataFrame(feature_dict["center_window"])
+    lag_df = pd.DataFrame(feature_dict["lagging_window"])
 
     model_reader = open(model_path, "rb")
     classifier = pickle.load(model_reader)
     model_reader.close()
 
-    predictions = [x[1] for x in classifier.predict_proba(dataframe)]
-    
-    for _ in range(iterations):
-        predictions = smooth_by_averaging(predictions, window_size=25)
+    # lead_p = [x[1] for x in classifier.predict_proba(lead_df)]
+    lead_p = classifier.predict(lead_df)
+    # center_p = [x[1] for x in classifier.predict_proba(center_df)]
+    center_p = classifier.predict(center_df)
+    # lag_p = [x[1] for x in classifier.predict_proba(lag_df)]
+    lag_p = classifier.predict(lag_df)
 
-        if mask is not None:
-            # Amplify gene predictions with conserved bacterial genes
-            for gene_i in range(len(predictions)):
-                predictions[gene_i] = (predictions[gene_i] * mask[gene_i])
+    predictions = list()
+    for x, y, z in zip(lead_p, center_p, lag_p):
+        predictions.append(max((x, y, z)))
 
-    if mask is not None:
-        predictions = smooth_by_averaging(predictions, window_size=3)
+    xs = list()
+    for feature in contig.features:
+        if feature.type == "CDS":
+            xs.append(feature.location.start)
 
-        return [x >= beta for x in predictions]
-    else:
-        return [x >= alpha for x in predictions]
+    if mask:
+        for gene_i in range(len(predictions)):
+            predictions[gene_i] = predictions[gene_i] * mask[gene_i]
+
+    predictions = smooth_by_averaging(predictions, window_size=10)
+
+    plt.scatter(xs, predictions)
+    plt.show()
+
+    return [x >= alpha for x in predictions]
 
 
 def predict_prophage_coords(contig, extend_by=0, mask=None):
@@ -203,6 +256,8 @@ def predict_prophage_coords(contig, extend_by=0, mask=None):
     :type contig: Bio.SeqRecord.SeqRecord
     :param extend_by: number of basepairs to overextend prophages by
     :type extend_by: int
+    :param mask: bitwise and will mask known/theorized bacterial genes
+    :type mask: list of int
     :return: prophage_coords
     """
     gene_predictions = predict_prophage_genes(contig, mask=mask) 

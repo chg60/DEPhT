@@ -176,7 +176,7 @@ def accuracy(true_pos, false_neg, true_neg, false_pos):
     return float(numer)/denom
 
 
-def matthews_correlation_coefficient(true_pos, false_neg, true_neg, false_pos):
+def mcc(true_pos, false_neg, true_neg, false_pos):
     """
     Calculates the Matthews correlation coefficient.
 

@@ -31,7 +31,7 @@ TMP_DIR = pathlib.Path("/tmp/prophicient")
 PROPHAGE_PREFIX = "prophi"
 PROPHAGE_DELIMITER = "-"
 
-EXTEND_BY = 4000
+EXTEND_BY = 5000
 ATT_SENSITIVITY = 7
 MIN_SIZE = 10000
 REF_BLAST_SORT_KEY = "bitscore"
@@ -269,7 +269,7 @@ def main():
             att_dir.mkdir()
 
         # Detect attachment sites, where possible, for the predicted prophage
-        search_space = int(EXTEND_BY * att_sensitivity)
+        search_space = att_sensitivity * EXTEND_BY
         detect_att_sites(prophages, BLASTN_DB, search_space, att_dir)
 
         if verbose:
