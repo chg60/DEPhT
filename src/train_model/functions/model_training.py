@@ -1,17 +1,24 @@
 import numpy as np
 
 from sklearn.model_selection import KFold
-from sklearn.ensemble import RandomForestClassifier
+from sklearn.naive_bayes import GaussianNB
 
-from prophicient.functions.statistics import average, \
-    matthews_correlation_coefficient
-
-# Seed RNG: the answer to the question of life, the universe, and everything
-RANDOM_STATE = 42
+from prophicient.functions.statistics import average, mcc
 
 
 def _score(real_classes, predict_classes):
+    """
+    Scores predicted classes against known classes to count how many
+    tps, tns, fps, fns there were.
+
+    :param real_classes: known classes
+    :type real_classes: list
+    :param predict_classes: predicted classes
+    :type predict_classes: list
+    :return: tps, tns, fps, fns
+    """
     tps, tns, fps, fns = 0, 0, 0, 0
+
     for real_value, predict_value in zip(real_classes, predict_classes):
         if real_value and predict_value:
             tps += 1
@@ -21,23 +28,23 @@ def _score(real_classes, predict_classes):
             fps += 1
         else:
             tns += 1
+
     return tps, tns, fps, fns
 
 
 def _mcc_score(real_classes, predict_classes):
-    tps, tns, fps, fns = _score(real_classes, predict_classes)
-    return matthews_correlation_coefficient(tps, fns, tns, fps)
-
-
-def train_random_forest_classifier(prophage_data, bacteria_data):
     """
-    Train a random forest classifier, to achieve maximal training
-    accuracy in discriminating between prophage genes (`prophage_data`)
-    and bacterial genes (`bacteria_data`).
+    Helper function to score class predictions and then return
+    the mcc.
+    """
+    tps, tns, fps, fns = _score(real_classes, predict_classes)
+    return mcc(tps, fns, tns, fps)
 
-    The model with the highest average accuracy (across training
-    datasets) is re-trained against all the data, then returned
-    as `best_model`.
+
+def train_bayes_classifier(prophage_data, bacteria_data):
+    """
+    Train a Naive Bayes classifier to descriminate between prophage
+    and bacterial genes.
 
     :param prophage_data: prophage gene features
     :type prophage_data: pandas.DataFrame
@@ -49,7 +56,7 @@ def train_random_forest_classifier(prophage_data, bacteria_data):
     prophage_data = np.array(prophage_data)
     bacteria_data = np.array(bacteria_data)
 
-    kf = KFold(n_splits=5, shuffle=True, random_state=RANDOM_STATE)
+    kf = KFold(n_splits=5, shuffle=True, random_state=42)
 
     prophage_splits = [x for x in kf.split(prophage_data)]
     bacteria_splits = [x for x in kf.split(bacteria_data)]
@@ -60,8 +67,7 @@ def train_random_forest_classifier(prophage_data, bacteria_data):
     b_tests = [x[1] for x in bacteria_splits]
 
     mcc_scores = list()
-    clf = RandomForestClassifier(n_estimators=250, criterion="gini",
-                                 bootstrap=False, n_jobs=-1, class_weight="balanced")
+    clf = GaussianNB()
 
     zipper = zip(p_trains, p_tests, b_trains, b_tests)
     for p_train, p_test, b_train, b_test in zipper:
@@ -80,11 +86,12 @@ def train_random_forest_classifier(prophage_data, bacteria_data):
     mean_mcc = average(mcc_scores)
 
     # Now we've got the best model parameters, let's re-train on all data
-    print(f"RandomForest classifier got average MCC = {mean_mcc:.3f}")
+    print(f"Naive Bayes classifier got average MCC = {mean_mcc:.3f}")
 
     all_feats = np.concatenate((prophage_data[:, :-1],
                                 bacteria_data[:, :-1]), axis=0)
     all_labels = np.concatenate((prophage_data[:, -1],
                                  bacteria_data[:, -1]), axis=0)
     clf.fit(all_feats, all_labels)
+
     return clf
