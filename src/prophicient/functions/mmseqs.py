@@ -1,4 +1,5 @@
 from bitarray import bitarray, util as bit_util
+import shutil
 
 from prophicient.functions.fasta import parse_fasta, write_fasta
 from prophicient.functions.run_command import run_command
@@ -18,6 +19,8 @@ SENS = 8
 IDENT = 0.5
 COVER = 0.80
 EVALUE = 0.001
+
+MIN_GCS = 0.7
 
 
 # MAIN FUNCTIONS
@@ -62,6 +65,12 @@ def assemble_bacterial_mask(contigs, bacterial_fasta, gene_bit_value_path,
     # Mark input genes well represented in the assigned clade
     mark_bacterial_mask(bacterial_masks, gene_bit_values,
                         clade_bit_mask)
+
+    # Write bacterial masks to file
+    dump_bacterial_masks(contigs, bacterial_masks, clade_bit_mask, working_dir)
+
+    # Cleanup working file
+    fasta_path.unlink()
 
     return bacterial_masks
 
@@ -115,12 +124,16 @@ def cluster_bacterial_genes(fasta_path, working_dir):
     :param working_dir: Path to place created data files
     :type working_dir: pathlib.Path
     """
+    # Create database file directory
+    database_dir = working_dir.joinpath("database")
+    database_dir.mkdir(exist_ok=True)
+
     # Define mmseqs working file paths
-    sequence_db = working_dir.joinpath("sequenceDB")
-    cluster_db = working_dir.joinpath("clusterDB")
-    seqfile_db = working_dir.joinpath("seqfileDB")
-    result_file = working_dir.joinpath("clustering_results.txt")
-    tmp_dir = working_dir.joinpath("tmp")
+    sequence_db = database_dir.joinpath("sequenceDB")
+    cluster_db = database_dir.joinpath("clusterDB")
+    seqfile_db = database_dir.joinpath("seqfileDB")
+    result_file = database_dir.joinpath("clustering_results.txt")
+    tmp_dir = database_dir.joinpath("tmp")
     tmp_dir.mkdir(exist_ok=True)
 
     # Create the initial mmseqs DB
@@ -139,6 +152,9 @@ def cluster_bacterial_genes(fasta_path, working_dir):
 
     # Parse the clustering output
     clustering_results = parse_mmseqs(result_file)
+
+    # Remove database file directory
+    shutil.rmtree(database_dir)
 
     return clustering_results
 
@@ -190,7 +206,7 @@ def assign_gene_bit_values(clustering_map, bacterial_gene_bit_values,
             gene_bit_values[contig_i][gene_i] = cluster_bitarray
 
 
-def assign_clade(gene_bit_values):
+def assign_clade(gene_bit_values, min_gcs=MIN_GCS):
     """Assigns clade membership of the input sequences based on the majority
     gene bit value
 
@@ -215,6 +231,10 @@ def assign_clade(gene_bit_values):
 
     if len(bit_count) <= 0:
         return bitarray([0])
+
+    count = max(bit_count)
+    if (count / len(gene_bit_values)) < min_gcs:
+        return bitarray([0] * len(bit_count), endian=ENDIANESS)
 
     clade = bit_count.index(max(bit_count))
 
@@ -245,6 +265,23 @@ def mark_bacterial_mask(bacterial_masks, gene_bit_values, clade_bit_mask):
 
             if masked_bitarray.count() > 0:
                 bacterial_mask[gene_i] = 0
+
+
+def dump_bacterial_masks(contigs, bacterial_masks, clade_bit_mask,
+                         working_dir):
+    for i, contig in enumerate(contigs):
+        bacterial_mask = bacterial_masks[i]
+        filepath = working_dir.joinpath(".".join([contig.id, "txt"]))
+
+        filehandle = filepath.open(mode="w")
+
+        for bit in clade_bit_mask:
+            filehandle.write(str(int(bit)))
+
+        filehandle.write("\n")
+
+        for bit in bacterial_mask:
+            filehandle.write(str(int(bit)))
 
 
 # HELPER FUNCTIONS

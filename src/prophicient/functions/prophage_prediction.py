@@ -1,12 +1,13 @@
 import pickle
-import matplotlib.pyplot as plt
 import pandas as pd
+
+from matplotlib import pyplot
 
 from prophicient import PACKAGE_DIR
 from prophicient.functions.sliding_window import *
 from prophicient.functions.statistics import average
 
-MODEL_PATH = PACKAGE_DIR.joinpath("data/new.prophage_model.pickle")
+MODEL_PATH = PACKAGE_DIR.joinpath("data/prophage_model.pickle")
 
 WINDOW = 51         # Number of CDS features to consider in a window
 
@@ -193,7 +194,8 @@ def smooth_by_averaging(values, window_size=25):
     return smoothed_values
 
 
-def predict_prophage_genes(contig, model_path=MODEL_PATH, alpha=0.5, mask=None):
+def predict_prophage_genes(contig, model_path=MODEL_PATH, alpha=0.50,
+                           mask=None):
     """
     Calculates the gene attributes used by the model to predict
     prophage vs bacterial genes. Then uses the classifier from
@@ -241,9 +243,6 @@ def predict_prophage_genes(contig, model_path=MODEL_PATH, alpha=0.5, mask=None):
 
     predictions = smooth_by_averaging(predictions, window_size=10)
 
-    plt.scatter(xs, predictions)
-    plt.show()
-
     return [x >= alpha for x in predictions]
 
 
@@ -260,7 +259,7 @@ def predict_prophage_coords(contig, extend_by=0, mask=None):
     :type mask: list of int
     :return: prophage_coords
     """
-    gene_predictions = predict_prophage_genes(contig, mask=mask) 
+    gene_predictions = predict_prophage_genes(contig, mask=mask)
 
     prophage_coords = list()
     left, right = None, None
