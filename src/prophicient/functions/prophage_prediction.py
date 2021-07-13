@@ -1,12 +1,11 @@
 import pickle
-import matplotlib.pyplot as plt
 import pandas as pd
 
 from prophicient import PACKAGE_DIR
 from prophicient.functions.sliding_window import *
 from prophicient.functions.statistics import average
 
-MODEL_PATH = PACKAGE_DIR.joinpath("data/new.prophage_model.pickle")
+MODEL_PATH = PACKAGE_DIR.joinpath("data/prophage_model.pickle")
 
 WINDOW = 51         # Number of CDS features to consider in a window
 
@@ -129,7 +128,7 @@ def average_strand_changes(strands, window=WINDOW):
     return leading_changes, center_changes, lagging_changes
 
 
-def calculate_feature_dict(contig):
+def build_contig_dataframe(contig):
     """
     Walks the features of the given contig and calculates the feature
     data to be used for model training and/or model prediction.
@@ -140,9 +139,7 @@ def calculate_feature_dict(contig):
     """
     cds_features = [ftr for ftr in contig.features if ftr.type == "CDS"]
 
-    feature_dict = {"leading_window": {"gene_size": [], "strand_change": []},
-                    "center_window": {"gene_size": [], "strand_change": []},
-                    "lagging_window": {"gene_size": [], "strand_change": []}}
+    temp_dict = dict()
 
     # These are the basis for gene density and strand bias calculations
     lefts, rights, strands = list(), list(), list()
@@ -154,14 +151,18 @@ def calculate_feature_dict(contig):
     lead_len, ctr_len, lag_len = average_gene_size(lefts, rights, len(contig))
     lead_str, ctr_str, lag_str = average_strand_changes(strands)
 
-    feature_dict["leading_window"]["gene_size"] = lead_len
-    feature_dict["leading_window"]["strand_change"] = lead_str
-    feature_dict["center_window"]["gene_size"] = ctr_len
-    feature_dict["center_window"]["strand_change"] = ctr_str
-    feature_dict["lagging_window"]["gene_size"] = lag_len
-    feature_dict["lagging_window"]["strand_change"] = lag_str
+    temp_dict["contig_id"] = [contig.id] * len(lefts)
+    temp_dict["start"] = lefts
+    temp_dict["stop"] = rights
+    temp_dict["strand"] = strands
+    temp_dict["lag_size"] = lag_len
+    temp_dict["ctr_size"] = ctr_len
+    temp_dict["lead_size"] = lead_len
+    temp_dict["lag_strand"] = lag_str
+    temp_dict["ctr_strand"] = ctr_str
+    temp_dict["lead_strand"] = lead_str
 
-    return feature_dict
+    return pd.DataFrame(temp_dict)
 
 
 def smooth_by_averaging(values, window_size=25):
@@ -193,7 +194,8 @@ def smooth_by_averaging(values, window_size=25):
     return smoothed_values
 
 
-def predict_prophage_genes(contig, model_path=MODEL_PATH, alpha=0.5, mask=None):
+def predict_prophage_genes(contig, model_path=MODEL_PATH, alpha=0.25,
+                           mask=None):
     """
     Calculates the gene attributes used by the model to predict
     prophage vs bacterial genes. Then uses the classifier from
@@ -209,40 +211,37 @@ def predict_prophage_genes(contig, model_path=MODEL_PATH, alpha=0.5, mask=None):
     :type mask: list of int
     :return: predictions
     """
-    feature_dict = calculate_feature_dict(contig)
+    dataframe = build_contig_dataframe(contig)
 
-    lead_df = pd.DataFrame(feature_dict["leading_window"])
-    center_df = pd.DataFrame(feature_dict["center_window"])
-    lag_df = pd.DataFrame(feature_dict["lagging_window"])
+    lead_df = pd.DataFrame()
+    lead_df["ctr_size"] = dataframe.loc[:, "lead_size"]
+    lead_df["ctr_strand"] = dataframe.loc[:, "lead_strand"]
+
+    center_df = dataframe.loc[:, ["ctr_size", "ctr_strand"]]
+
+    lag_df = pd.DataFrame()
+    lag_df["ctr_size"] = dataframe.loc[:, "lag_size"]
+    lag_df["ctr_strand"] = dataframe.loc[:, "lag_strand"]
 
     model_reader = open(model_path, "rb")
     classifier = pickle.load(model_reader)
     model_reader.close()
 
-    # lead_p = [x[1] for x in classifier.predict_proba(lead_df)]
     lead_p = classifier.predict(lead_df)
-    # center_p = [x[1] for x in classifier.predict_proba(center_df)]
     center_p = classifier.predict(center_df)
-    # lag_p = [x[1] for x in classifier.predict_proba(lag_df)]
     lag_p = classifier.predict(lag_df)
 
     predictions = list()
     for x, y, z in zip(lead_p, center_p, lag_p):
         predictions.append(max((x, y, z)))
 
-    xs = list()
-    for feature in contig.features:
-        if feature.type == "CDS":
-            xs.append(feature.location.start)
+    predictions = smooth_by_averaging(predictions, window_size=10)
 
     if mask:
         for gene_i in range(len(predictions)):
             predictions[gene_i] = predictions[gene_i] * mask[gene_i]
 
-    predictions = smooth_by_averaging(predictions, window_size=10)
-
-    plt.scatter(xs, predictions)
-    plt.show()
+    predictions = smooth_by_averaging(predictions, window_size=5)
 
     return [x >= alpha for x in predictions]
 
@@ -284,7 +283,7 @@ def predict_prophage_coords(contig, extend_by=0, mask=None):
     if left or right:
         prophage_coords.append((left, right))
 
-    # Deal with edge cases (4 major possibilities):
+    # Deal with edge cases (3 major possibilities):
     # Case 0: whole contig is a prophage - last gene processed was a predicted
     # prophage gene, and we had no PROPHAGE <-> BACTERIAL inflections
     if previous_state == PROPHAGE and n_inflections == 0:

@@ -1,8 +1,10 @@
 import numpy as np
+import pandas as pd
 
 from sklearn.model_selection import KFold
 from sklearn.naive_bayes import GaussianNB
 
+from prophicient.classes.prophage_classifier import ProphageClassifier
 from prophicient.functions.statistics import average, mcc
 
 
@@ -38,7 +40,53 @@ def _mcc_score(real_classes, predict_classes):
     the mcc.
     """
     tps, tns, fps, fns = _score(real_classes, predict_classes)
+    print(tps, tns, fps, fns)
     return mcc(tps, fns, tns, fps)
+
+
+def train_prophage_classifier(prophage_data, bacteria_data):
+    kf = KFold(n_splits=5, shuffle=True, random_state=42)
+
+    prophage_splits = [x for x in kf.split(prophage_data)]
+    bacteria_splits = [x for x in kf.split(bacteria_data)]
+
+    p_trains = [x[0] for x in prophage_splits]
+    p_tests = [x[1] for x in prophage_splits]
+    b_trains = [x[0] for x in bacteria_splits]
+    b_tests = [x[1] for x in bacteria_splits]
+
+    mcc_scores = list()
+
+    clf = ProphageClassifier()
+
+    zipper = zip(p_trains, p_tests, b_trains, b_tests)
+    for p_train, p_test, b_train, b_test in zipper:
+        train_feats = pd.concat((prophage_data.iloc[list(p_train), :-1],
+                                 bacteria_data.iloc[list(b_train), :-1]),
+                                axis=0)
+        train_labels = pd.concat((prophage_data.iloc[list(p_train), -1],
+                                  bacteria_data.iloc[list(b_train), -1]),
+                                 axis=0)
+        test_feats = pd.concat((prophage_data.iloc[list(p_test), :-1],
+                                bacteria_data.iloc[list(b_test), :-1]), axis=0)
+        test_labels = pd.concat((prophage_data.iloc[list(p_test), -1],
+                                 bacteria_data.iloc[list(b_test), -1]), axis=0)
+
+        clf.fit(train_feats, train_labels)
+
+        predictions = clf.predict(test_feats)
+        mcc_scores.append(_mcc_score(test_labels, predictions))
+
+    mean_mcc = average(mcc_scores)
+
+    all_feats = pd.concat((prophage_data.iloc[:, :-1],
+                           bacteria_data.iloc[:, :-1]), axis=0)
+    all_labels = pd.concat((prophage_data.iloc[:, -1],
+                            bacteria_data.iloc[:, -1]), axis=0)
+
+    clf.fit(all_feats, all_labels)
+
+    return clf, mean_mcc
 
 
 def train_bayes_classifier(prophage_data, bacteria_data):
@@ -67,6 +115,7 @@ def train_bayes_classifier(prophage_data, bacteria_data):
     b_tests = [x[1] for x in bacteria_splits]
 
     mcc_scores = list()
+
     clf = GaussianNB()
 
     zipper = zip(p_trains, p_tests, b_trains, b_tests)
@@ -80,18 +129,22 @@ def train_bayes_classifier(prophage_data, bacteria_data):
         test_labels = np.concatenate((prophage_data[p_test, -1],
                                       bacteria_data[b_test, -1]), axis=0)
 
-        clf.fit(train_feats, train_labels)
+        ratio = float(len(b_train))/len(p_train)
+        sample_weights = [ratio] * len(p_train)
+        sample_weights.extend([1] * len(b_train))
+
+        clf.fit(train_feats, train_labels, sample_weight=sample_weights)
+
         predictions = clf.predict(test_feats)
         mcc_scores.append(_mcc_score(test_labels, predictions))
-    mean_mcc = average(mcc_scores)
 
-    # Now we've got the best model parameters, let's re-train on all data
-    print(f"Naive Bayes classifier got average MCC = {mean_mcc:.3f}")
+    mean_mcc = average(mcc_scores)
 
     all_feats = np.concatenate((prophage_data[:, :-1],
                                 bacteria_data[:, :-1]), axis=0)
     all_labels = np.concatenate((prophage_data[:, -1],
                                  bacteria_data[:, -1]), axis=0)
+
     clf.fit(all_feats, all_labels)
 
-    return clf
+    return clf, mean_mcc
