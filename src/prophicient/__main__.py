@@ -287,6 +287,10 @@ def main():
 
         if dump:
             destination = genome_outdir.joinpath("tmp_data")
+
+            if destination.exists():
+                shutil.rmtree(destination)
+
             shutil.copytree(tmp_dir, destination)
         shutil.rmtree(tmp_dir)  # clean up after ourselves
 

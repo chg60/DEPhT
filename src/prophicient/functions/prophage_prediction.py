@@ -259,7 +259,7 @@ def predict_prophage_coords(contig, extend_by=0, mask=None):
     :type mask: list of int
     :return: prophage_coords
     """
-    gene_predictions = predict_prophage_genes(contig, mask=mask) 
+    gene_predictions = predict_prophage_genes(contig, mask=mask)
 
     prophage_coords = list()
     left, right = None, None
