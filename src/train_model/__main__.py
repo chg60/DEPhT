@@ -51,16 +51,7 @@ def get_dataframe(filepath, tmp_dir):
             continue
         record = SeqIO.read(f, "fasta")
         annotate_contig(record, tmp_dir, trna=False)
-
-        starts, stops, strands, temp_dict = list(), list(), list(), dict()
-        for feature in record.features:
-            if feature.type == "CDS":
-                starts.append(feature.location.start)
-                stops.append(feature.location.end)
-                strands.append(feature.location.strand)
-
         df = build_contig_dataframe(record)
-
         dataframes.append(df)
 
     return pd.concat([pd.DataFrame(fd) for fd in dataframes], axis=0)
