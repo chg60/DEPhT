@@ -1,9 +1,6 @@
 """
-Module for training a Random Forest Classifier with best accuracy
-in discriminating between bacterial and prophage genes.
-
-For best results, limit the scope to a single bacterial genus or
-phylum.
+Helper module for training the model used by MycoPhinder on known
+phage/prophage and bacterial gene data.
 """
 
 import sys
@@ -14,11 +11,10 @@ import shutil
 
 import pandas as pd
 from Bio import SeqIO
-import matplotlib.pyplot as plt
 
 from prophicient.functions.prophage_prediction import MODEL_PATH
 from prophicient.functions.annotation import annotate_contig
-from prophicient.functions.prophage_prediction import calculate_feature_dict
+from prophicient.functions.prophage_prediction import build_contig_dataframe
 from train_model.functions.model_training import train_prophage_classifier
 
 EPILOG = """
@@ -26,7 +22,6 @@ Bacterial genomes used for training should be complete assemblies, free of
 prophages, and with all plasmid contigs removed.
 """
 TMP_DIR = pathlib.Path("/tmp/train_model")
-# MODEL_PATH = pathlib.Path("~/Desktop/prophage_model.pickle").expanduser()
 
 
 def parse_args(arguments):
@@ -64,20 +59,9 @@ def get_dataframe(filepath, tmp_dir):
                 stops.append(feature.location.end)
                 strands.append(feature.location.strand)
 
-        fd = calculate_feature_dict(record)
+        df = build_contig_dataframe(record)
 
-        temp_dict["contig_id"] = [record.id] * len(starts)
-        temp_dict["start"] = starts
-        temp_dict["stop"] = stops
-        temp_dict["strand"] = strands
-        temp_dict["lag_size"] = fd["lagging_window"]["gene_size"]
-        temp_dict["ctr_size"] = fd["center_window"]["gene_size"]
-        temp_dict["lead_size"] = fd["leading_window"]["gene_size"]
-        temp_dict["lag_strand"] = fd["lagging_window"]["strand_change"]
-        temp_dict["ctr_strand"] = fd["center_window"]["strand_change"]
-        temp_dict["lead_strand"] = fd["leading_window"]["strand_change"]
-
-        dataframes.append(pd.DataFrame(temp_dict))
+        dataframes.append(df)
 
     return pd.concat([pd.DataFrame(fd) for fd in dataframes], axis=0)
 
@@ -121,9 +105,6 @@ def main(arguments):
         prophage_df.to_csv(prophage_file, index=False)
     prophage_df = prophage_df.loc[:, ["ctr_size", "ctr_strand", "is_prophage"]]
 
-    # prophage_df.plot(x="gene_size", y="strand_change", kind="scatter")
-    # plt.show()
-
     # Deal with bacteria data
     bacteria_file = bacteria_dir.joinpath("data.csv")
     if bacteria_file.is_file():
@@ -135,9 +116,6 @@ def main(arguments):
         bacteria_df["is_prophage"] = [0] * len(bacteria_df)
         bacteria_df.to_csv(bacteria_file, index=False)
     bacteria_df = bacteria_df.loc[:, ["ctr_size", "ctr_strand", "is_prophage"]]
-
-    # bacteria_df.plot(x="gene_size", y="strand_change", kind="scatter")
-    # plt.show()
 
     print("Training classifier...")
     model, training_mcc = train_prophage_classifier(prophage_df, bacteria_df)
