@@ -26,19 +26,22 @@ from prophicient.functions.visualization import draw_complete_diagram
 
 # GLOBAL VARIABLES
 # -----------------------------------------------------------------------------
+# For temporary file I/O
 TMP_DIR = pathlib.Path("/tmp/prophicient")
 
+# For naming any identified prophages
 PROPHAGE_PREFIX = "prophi"
 PROPHAGE_DELIMITER = "-"
 
+# For attachment site detection
 EXTEND_BY = 5000
 ATT_SENSITIVITY = 7
-MIN_SIZE = 10000
 REF_BLAST_SORT_KEY = "bitscore"
 
-NORMAL_PRODUCT_THRESHOLD = 5
-STRICT_PRODUCT_THRESHOLD = 10
-
+# For deciding whether to cull predicted "prophages"
+MIN_SIZE = 10000
+MIN_PRODUCTS_NORMAL = 5
+MIN_PRODUCTS_STRICT = 10
 
 # DEFAULT FILE PATHS
 # -----------------------------------------------------------------------------
@@ -85,6 +88,9 @@ def parse_args():
     p.add_argument("-v", "--verbose",
                    action="store_true",
                    help="print progress messages as the program runs")
+    p.add_argument("-t", "--tmp-dir", type=pathlib.Path, default=TMP_DIR,
+                   help=f"temporary directory to use for file I/O [default: "
+                        f"{TMP_DIR}]")
 
     return p.parse_args()
 
@@ -128,10 +134,11 @@ def main():
         print(f"'{str(outdir)}' does not exist - creating it...")
         outdir.mkdir(parents=True)
 
-    # Refresh the temporary directory
-    if TMP_DIR.is_dir():
-        shutil.rmtree(TMP_DIR)
-    TMP_DIR.mkdir(parents=True)
+    # Get the temporary directory, refresh it if it exists
+    tmpdir = pathlib.Path(args.tmp_dir).resolve()
+    if tmpdir.is_dir():
+        shutil.rmtree(tmpdir)
+    tmpdir.mkdir(parents=True)
 
     # Mark program start time
     mark = datetime.now()
@@ -149,9 +156,9 @@ def main():
             continue
 
         # Set up a temporary directory for this genome
-        tmp_dir = pathlib.Path(mkdtemp(dir=TMP_DIR))
-        if not tmp_dir.is_dir():
-            tmp_dir.mkdir()
+        genome_tmp_dir = pathlib.Path(mkdtemp(dir=tmpdir))
+        if not genome_tmp_dir.is_dir():
+            genome_tmp_dir.mkdir()
 
         # Parse all contigs of annotation-worthy length
         if verbose:
@@ -161,7 +168,7 @@ def main():
         if not contigs:
             print(f"no {fmt}-formatted records found in '{str(infile)}' - "
                   f"skipping it...")
-            shutil.rmtree(tmp_dir)  # clean up after ourselves
+            shutil.rmtree(genome_tmp_dir)  # clean up after ourselves
             continue
 
         # Annotate contigs if format is "fasta"
@@ -169,7 +176,7 @@ def main():
             if verbose:
                 print("annotating t(m)RNA and CDS genes de novo...")
 
-            annotate_dir = tmp_dir.joinpath("annotate")
+            annotate_dir = genome_tmp_dir.joinpath("annotate")
             if not annotate_dir.is_dir():
                 annotate_dir.mkdir()
 
@@ -190,13 +197,13 @@ def main():
         if not contigs:
             print(f"no contigs long enough to analyze in '{str(infile)}' - "
                   f"skipping it...")
-            shutil.rmtree(tmp_dir)  # clean up after ourselves
+            shutil.rmtree(genome_tmp_dir)  # clean up after ourselves
             continue
 
         if verbose:
             print("masking conserved bacterial features...")
 
-        mmseqs_dir = tmp_dir.joinpath("mmseqs")
+        mmseqs_dir = genome_tmp_dir.joinpath("mmseqs")
         if not mmseqs_dir.is_dir():
             mmseqs_dir.mkdir()
 
@@ -225,12 +232,12 @@ def main():
         if all([not any(x) for x in prophage_preds]):
             print(f"no complete prophages found in {str(infile)}. "
                   f"PHASTER may be able to find partial (dead) prophages.")
-            shutil.rmtree(tmp_dir)  # clean up after ourselves
+            shutil.rmtree(genome_tmp_dir)  # clean up after ourselves
             continue
 
         product_threshold = 0
         if runmode in ("normal", "strict"):
-            hhsearch_dir = tmp_dir.joinpath("hhsearch")
+            hhsearch_dir = genome_tmp_dir.joinpath("hhsearch")
             if not hhsearch_dir.is_dir():
                 hhsearch_dir.mkdir()
 
@@ -240,14 +247,14 @@ def main():
 
             find_homologs(contigs, prophage_preds, ESSENTIAL_DB,
                           hhsearch_dir, cpus)
-            product_threshold = NORMAL_PRODUCT_THRESHOLD
+            product_threshold = MIN_PRODUCTS_NORMAL
 
             if runmode == "strict":
                 if verbose:
                     print("extending search for phage gene homologs...")
                 find_homologs(contigs, prophage_preds, EXTENDED_DB,
                               hhsearch_dir, cpus)
-                product_threshold = STRICT_PRODUCT_THRESHOLD
+                product_threshold = MIN_PRODUCTS_STRICT
 
         prophages = load_initial_prophages(contigs, prophage_preds,
                                            product_threshold,
@@ -257,14 +264,14 @@ def main():
         if not prophages:
             print(f"no complete prophages found in {str(infile)}. "
                   f"PHASTER may be able to find partial (dead) prophages.")
-            shutil.rmtree(tmp_dir)  # clean up after ourselves
+            shutil.rmtree(genome_tmp_dir)  # clean up after ourselves
             continue
 
         if verbose:
             print("searching for attL/R...")
 
         # Set up directory where we can do attL/R detection
-        att_dir = tmp_dir.joinpath("att_core")
+        att_dir = genome_tmp_dir.joinpath("att_core")
         if not att_dir.is_dir():
             att_dir.mkdir()
 
@@ -279,7 +286,7 @@ def main():
         if not genome_outdir.is_dir():
             genome_outdir.mkdir()
 
-        draw_dir = tmp_dir.joinpath("draw_diagram")
+        draw_dir = genome_tmp_dir.joinpath("draw_diagram")
         if not draw_dir.is_dir():
             draw_dir.mkdir()
         write_prophage_output(genome_outdir, contigs, prophages, draw_dir,
@@ -291,8 +298,8 @@ def main():
             if destination.exists():
                 shutil.rmtree(destination)
 
-            shutil.copytree(tmp_dir, destination)
-        shutil.rmtree(tmp_dir)  # clean up after ourselves
+            shutil.copytree(genome_tmp_dir, destination)
+        shutil.rmtree(genome_tmp_dir)  # clean up after ourselves
 
     print(f"\nTotal runtime: {str(datetime.now() - mark)}")
 
@@ -320,7 +327,7 @@ def load_flat_file_contigs(contigs):
 
 
 def load_initial_prophages(contigs, prophage_predictions,
-                           product_threshold=NORMAL_PRODUCT_THRESHOLD,
+                           product_threshold=MIN_PRODUCTS_NORMAL,
                            prefix=PROPHAGE_PREFIX,
                            delimiter=PROPHAGE_DELIMITER):
     """Creates Prophage objects from initial prophage prediction coordinates
@@ -328,9 +335,15 @@ def load_initial_prophages(contigs, prophage_predictions,
 
     :param contigs: SeqRecord nucleotide sequence objects
     :type contigs: list[Bio.SeqRecord.SeqRecord]
-    :param prophage_predictions: Coordinates for predicted prophages
+    :param prophage_predictions: coordinates for predicted prophages
     :type prophage_predictions: list[list]
-    :return: Prophage objects that contain putative sequences and coordinates
+    :param product_threshold: number of products
+    :type product_threshold:
+    :param prefix: how should locus tags begin?
+    :type prefix: str
+    :param delimiter: how should locus tags be delimited
+    :type delimiter: str
+    :return: prophage objects that contain putative sequences and coordinates
     :rtype: list
     """
     prophages = []
