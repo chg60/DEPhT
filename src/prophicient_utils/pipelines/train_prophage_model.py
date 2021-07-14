@@ -12,16 +12,18 @@ import shutil
 import pandas as pd
 from Bio import SeqIO
 
-from prophicient.functions.prophage_prediction import MODEL_PATH
+from prophicient_utils.classes.kfold import KFold
+from prophicient.classes.prophage_classifier import ProphageClassifier
 from prophicient.functions.annotation import annotate_contig
+from prophicient.functions.prophage_prediction import MODEL_PATH
 from prophicient.functions.prophage_prediction import build_contig_dataframe
-from train_model.functions.model_training import train_prophage_classifier
+from prophicient.functions.statistics import average, mcc
 
 EPILOG = """
 Bacterial genomes used for training should be complete assemblies, free of 
 prophages, and with all plasmid contigs removed.
 """
-TMP_DIR = pathlib.Path("/tmp/train_model")
+TMP_DIR = pathlib.Path("/tmp/prophicient_utils/train_model")
 
 
 def parse_args(arguments):
@@ -44,6 +46,16 @@ def parse_args(arguments):
 
 
 def get_dataframe(filepath, tmp_dir):
+    """
+    Builds a bacterial/prophage dataframe from a directory of FASTA
+    files.
+
+    :param filepath: path to the FASTAs to integrate into a dataframe
+    :type filepath: pathlib.Path
+    :param tmp_dir: path where annotation files can be written
+    :type tmp_dir: pathlib.Path
+    :return: dataframe
+    """
     dataframes = list()
 
     for f in filepath.iterdir():
@@ -55,6 +67,78 @@ def get_dataframe(filepath, tmp_dir):
         dataframes.append(df)
 
     return pd.concat(dataframes, axis=0)
+
+
+def mcc_score(real_classes, predict_classes):
+    """
+    Helper function to score class predictions and then return
+    the mcc.
+    """
+    tps, tns, fps, fns = 0, 0, 0, 0
+
+    for real_value, predict_value in zip(real_classes, predict_classes):
+        if real_value and predict_value:
+            tps += 1
+        elif real_value and not predict_value:
+            fns += 1
+        elif predict_value and not real_value:
+            fps += 1
+        else:
+            tns += 1
+
+    return mcc(tps, fns, tns, fps)
+
+
+def train_prophage_classifier(prophage_data, bacteria_data):
+    """
+    Trains a ProphageClassifier on the given prophage_data and
+    bacteria_data. This is effectively a simple implementation of
+    a Naive Bayes Classifier, that builds a probability distribution
+    for each input feature, and can then use that distribution to
+    predict the probability that a given input gene belongs to the
+    prophage class.
+    """
+    # Seed RNG for reproducibility - use the "Answer to the Ultimate
+    # Question of Life, the Universe, and Everything." (Douglas Adams)
+    kf = KFold(n_splits=5, shuffle=True, random_state=42)
+
+    # Get train/test split indices for both groups of genes
+    prophage_splits = [x for x in kf.split(len(prophage_data))]
+    bacteria_splits = [x for x in kf.split(len(bacteria_data))]
+
+    mcc_scores = list()
+    clf = ProphageClassifier()
+
+    for prophage_split, bacteria_split in zip(prophage_splits, bacteria_splits):
+        p_train, p_test = prophage_split
+        b_train, b_test = bacteria_split
+
+        train_feats = pd.concat((prophage_data.iloc[list(p_train), :-1],
+                                 bacteria_data.iloc[list(b_train), :-1]),
+                                axis=0)
+        train_labels = pd.concat((prophage_data.iloc[list(p_train), -1],
+                                  bacteria_data.iloc[list(b_train), -1]),
+                                 axis=0)
+        test_feats = pd.concat((prophage_data.iloc[list(p_test), :-1],
+                                bacteria_data.iloc[list(b_test), :-1]), axis=0)
+        test_labels = pd.concat((prophage_data.iloc[list(p_test), -1],
+                                 bacteria_data.iloc[list(b_test), -1]), axis=0)
+
+        clf.fit(train_feats, train_labels)
+
+        predictions = clf.predict(test_feats)
+        mcc_scores.append(mcc_score(test_labels, predictions))
+
+    mean_mcc = average(mcc_scores)
+
+    all_feats = pd.concat((prophage_data.iloc[:, :-1],
+                           bacteria_data.iloc[:, :-1]), axis=0)
+    all_labels = pd.concat((prophage_data.iloc[:, -1],
+                            bacteria_data.iloc[:, -1]), axis=0)
+
+    clf.fit(all_feats, all_labels)
+
+    return clf, mean_mcc
 
 
 def main(arguments):
