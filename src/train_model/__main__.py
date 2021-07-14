@@ -54,7 +54,7 @@ def get_dataframe(filepath, tmp_dir):
         df = build_contig_dataframe(record)
         dataframes.append(df)
 
-    return pd.concat([pd.DataFrame(fd) for fd in dataframes], axis=0)
+    return pd.concat(dataframes, axis=0)
 
 
 def main(arguments):
