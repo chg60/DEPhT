@@ -1,5 +1,5 @@
 """
-Helper module for training the model used by MycoPhinder on known
+Helper pipeline for training the model used by MycoPhinder on known
 phage/prophage and bacterial gene data.
 """
 

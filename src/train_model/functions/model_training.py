@@ -1,21 +1,14 @@
+import random
 import pandas as pd
-
-from sklearn.model_selection import KFold
 
 from prophicient.classes.prophage_classifier import ProphageClassifier
 from prophicient.functions.statistics import average, mcc
 
 
-def _score(real_classes, predict_classes):
+def mcc_score(real_classes, predict_classes):
     """
-    Scores predicted classes against known classes to count how many
-    tps, tns, fps, fns there were.
-
-    :param real_classes: known classes
-    :type real_classes: list
-    :param predict_classes: predicted classes
-    :type predict_classes: list
-    :return: tps, tns, fps, fns
+    Helper function to score class predictions and then return
+    the mcc.
     """
     tps, tns, fps, fns = 0, 0, 0, 0
 
@@ -29,35 +22,69 @@ def _score(real_classes, predict_classes):
         else:
             tns += 1
 
-    return tps, tns, fps, fns
-
-
-def _mcc_score(real_classes, predict_classes):
-    """
-    Helper function to score class predictions and then return
-    the mcc.
-    """
-    tps, tns, fps, fns = _score(real_classes, predict_classes)
     return mcc(tps, fns, tns, fps)
 
 
+class KFold:
+    """
+    Slim implementation of sklearn.model_selection.KFold functionality.
+    """
+    def __init__(self, n_splits=5, shuffle=False, random_state=None):
+        if random_state and not shuffle:
+            raise ValueError("random_state cannot be used without shuffle")
+
+        if random_state:
+            random.seed(random_state)
+
+        self.n_splits = n_splits
+        self.shuffle = shuffle
+
+    def split(self, x):
+        """
+        Generator that yields the train/test indices for the indicated
+        n_splits.
+
+        :param x: the length of the data to be split
+        :type x: int
+        """
+        indices = list(range(x))
+
+        # Shuffle indices if told to do so
+        if self.shuffle:
+            random.shuffle(indices)
+
+        # Now start creating the splits
+        for i in range(self.n_splits):
+            train, test = list(), list()
+            for x, index in enumerate(indices):
+                if x % self.n_splits == i:
+                    test.append(index)
+                else:
+                    train.append(index)
+            yield sorted(train), sorted(test)
+
+
 def train_prophage_classifier(prophage_data, bacteria_data):
+    """
+    Trains a ProphageClassifier on the given prophage_data and
+    bacteria_data. This is effectively a simple implementation of
+    a Naive Bayes
+    """
+    # Seed RNG for reproducibility - use the "Answer to the Ultimate
+    # Question of Life, the Universe, and Everything." (Douglas Adams)
     kf = KFold(n_splits=5, shuffle=True, random_state=42)
 
-    prophage_splits = [x for x in kf.split(prophage_data)]
-    bacteria_splits = [x for x in kf.split(bacteria_data)]
-
-    p_trains = [x[0] for x in prophage_splits]
-    p_tests = [x[1] for x in prophage_splits]
-    b_trains = [x[0] for x in bacteria_splits]
-    b_tests = [x[1] for x in bacteria_splits]
+    # Get train/test split indices for both groups of genes
+    prophage_splits = [x for x in kf.split(len(prophage_data))]
+    bacteria_splits = [x for x in kf.split(len(bacteria_data))]
 
     mcc_scores = list()
-
     clf = ProphageClassifier()
 
-    zipper = zip(p_trains, p_tests, b_trains, b_tests)
-    for p_train, p_test, b_train, b_test in zipper:
+    for prophage_split, bacteria_split in zip(prophage_splits, bacteria_splits):
+        p_train, p_test = prophage_split
+        b_train, b_test = bacteria_split
+
         train_feats = pd.concat((prophage_data.iloc[list(p_train), :-1],
                                  bacteria_data.iloc[list(b_train), :-1]),
                                 axis=0)
@@ -72,7 +99,7 @@ def train_prophage_classifier(prophage_data, bacteria_data):
         clf.fit(train_feats, train_labels)
 
         predictions = clf.predict(test_feats)
-        mcc_scores.append(_mcc_score(test_labels, predictions))
+        mcc_scores.append(mcc_score(test_labels, predictions))
 
     mean_mcc = average(mcc_scores)
 
