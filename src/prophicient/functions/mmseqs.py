@@ -69,6 +69,13 @@ def assemble_bacterial_mask(contigs, bacterial_fasta, gene_bit_value_path,
     # Write bacterial masks to file
     dump_bacterial_masks(contigs, bacterial_masks, clade_bit_mask, working_dir)
 
+    # Store bacterial mask within each contig object
+    for i in range(len(contigs)):
+        contig = contigs[i]
+        mask = bacterial_masks[i]
+
+        contig.update_mask_bits(mask)
+
     # Cleanup working file
     fasta_path.unlink()
 
@@ -94,10 +101,7 @@ def initialize_bacterial_mask(contigs, bacterial_fasta, out_path):
     gene_bit_values = []
     for contig_index, contig in enumerate(contigs):
         feature_index = 0
-        for feature in contig.features:
-            if feature.type != "CDS":
-                continue
-
+        for feature in contig.genes:
             # Index input gene
             b_gene_names.append(f"{contig_index}_{feature_index}")
 
