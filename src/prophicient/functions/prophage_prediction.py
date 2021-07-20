@@ -211,7 +211,7 @@ def predict_prophage_genes(contig, model_path=MODEL_PATH, alpha=0.25,
     :type mask: list of int
     :return: predictions
     """
-    dataframe = build_contig_dataframe(contig)
+    dataframe = build_contig_dataframe(contig.record)
 
     lead_df = pd.DataFrame()
     lead_df["ctr_size"] = dataframe.loc[:, "lead_size"]
@@ -234,6 +234,9 @@ def predict_prophage_genes(contig, model_path=MODEL_PATH, alpha=0.25,
     predictions = list()
     for x, y, z in zip(lead_p, center_p, lag_p):
         predictions.append(max((x, y, z)))
+
+    # Store model predictions within the contig option
+    contig.update_model_scores(predictions)
 
     predictions = smooth_by_averaging(predictions, window_size=10)
 
@@ -266,15 +269,12 @@ def predict_prophage_coords(contig, extend_by=0, mask=None):
     n_inflections = 0
     previous_state = gene_predictions[-1]
 
-    # predictions are only made on the cds features
-    cds_features = [feat for feat in contig.features if feat.type == "CDS"]
-
     for i, current_state in enumerate(gene_predictions):
         if previous_state == BACTERIA and current_state == PROPHAGE:
-            left = cds_features[i].location.start - extend_by
+            left = contig.genes[i].location.start - extend_by
             n_inflections += 1
         elif previous_state == PROPHAGE and current_state == BACTERIA:
-            right = cds_features[i - 1].location.end + extend_by
+            right = contig.genes[i - 1].location.end + extend_by
             prophage_coords.append((left, right))
             left, right = None, None
             n_inflections += 1
@@ -287,7 +287,7 @@ def predict_prophage_coords(contig, extend_by=0, mask=None):
     # Case 0: whole contig is a prophage - last gene processed was a predicted
     # prophage gene, and we had no PROPHAGE <-> BACTERIAL inflections
     if previous_state == PROPHAGE and n_inflections == 0:
-        left, right = 0, len(contig)
+        left, right = 0, len(contig.seq)
         prophage_coords.append((left, right))
 
     # Case 1: there's a prophage that falls off the left edge of a contig -
@@ -299,7 +299,7 @@ def predict_prophage_coords(contig, extend_by=0, mask=None):
     # Case 2: there's a prophage that falls off the right edge of a contig -
     # len(prophage_coords) >= 1, and no right coord for last coordinate tuple
     if len(prophage_coords) >= 1 and not prophage_coords[-1][-1]:
-        left, right = prophage_coords[-1][0], len(contig) - 1
+        left, right = prophage_coords[-1][0], len(contig.seq) - 1
         prophage_coords[-1] = (left, right)
 
     return prophage_coords

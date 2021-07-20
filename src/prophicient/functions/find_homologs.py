@@ -1,5 +1,3 @@
-import pathlib
-
 from prophicient.classes.hhresult import HHResult
 from prophicient.functions.fasta import write_fasta
 from prophicient.functions.multiprocess import parallelize
@@ -65,7 +63,7 @@ def find_single_homologs(header, sequence, db, tmp_dir, prob=HHSEARCH_PROB,
     hhsearch(query_file, output_file, db)
 
     # Parse the hhsearch result
-    hhresult, best_match = HHResult(output_file), None
+    hhresult, best_match, best_probability = HHResult(output_file), None, 0.0
     hhresult.parse_result()
 
     # Cull low-probability matches
@@ -77,8 +75,9 @@ def find_single_homologs(header, sequence, db, tmp_dir, prob=HHSEARCH_PROB,
         # Best match is the one with the highest bit-score
         hhresult.matches.sort(key=lambda x: float(x.score), reverse=True)
         best_match = hhresult.matches[0].target_id
+        best_probability = hhresult.matches[0].probability
 
-    return header, best_match
+    return header, best_match, best_probability
 
 
 def find_batch_homologs(headers, sequences, db, tmp_dir, cpus):
@@ -106,7 +105,8 @@ def find_batch_homologs(headers, sequences, db, tmp_dir, cpus):
     return homologs
 
 
-def find_homologs(contigs, prophage_coords, db, tmp_dir, cpus, min_length=150):
+def find_homologs(contigs, prophage_coords, db, tmp_dir, cpus, min_length=150,
+                  cache_scores=True):
     """
     Convenience function for finding all prophage-predicted gene homologs
     across all contigs of a genome.
@@ -125,37 +125,41 @@ def find_homologs(contigs, prophage_coords, db, tmp_dir, cpus, min_length=150):
     :type cpus: int
     :param min_length: don't find homologs for genes shorter than this
     :type min_length: int
+    :param cache_scores: Toggles whether to store probabilities in the contig
+    :type cache_scores: bool
     """
     # Iterate over contigs and prophage coordinate predictions together
     for contig, contig_prophage_coords in zip(contigs, prophage_coords):
         map_geneid_to_feature = dict()
         batch_geneids, batch_sequences = list(), list()
-        for i, feature in enumerate(contig.features):
-            geneid = f"{contig.id}_{i+1}"
-            feature.qualifiers["locus_tag"] = [geneid]
-            feature.qualifiers["gene"] = [i + 1]
+        for i, feature in enumerate(contig.genes):
+            geneid = contig.gene_ids[i]
 
-            # Only hhsearch CDS features
-            if feature.type == "CDS":
-                translation = feature.qualifiers["translation"][0]
+            translation = feature.qualifiers["translation"][0]
 
-                # Only hhsearch if length > min_length
-                if len(translation) < min_length:
-                    continue
+            # Only hhsearch if length > min_length
+            if len(translation) < min_length:
+                continue
 
-                # Only check features that overlap or are in prophages
-                if __feature_in_prophage(feature, contig_prophage_coords):
-                    map_geneid_to_feature[geneid] = feature
-                    batch_geneids.append(geneid)
-                    batch_sequences.append(translation)
+            # Only check features that overlap or are in prophages
+            if __feature_in_prophage(feature, contig_prophage_coords):
+                map_geneid_to_feature[geneid] = feature
+                batch_geneids.append(geneid)
+                batch_sequences.append(translation)
 
         homologs = find_batch_homologs(
             batch_geneids, batch_sequences, db, tmp_dir, cpus)
 
-        for geneid, product in homologs:
+        hhsearch_scores = [0.0] * len(contig.gene_ids)
+        for geneid, product, prob in homologs:
             if product:
                 feature = map_geneid_to_feature[geneid]
                 feature.qualifiers["product"] = [product]
+
+                hhsearch_scores[contig.gene_ids.index(geneid)] = float(prob)
+
+        if cache_scores:
+            contig.update_hhsearch_scores(hhsearch_scores)
 
 
 def __feature_in_prophage(feature, contig_prophage_coords):
