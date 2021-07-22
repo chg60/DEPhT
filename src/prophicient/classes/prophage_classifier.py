@@ -84,7 +84,7 @@ class ProphageClassifier:
 
         return temp_proba
 
-    def predict(self, x, feature_weights=None, alpha=0.5):
+    def predict(self, x, feature_weights=None, alpha=0.55):
         """
         Get binary class predictions by calling predict_proba and
         setting values to 0 if < alpha, else 1.
