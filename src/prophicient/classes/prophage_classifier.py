@@ -1,4 +1,11 @@
+import pandas as pd
+
+
 class ProphageClassifier:
+    """
+    Classifier that uses a Naive Bayes-type strategy to construct
+    probability distributions for an n-feature space
+    """
     def __init__(self):
         """
         Constructor for instances of ProphageClassifier.
@@ -16,11 +23,13 @@ class ProphageClassifier:
         :param x: training data to fit a model against
         :type x: pandas.DataFrame
         :param y: training data class labels
-        :type y:
+        :type y: list or numpy.ndarray or pd.DataFrame
         """
         # Build a probability distribution for each feature
         prophage_df = x.iloc[[i for i, value in enumerate(y) if value == 1], :]
         bacteria_df = x.iloc[[i for i, value in enumerate(y) if value == 0], :]
+
+        ratio = float(len(bacteria_df)) / len(prophage_df)
 
         for feature in x.columns:
             prophage_series = prophage_df.loc[:, feature]
@@ -29,7 +38,9 @@ class ProphageClassifier:
             prophage_hist = Histogram(prophage_series)
             bacteria_hist = Histogram(bacteria_series, prophage_hist.bin_width)
 
-            dist = ProbabilityDistribution(prophage_hist, bacteria_hist)
+            dist = ProbabilityDistribution(prophage_hist, bacteria_hist,
+                                           weights=[1, ratio])
+
             self.distributions_[feature] = dist
 
     def predict_proba(self, x, feature_weights=None):
@@ -115,14 +126,15 @@ class Histogram:
         else:
             data_range = data.max() - data.min()
 
-            # For small numbers
-            if 0 < data_range <= 1:
+            if 0 < data_range <= 1:         # For very small numbers
                 self.bin_width = 0.01
-            elif 0 < data_range <= 5000:
+            elif 0 < data_range <= 100:     # For smallish numbers
+                self.bin_width = 1
+            else:                           # Everything else
                 self.bin_width = 10
-            else:
-                iqr = data.quantile(0.75) - data.quantile(0.25)
-                self.bin_width = (2 * iqr) / (len(data) ** (1 / 3))
+            # else:
+            #     iqr = data.quantile(0.75) - data.quantile(0.25)
+            #     self.bin_width = (2 * iqr) / (len(data) ** (1 / 3))
 
         for value in data:
             index = round(value // self.bin_width * self.bin_width, 2)
@@ -133,13 +145,15 @@ class Histogram:
 
 
 class ProbabilityDistribution:
-    def __init__(self, prophage_hist, bacteria_hist):
+    def __init__(self, prophage_hist, bacteria_hist, weights=None):
         """
 
-        :param prophage_hist:
+        :param prophage_hist: prophage histogram
         :type prophage_hist: Histogram
-        :param bacteria_hist:
+        :param bacteria_hist: bacteria histogram
         :type bacteria_hist: Histogram
+        :param weights: adjust weights to account for uneven sampling
+        :type weights: list of int or list of float or None
         """
         if not prophage_hist.bin_width == bacteria_hist.bin_width:
             raise ValueError("input histograms must have the same bin_width")
@@ -151,16 +165,22 @@ class ProbabilityDistribution:
 
         self.bin_width = prophage_hist.bin_width
 
-        prophage_count = prophage_hist.n_samples
-        bacteria_count = bacteria_hist.n_samples
+        if weights:
+            prophage_weight, bacteria_weight = weights
+        else:
+            prophage_weight, bacteria_weight = 1, 1
+
+        prophage_count = prophage_hist.n_samples * prophage_weight
+        bacteria_count = bacteria_hist.n_samples * bacteria_weight
 
         temp_distribution = dict()
 
         for prophage_key, prophage_value in prophage_hist.hist.items():
-            numer = float(prophage_value) / prophage_count
+            numer = float(prophage_value) / prophage_count * prophage_weight
             if prophage_key in bacteria_hist.hist:
                 bacteria_value = bacteria_hist.hist[prophage_key]
                 bacteria_proportion = float(bacteria_value) / bacteria_count
+                bacteria_proportion *= bacteria_weight
             else:
                 bacteria_proportion = 0.0
             denom = numer + bacteria_proportion
