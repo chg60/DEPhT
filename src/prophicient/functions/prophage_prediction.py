@@ -5,10 +5,9 @@ from prophicient import PACKAGE_DIR
 from prophicient.functions.sliding_window import *
 from prophicient.functions.statistics import average
 
-MODEL_PATH = PACKAGE_DIR.joinpath("data/prophage_model.pickle")
+MODEL_PATH = PACKAGE_DIR.joinpath("data/new.prophage_model.pickle")
 
-WINDOW = 51         # Number of CDS features to consider in a window
-
+WINDOW = 55         # Number of CDS features to consider in a window
 BACTERIA = 0        # Gene prediction state - bacterial
 PROPHAGE = 1        # Gene prediction state - prophage
 
@@ -49,7 +48,7 @@ def average_gene_size(starts, stops, length, window=WINDOW):
             right_coord += length
 
         nucl_dist = right_coord - left_coord + 1
-        leading_sizes.append(round(float(nucl_dist)/window, 2))
+        leading_sizes.append(round(float(nucl_dist)/window))
 
     for i_left, i, i_right in lagging_window(window, num_genes):
         right_coord = stops[i_right]
@@ -59,7 +58,7 @@ def average_gene_size(starts, stops, length, window=WINDOW):
             right_coord += length
 
         nucl_dist = right_coord - left_coord + 1
-        lagging_sizes.append(round(float(nucl_dist)/window, 2))
+        lagging_sizes.append(round(float(nucl_dist)/window))
 
     for i_left, i, i_right in center_window(window, num_genes):
         if i_right >= num_genes:        # Avoid IndexError
@@ -72,7 +71,7 @@ def average_gene_size(starts, stops, length, window=WINDOW):
             right_coord += length
 
         nucl_dist = right_coord - left_coord + 1
-        center_sizes.append(round(float(nucl_dist)/window, 2))
+        center_sizes.append(round(float(nucl_dist)/window))
 
     return leading_sizes, center_sizes, lagging_sizes
 
@@ -103,7 +102,7 @@ def average_strand_changes(strands, window=WINDOW):
             if strands[x] != cursor_strand:
                 strand_changes += 1
                 cursor_strand = strands[x]
-        leading_changes.append(round(float(strand_changes)/window, 3))
+        leading_changes.append(strand_changes)
 
     for i_left, i, i_right in lagging_window(window, num_genes):
         cursor_strand = strands[i_left]
@@ -112,7 +111,7 @@ def average_strand_changes(strands, window=WINDOW):
             if strands[x] != cursor_strand:
                 strand_changes += 1
                 cursor_strand = strands[x]
-        lagging_changes.append(round(float(strand_changes)/window, 3))
+        lagging_changes.append(strand_changes)
 
     for i_left, i, i_right in center_window(window, num_genes):
         cursor_strand = strands[i_left]
@@ -123,7 +122,7 @@ def average_strand_changes(strands, window=WINDOW):
             if strands[x] != cursor_strand:
                 strand_changes += 1
                 cursor_strand = strands[x]
-        center_changes.append(round(float(strand_changes)/window, 3))
+        center_changes.append(strand_changes)
 
     return leading_changes, center_changes, lagging_changes
 
@@ -135,7 +134,7 @@ def build_contig_dataframe(contig):
 
     :param contig: a contig to analyze features from
     :type contig: Bio.SeqRecord.SeqRecord
-    :return: feature_dict
+    :return: pd.DataFrame(feature_dict)
     """
     cds_features = [ftr for ftr in contig.features if ftr.type == "CDS"]
 
@@ -202,7 +201,7 @@ def predict_prophage_genes(contig, model_path=MODEL_PATH, alpha=0.25,
     `model_path` to make those predictions.
 
     :param contig: the contig to make prophage predictions in
-    :type contig: Bio.SeqRecord.SeqRecord
+    :type contig: prophicient.classes.contig.Contig
     :param model_path: path to a binary file with sklearn model inside
     :type model_path: pathlib.Path
     :param alpha: probability above which to keep prophage prediction
@@ -255,7 +254,7 @@ def predict_prophage_coords(contig, extend_by=0, mask=None):
     the coordinates associated with phage <-> bacterial transitions.
 
     :param contig: the contig to scan for possible prophages
-    :type contig: Bio.SeqRecord.SeqRecord
+    :type contig: prophicient.classes.contig.Contig
     :param extend_by: number of basepairs to overextend prophages by
     :type extend_by: int
     :param mask: bitwise and will mask known/theorized bacterial genes
