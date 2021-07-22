@@ -5,7 +5,7 @@ from prophicient import PACKAGE_DIR
 from prophicient.functions.sliding_window import *
 from prophicient.functions.statistics import average
 
-MODEL_PATH = PACKAGE_DIR.joinpath("data/new.prophage_model.pickle")
+MODEL_PATH = PACKAGE_DIR.joinpath("data/prophage_model.pickle")
 
 WINDOW = 55         # Number of CDS features to consider in a window
 BACTERIA = 0        # Gene prediction state - bacterial
@@ -33,23 +33,7 @@ def average_gene_size(starts, stops, length, window=WINDOW):
 
     num_genes = len(starts)
 
-    leading_sizes = list()
     lagging_sizes = list()
-    center_sizes = list()
-
-    for i_left, i, i_right in leading_window(window, num_genes):
-        if i_right >= num_genes:        # Avoid IndexError
-            i_right -= num_genes
-
-        right_coord = stops[i_right]
-        left_coord = starts[i_left]
-
-        if right_coord < left_coord:    # Avoid negative nucleotide distance
-            right_coord += length
-
-        nucl_dist = right_coord - left_coord + 1
-        leading_sizes.append(round(float(nucl_dist)/window))
-
     for i_left, i, i_right in lagging_window(window, num_genes):
         right_coord = stops[i_right]
         left_coord = starts[i_left]
@@ -60,18 +44,12 @@ def average_gene_size(starts, stops, length, window=WINDOW):
         nucl_dist = right_coord - left_coord + 1
         lagging_sizes.append(round(float(nucl_dist)/window))
 
-    for i_left, i, i_right in center_window(window, num_genes):
-        if i_right >= num_genes:        # Avoid IndexError
-            i_right -= num_genes
+    mid_idx = window // 2
+    center_sizes = lagging_sizes[mid_idx:]
+    center_sizes.extend(lagging_sizes[:mid_idx])
 
-        right_coord = stops[i_right]
-        left_coord = starts[i_left]
-
-        if right_coord < left_coord:
-            right_coord += length
-
-        nucl_dist = right_coord - left_coord + 1
-        center_sizes.append(round(float(nucl_dist)/window))
+    leading_sizes = lagging_sizes[window:]
+    leading_sizes.extend(lagging_sizes[:window])
 
     return leading_sizes, center_sizes, lagging_sizes
 
@@ -89,21 +67,7 @@ def average_strand_changes(strands, window=WINDOW):
     """
     num_genes = len(strands)
 
-    leading_changes = list()
     lagging_changes = list()
-    center_changes = list()
-
-    for i_left, i, i_right in leading_window(window, num_genes):
-        cursor_strand = strands[i_left]
-        strand_changes = 0
-        for x in range(i_left, i_right + 1):
-            if x >= num_genes:
-                x -= num_genes
-            if strands[x] != cursor_strand:
-                strand_changes += 1
-                cursor_strand = strands[x]
-        leading_changes.append(strand_changes)
-
     for i_left, i, i_right in lagging_window(window, num_genes):
         cursor_strand = strands[i_left]
         strand_changes = 0
@@ -113,16 +77,12 @@ def average_strand_changes(strands, window=WINDOW):
                 cursor_strand = strands[x]
         lagging_changes.append(strand_changes)
 
-    for i_left, i, i_right in center_window(window, num_genes):
-        cursor_strand = strands[i_left]
-        strand_changes = 0
-        for x in range(i_left, i_right + 1):
-            if x >= num_genes:
-                x -= num_genes
-            if strands[x] != cursor_strand:
-                strand_changes += 1
-                cursor_strand = strands[x]
-        center_changes.append(strand_changes)
+    mid_idx = window // 2
+    center_changes = lagging_changes[mid_idx:]
+    center_changes.extend(lagging_changes[:mid_idx])
+
+    leading_changes = lagging_changes[window:]
+    leading_changes.extend(lagging_changes[:window])
 
     return leading_changes, center_changes, lagging_changes
 
