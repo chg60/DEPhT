@@ -17,7 +17,7 @@ from prophicient.classes.prophage_classifier import ProphageClassifier
 from prophicient.functions.annotation import annotate_contig
 from prophicient.functions.prophage_prediction import MODEL_PATH
 from prophicient.functions.prophage_prediction import build_contig_dataframe
-from prophicient.functions.statistics import average, mcc
+from prophicient.functions.statistics import average, mcc, f1_score
 
 EPILOG = """
 Bacterial genomes used for training should be complete assemblies, free of 
@@ -69,10 +69,10 @@ def get_dataframe(filepath, tmp_dir):
     return pd.concat(dataframes, axis=0)
 
 
-def mcc_score(real_classes, predict_classes):
+def _score(real_classes, predict_classes):
     """
     Helper function to score class predictions and then return
-    the mcc.
+    the mcc and f1_scores.
     """
     tps, tns, fps, fns = 0, 0, 0, 0
 
@@ -86,7 +86,9 @@ def mcc_score(real_classes, predict_classes):
         else:
             tns += 1
 
-    return mcc(tps, fns, tns, fps)
+    # print(tps, tns, fps, fns)
+
+    return mcc(tps, fns, tns, fps), f1_score(tps, fps, fns)
 
 
 def train_prophage_classifier(prophage_data, bacteria_data):
@@ -97,6 +99,12 @@ def train_prophage_classifier(prophage_data, bacteria_data):
     for each input feature, and can then use that distribution to
     predict the probability that a given input gene belongs to the
     prophage class.
+
+    :param prophage_data: the (pro)phage training data
+    :type prophage_data: pd.DataFrame
+    :param bacteria_data: the bacterial training data
+    :type bacteria_data: pd.DataFrame
+    :return: clf, mean_mcc, mean_f1
     """
     # Seed RNG for reproducibility - use the "Answer to the Ultimate
     # Question of Life, the Universe, and Everything." (Douglas Adams)
@@ -106,7 +114,7 @@ def train_prophage_classifier(prophage_data, bacteria_data):
     prophage_splits = [x for x in kf.split(len(prophage_data))]
     bacteria_splits = [x for x in kf.split(len(bacteria_data))]
 
-    mcc_scores = list()
+    mcc_scores, f1_scores = list(), list()
     clf = ProphageClassifier()
 
     for prophage_split, bacteria_split in zip(prophage_splits, bacteria_splits):
@@ -126,10 +134,11 @@ def train_prophage_classifier(prophage_data, bacteria_data):
 
         clf.fit(train_feats, train_labels)
 
-        predictions = clf.predict(test_feats)
-        mcc_scores.append(mcc_score(test_labels, predictions))
+        predictions = clf.predict(test_feats, alpha=0.55)
+        m, f = _score(test_labels, predictions)
+        mcc_scores.append(m), f1_scores.append(f)
 
-    mean_mcc = average(mcc_scores)
+    mean_mcc, mean_f1 = average(mcc_scores), average(f1_scores)
 
     all_feats = pd.concat((prophage_data.iloc[:, :-1],
                            bacteria_data.iloc[:, :-1]), axis=0)
@@ -138,7 +147,7 @@ def train_prophage_classifier(prophage_data, bacteria_data):
 
     clf.fit(all_feats, all_labels)
 
-    return clf, mean_mcc
+    return clf, mean_mcc, mean_f1
 
 
 def main(arguments):
@@ -193,8 +202,10 @@ def main(arguments):
     bacteria_df = bacteria_df.loc[:, ["ctr_size", "ctr_strand", "is_prophage"]]
 
     print("Training classifier...")
-    model, training_mcc = train_prophage_classifier(prophage_df, bacteria_df)
-    print(f"ProphageClassifier got average MCC = {training_mcc:.3f}")
+    model, train_mcc, train_f1 = \
+        train_prophage_classifier(prophage_df, bacteria_df)
+    print(f"ProphageClassifier got average MCC, F1 = {train_mcc:.3f}, "
+          f"{train_f1:.3f}...")
 
     # Save old model file if it exists
     if MODEL_PATH.is_file():
