@@ -186,13 +186,13 @@ def predict_prophage_genes(contig, model_path=MODEL_PATH, alpha=0.25,
     classifier = pickle.load(model_reader)
     model_reader.close()
 
-    lead_p = classifier.predict(lead_df)
-    center_p = classifier.predict(center_df)
-    lag_p = classifier.predict(lag_df)
+    lead_p = classifier.predict_proba(lead_df)
+    center_p = classifier.predict_proba(center_df)
+    lag_p = classifier.predict_proba(lag_df)
 
     predictions = list()
     for x, y, z in zip(lead_p, center_p, lag_p):
-        predictions.append(max((x, y, z)))
+        predictions.append(average([x, y, z]))
 
     # Store model predictions within the contig option
     contig.update_model_scores(predictions)
