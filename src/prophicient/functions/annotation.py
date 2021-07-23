@@ -16,7 +16,7 @@ from prophicient.functions.fasta import parse_fasta
 MIN_LENGTH = 20000      # Don't annotate short contigs
 META_LENGTH = 100000    # Medium-length contigs -> use metagenomic mode
 
-MIN_CDS_FEATURES = 51
+MIN_CDS_FEATURES = 55
 
 DEFAULT_PRODUCT = "hypothetical protein"
 
