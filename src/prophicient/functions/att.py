@@ -13,7 +13,7 @@ from prophicient.functions.statistics import transform
 # GLOBAL VARIABLES
 # -----------------------------------------------------------------------------
 KMER_SIZE = 5
-MIN_ATT_SCORE = 1
+MIN_ATT_SCORE = 2.3
 EVALUE_FILTER = 10000
 
 L_SEQ_NAME = "putative_attL_region"
@@ -312,8 +312,10 @@ def score_kmer(kmer_contig, prophage, paired_ref_map, r_seq_start):
                                         attL_pos, attR_pos,
                                         len(kmer_contig[0]), paired_ref_map)
 
-    composite_score = (att_quality_score + int_proximity_score +
-                       model_cov_score + reference_score)
+    composite_score = ((att_quality_score + int_proximity_score +
+                        model_cov_score) *
+                       (3 / (AQ_WEIGHT + IP_WEIGHT + MC_WEIGHT)) +
+                       reference_score)
 
     return (composite_score, att_quality_score, kmer_contig[3],
             int_proximity_score, int_distance,
