@@ -1,26 +1,28 @@
 import math
 
 from networkx import DiGraph
+from scipy.stats import zscore
 
 from prophicient.classes import kmers
 from prophicient.classes.prophage import DEFAULT_PRODUCT
 from prophicient.functions.blastn import blastn
 from prophicient.functions.fasta import write_fasta
+from prophicient.functions.statistics import transform
 
 
 # GLOBAL VARIABLES
 # -----------------------------------------------------------------------------
 KMER_SIZE = 5
-MIN_ATT_SCORE = 1
+MIN_ATT_SCORE = 2.3
 EVALUE_FILTER = 10000
 
 L_SEQ_NAME = "putative_attL_region"
 R_SEQ_NAME = "putative_attR_region"
 
 AQ_WEIGHT = 1
-IP_WEIGHT = 0.5
-MC_WEIGHT = 0.5
-RC_WEIGHT = 2
+IP_WEIGHT = 0.6
+MC_WEIGHT = 0.9
+RC_WEIGHT = 1
 
 DEFAULTS = {"k": 5, "fpp": 0.0001, "outfmt": 10}
 
@@ -71,6 +73,8 @@ def find_attachment_site(prophage, l_seq, r_seq,
 
     if not kmer_contigs:
         return
+
+    transform_kmer_contig_bitscores(kmer_contigs)
 
     # Score putative attachment site sequences
     # TODO paramaterize and allow access to change the 'exponent' variable
@@ -138,9 +142,9 @@ def blast_attachment_site(l_seq_path, r_seq_path, tmp_dir, k=KMER_SIZE,
     kmer_contigs = []
     for result in blast_results:
         # Append the contig and its positions to the list
-        kmer_contig = (result["qseq"],
+        kmer_contig = [result["qseq"],
                        int(result["qstart"]) - 1, int(result["send"]),
-                       float(result["bitscore"]))
+                       float(result["bitscore"])]
         kmer_contigs.append(kmer_contig)
 
     return kmer_contigs
@@ -267,6 +271,22 @@ def pair_reference_maps(ref_ids, left_map, right_map, k, sort_key,
 
 # SCORING HELPER FUNCTIONS
 # -----------------------------------------------------------------------------
+def transform_kmer_contig_bitscores(kmer_contigs):
+    """Transform the kmer contig bitscores into z-scores
+    :param kmer_contigs: A list of kmers and their positions in the sequence
+    :type kmer_contigs: list
+    """
+    bitscores = []
+    for kmer_contig in kmer_contigs:
+        bitscores.append(kmer_contig[3])
+
+    zscores = zscore(bitscores)
+    transform(zscores, min_t=0, max_t=1)
+
+    for i, kmer_contig in enumerate(kmer_contigs):
+        kmer_contig.append(zscores[i])
+
+
 def score_kmer(kmer_contig, prophage, paired_ref_map, r_seq_start):
     """Score kmer contigs with a complete holsitic approach.
 
@@ -278,39 +298,44 @@ def score_kmer(kmer_contig, prophage, paired_ref_map, r_seq_start):
     attL_pos = prophage.start + kmer_contig[1]
     attR_pos = r_seq_start + kmer_contig[2]
 
-    att_quality_score = score_att_quality(kmer_contig[3])
+    att_quality_score = score_att_quality(kmer_contig[4])
 
-    int_proximity_score = score_integrase_proximity(prophage,
+    int_proximity_score, int_distance = score_integrase_proximity(
+                                                    prophage,
                                                     attL_pos - prophage.start,
                                                     attR_pos - prophage.start)
 
-    model_cov_score = score_model_coverage(attR_pos - attL_pos,
-                                           len(prophage.seq))
+    model_cov_score, model_coverage = score_model_coverage(attR_pos - attL_pos,
+                                                           len(prophage.seq))
 
-    reference_score = score_reference_concurrence(
+    reference_score, reference_bitscore = score_reference_concurrence(
                                         attL_pos, attR_pos,
                                         len(kmer_contig[0]), paired_ref_map)
 
-    composite_score = (att_quality_score + int_proximity_score +
-                       model_cov_score + reference_score)
+    composite_score = ((att_quality_score + int_proximity_score +
+                        model_cov_score) *
+                       (3 / (AQ_WEIGHT + IP_WEIGHT + MC_WEIGHT)) +
+                       reference_score)
 
-    return (composite_score, att_quality_score, int_proximity_score,
-            model_cov_score, reference_score)
+    return (composite_score, att_quality_score, kmer_contig[3],
+            int_proximity_score, int_distance,
+            model_cov_score, model_coverage,
+            reference_score, reference_bitscore)
 
 
-def score_att_quality(bitscore, base=KMER_SIZE, weight=AQ_WEIGHT):
-    score = 1 - (base / bitscore)
+def score_att_quality(normalized_bitscore, weight=AQ_WEIGHT):
+    score = normalized_bitscore
 
     if score < 0:
         score = 0.0
     elif score > 1:
         score = 1.0
 
-    score = score * weight
-    return score
+    weighted_score = score * weight
+    return weighted_score
 
 
-def score_integrase_proximity(prophage, attL_pos, attR_pos, base=100,
+def score_integrase_proximity(prophage, attL_pos, attR_pos, base_dist=1500,
                               weight=IP_WEIGHT):
     int_dist = None
     for feature in prophage.record.features:
@@ -323,33 +348,36 @@ def score_integrase_proximity(prophage, attL_pos, attR_pos, base=100,
             left_int_dist = int(feature.location.start - attL_pos)
             right_int_dist = int(attR_pos - feature.location.end)
 
-            if left_int_dist < 0 or right_int_dist < 0:
-                continue
-
             if int_dist is None:
                 int_dist = left_int_dist
+            elif int_dist < 0 and left_int_dist > int_dist:
+                int_dist = left_int_dist
             else:
-                if left_int_dist < int_dist:
+                if left_int_dist < int_dist and left_int_dist > 0:
                     int_dist = left_int_dist
 
-            if right_int_dist < int_dist:
+            if int_dist is None:
                 int_dist = right_int_dist
+            elif int_dist < 0 and right_int_dist > int_dist:
+                int_dist = right_int_dist
+            else:
+                if right_int_dist < int_dist and right_int_dist > 0:
+                    int_dist = right_int_dist
 
     if int_dist is None:
-        return 0.0
+        score = -1
+    elif int_dist < 0:
+        score = -1
+    elif int_dist == 0:
+        score = 1
+    else:
+        score = (base_dist / int_dist) ** 2
 
-    if int_dist < 10:
-        int_dist = 10
+        if score > 1:
+            score = 1
 
-    score = 1 / (math.log(int_dist, base))
-
-    if score < 0:
-        score = 0.0
-    elif score > 1:
-        score = 1.0
-
-    score = score * weight
-    return score
+    weighted_score = score * weight
+    return weighted_score, int_dist
 
 
 def score_model_coverage(putative_len, model_len, weight=MC_WEIGHT):
@@ -358,8 +386,8 @@ def score_model_coverage(putative_len, model_len, weight=MC_WEIGHT):
     if score > 1:
         score = 1.0
 
-    score = score * weight
-    return score
+    weighted_score = score * weight
+    return score, weighted_score
 
 
 def score_reference_concurrence(attL_pos, attR_pos, att_len, paired_ref_map,
@@ -388,7 +416,7 @@ def score_reference_concurrence(attL_pos, attR_pos, att_len, paired_ref_map,
                 ref_bitscore = ref_data[3]
 
     if ref_bitscore is None:
-        return 0.0
+        return 0.0, 0
 
     if ref_bitscore < 10:
         ref_bitscore = 10
@@ -400,8 +428,8 @@ def score_reference_concurrence(attL_pos, attR_pos, att_len, paired_ref_map,
     elif score > 1:
         score = 1.0
 
-    score = score * weight
-    return score
+    weighted_score = score * weight
+    return weighted_score, ref_bitscore
 
 
 # DEB-GRAPH KMER-COUNTING HELPER FUNCTIONS
