@@ -76,6 +76,10 @@ def find_single_homologs(header, sequence, db, tmp_dir, prob=HHSEARCH_PROB,
         hhresult.matches.sort(key=lambda x: float(x.score), reverse=True)
         best_match = hhresult.matches[0].target_id
         best_probability = hhresult.matches[0].probability
+    else:
+        output_file.unlink()
+
+    query_file.unlink()
 
     return header, best_match, best_probability
 

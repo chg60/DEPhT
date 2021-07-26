@@ -30,8 +30,8 @@ from prophicient.functions.visualization import draw_complete_diagram
 # -----------------------------------------------------------------------------
 # For temporary file I/O
 TMP_DIR = pathlib.Path("/tmp/prophicient")
-CONTIG_DATA_HEADER = ["Gene ID", "Start", "Stop", "Prediction",
-                      "Conservation", "Homology"]
+CONTIG_DATA_HEADER = ["Gene ID", "Start", "End", "Prediction",
+                      "Bacterial Homology", "Phage Homology"]
 
 # For naming any identified prophages
 PROPHAGE_PREFIX = "prophi"
@@ -304,10 +304,6 @@ def main():
                               draw)
 
         if dump:
-            for contig in contigs:
-                contig_data_path = genome_tmp_dir.joinpath(f"{contig.id}.csv")
-                write_contig_data(contig, contig_data_path)
-
             destination = genome_outdir.joinpath("tmp_data")
 
             if destination.exists():
@@ -480,8 +476,11 @@ def write_prophage_output(outdir, contigs, prophages, tmp_dir, draw):
         contig.record.annotations = ANNOTATIONS
 
         genbank_filename = outdir.joinpath(name).with_suffix(".gbk")
+        table_filename = outdir.joinpath(name).with_suffix(".csv")
 
         SeqIO.write(contig.record, genbank_filename, "genbank")
+
+        write_contig_data(contig, table_filename)
 
     for prophage in prophages:
         name = prophage.id
@@ -524,6 +523,8 @@ def write_contig_data(contig, outpath):
             data_dict[header] = data[j]
 
         csv_writer.writerow(data_dict)
+
+    filehandle.close()
 
 
 if __name__ == "__main__":
