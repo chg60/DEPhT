@@ -71,3 +71,9 @@ class Contig:
         self.hhsearch_scores = list()
         for score in hhsearch_scores:
             self.hhsearch_scores.append(score)
+
+    def fill_hhsearch_scores(self):
+        if not (self.genes):
+            return
+
+        self.hhsearch_scores = [0.0] * len(self.genes)
