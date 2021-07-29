@@ -95,8 +95,11 @@ def parse_args():
     p.add_argument("-t", "--tmp-dir", type=pathlib.Path, default=TMP_DIR,
                    help=f"temporary directory to use for file I/O [default: "
                         f"{TMP_DIR}]")
-    p.add_argument("-P",  "--product_threshold", type=int, default=None,
-                   help="select a phage homolog product lower threshold")
+    p.add_argument("-p",  "--product-threshold", type=int, default=None,
+                   help=f"select a phage homolog product lower threshold")
+    p.add_argument("-l", "--length-threshold", type=int, default=MIN_SIZE,
+                   help=f"select a minimum length for prophages [default: "
+                        f"{MIN_SIZE}]")
 
     return p.parse_args()
 
@@ -115,7 +118,8 @@ def main():
     runmode = args.mode         # What runmode are we using?
     verbose = args.verbose      # Print verbose outputs?
     cpus = args.cpus            # How many physical cores can we use?
-    att_sens = args.att_sensitivity  # What's the att sensitivity modifier?
+    att_sens = args.att_sensitivity     # What's the att sensitivity modifier?
+    min_length = args.length_threshold  # Minimum prophage length in bp
 
     # Get output dir and make sure it's a valid path
     outdir = pathlib.Path(args.outdir).resolve()
@@ -213,7 +217,7 @@ def main():
 
             filtered_prediction = []
             for pred in prediction:
-                if len(range(*pred)) < MIN_SIZE:
+                if len(range(*pred)) < min_length:
                     continue
 
                 filtered_prediction.append(pred)
@@ -271,7 +275,7 @@ def main():
         detect_att_sites(prophages, BLASTN_DB, search_space, att_dir)
 
         prophages = [prophage for prophage in prophages
-                     if prophage.length >= MIN_SIZE]
+                     if prophage.length >= min_length]
 
         if not prophages:
             print(f"no complete prophages found in {str(infile)}. "
@@ -471,8 +475,8 @@ def write_prophage_output(outdir, contigs, prophages, tmp_dir, draw):
         name = contig.id
         contig.record.annotations = ANNOTATIONS
 
-        genbank_filename = outdir.joinpath(name).with_suffix(".gbk")
-        table_filename = outdir.joinpath(name).with_suffix(".csv")
+        genbank_filename = outdir.joinpath(f"{name}.gbk")
+        table_filename = outdir.joinpath(f"{name}.csv")
 
         SeqIO.write(contig.record, genbank_filename, "genbank")
 
@@ -483,8 +487,8 @@ def write_prophage_output(outdir, contigs, prophages, tmp_dir, draw):
         prophage_outdir = outdir.joinpath(name)
         prophage_outdir.mkdir(exist_ok=True)
 
-        genbank_filename = prophage_outdir.joinpath(name).with_suffix(".gbk")
-        fasta_filename = prophage_outdir.joinpath(name).with_suffix(".fasta")
+        genbank_filename = prophage_outdir.joinpath(f"{name}.gbk")
+        fasta_filename = prophage_outdir.joinpath(f"{name}.fasta")
 
         SeqIO.write(prophage.record, genbank_filename, "genbank")
         SeqIO.write(prophage.record, fasta_filename, "fasta")
