@@ -158,24 +158,24 @@ def parse_aragorn(outfile):
     return features
 
 
-def annotate_contig(contig, tmp_dir, trna=True):
+def annotate_record(record, tmp_dir, trna=True):
     """
     Uses Prodigal to predict protein-coding genes, and Aragorn to
     predict t(m)RNA genes on bacterial contigs. All resultant features
     are appended directly to the contig's features list.
 
-    :param contig: the nucleotide sequence to predict genes on
-    :type contig: Bio.SeqRecord.SeqRecord
+    :param record: the nucleotide sequence to predict genes on
+    :type record: Bio.SeqRecord.SeqRecord
     :param tmp_dir: temporary directory where files can go
     :type tmp_dir: pathlib.Path
     :param trna: don't annotate tRNAs
     :type trna: bool
     """
     # Set up to run Prodigal and Aragorn
-    infile = tmp_dir.joinpath(f"{contig.id}.fna")
+    infile = tmp_dir.joinpath(f"{record.id}.fna")
 
     infile_writer = infile.open("w")
-    SeqIO.write(contig, infile_writer, "fasta")
+    SeqIO.write(record, infile_writer, "fasta")
     infile_writer.close()
 
     # Name the output files
@@ -184,7 +184,7 @@ def annotate_contig(contig, tmp_dir, trna=True):
 
     # Set up to run Prodigal first, since it takes the longest to run
     prodigal_process = prodigal(infile, prodigal_out,
-                                len(contig) < META_LENGTH)
+                                len(record) < META_LENGTH)
 
     # Now kick off Aragorn - wait until it finishes, then begin parsing output
     if trna:
@@ -192,13 +192,13 @@ def annotate_contig(contig, tmp_dir, trna=True):
         while aragorn_process.poll() is None:
             time.sleep(0.5)
         for ftr in parse_aragorn(aragorn_out):
-            contig.features.append(ftr)
+            record.features.append(ftr)
 
     # Now wait until Prodigal finishes to parse its output
     while prodigal_process.poll() is None:
         time.sleep(0.5)
     for ftr in parse_prodigal(prodigal_out):
-        contig.features.append(ftr)
+        record.features.append(ftr)
 
     # Sort contig features on start position
-    contig.features.sort(key=lambda x: x.location.start)
+    record.features.sort(key=lambda x: x.location.start)

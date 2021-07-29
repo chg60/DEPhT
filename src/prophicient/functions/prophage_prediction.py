@@ -215,18 +215,19 @@ def predict_prophage_coords(contig, extend_by=0, mask=None):
 
     :param contig: the contig to scan for possible prophages
     :type contig: prophicient.classes.contig.Contig
-    :param extend_by: number of basepairs to overextend prophages by
+    :param extend_by: number of bases to overextend prophages by
     :type extend_by: int
     :param mask: bitwise and will mask known/theorized bacterial genes
     :type mask: list of int
     :return: prophage_coords
+    :rtype: list of (int, int)
     """
     gene_predictions = predict_prophage_genes(contig, mask=mask)
 
     prophage_coords = list()
     left, right = None, None
     n_inflections = 0
-    previous_state = gene_predictions[-1]
+    previous_state = gene_predictions[0]
 
     for i, current_state in enumerate(gene_predictions):
         if previous_state == BACTERIA and current_state == PROPHAGE:

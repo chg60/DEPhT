@@ -17,7 +17,7 @@ from Bio import SeqIO
 from prophicient import PACKAGE_DIR
 from prophicient.classes.prophage import ANNOTATIONS, DEFAULT_PRODUCT, Prophage
 from prophicient.classes.contig import CODING_FEATURE_TYPES, Contig
-from prophicient.functions.annotation import annotate_contig, MIN_LENGTH, \
+from prophicient.functions.annotation import annotate_record, MIN_LENGTH, \
                                              MIN_CDS_FEATURES
 from prophicient.functions.att import find_attachment_site
 from prophicient.functions.find_homologs import find_homologs
@@ -106,31 +106,14 @@ def main():
     """
     args = parse_args()
 
-    # Get input file(s) and format
-    infiles, fmt = args.infile, args.input_format
-
-    # Are we going to draw genome diagrams?
-    draw = args.draw
-
-    # Are we dumping data into outdir when done?
-    dump = args.dump_data
-
-    # What runmode are we using - never draw in fast runmode
-    runmode = args.mode
-    if runmode == "fast" and draw:
-        # Why do we want to turn off draw?
-        # print("fast mode - turning off draw...")
-        # draw = False
-        pass
-
-    # Print verbose outputs?
-    verbose = args.verbose
-
-    # How many physical cores can we use?
-    cpus = args.cpus
-
-    # What's the att sensitivity modifier?
-    att_sensitivity = args.att_sensitivity
+    infiles = args.infile       # What input file(s)?
+    fmt = args.input_format     # What is the input file format?
+    draw = args.draw            # Are we going to draw genome diagrams?
+    dump = args.dump_data       # Are we dumping data into outdir when done?
+    runmode = args.mode         # What runmode are we using?
+    verbose = args.verbose      # Print verbose outputs?
+    cpus = args.cpus            # How many physical cores can we use?
+    att_sens = args.att_sensitivity  # What's the att sensitivity modifier?
 
     # Get output dir and make sure it's a valid path
     outdir = pathlib.Path(args.outdir).resolve()
@@ -167,10 +150,9 @@ def main():
         # Parse all contigs of annotation-worthy length
         if verbose:
             print(f"\nparsing '{str(infile)}'...")
-        contig_records = [x for x in SeqIO.parse(infile, fmt)
-                          if len(x) >= MIN_LENGTH]
+        records = [x for x in SeqIO.parse(infile, fmt) if len(x) >= MIN_LENGTH]
 
-        if not contig_records:
+        if not records:
             print(f"no {fmt}-formatted records found in '{str(infile)}' - "
                   f"skipping it...")
             shutil.rmtree(genome_tmp_dir)  # clean up after ourselves
@@ -185,28 +167,27 @@ def main():
             if not annotate_dir.is_dir():
                 annotate_dir.mkdir()
 
-            for record in contig_records:
-                annotate_contig(record, annotate_dir)
+            for record in records:
+                annotate_record(record, annotate_dir)
 
         else:
             if verbose:
                 print("using flat file annotation...")
 
-            load_flat_file_contig_records(contig_records)
+            cleanup_flatfile_records(records)
 
         # Filter contigs that don't have enough CDS features
-        contig_records = [record for record in contig_records
-                          if (len(
-                            [x for x in record.features if x.type == "CDS"]) >=
-                              MIN_CDS_FEATURES)]
+        records = [record for record in records if (len(
+            [x for x in record.features if x.type == "CDS"]) >=
+                                                    MIN_CDS_FEATURES)]
 
-        if not contig_records:
+        if not records:
             print(f"no contigs long enough to analyze in '{str(infile)}' - "
                   f"skipping it...")
             shutil.rmtree(genome_tmp_dir)  # clean up after ourselves
             continue
 
-        contigs = load_contigs(contig_records)
+        contigs = load_contigs(records)
 
         if verbose:
             print("masking conserved bacterial features...")
@@ -223,21 +204,21 @@ def main():
             print("looking for high-probability prophage regions...")
 
         # Predict prophage coordinates for each contig
-        prophage_preds = list()
+        prophage_predictions = list()
         for i, contig in enumerate(contigs):
-            contig_pred = predict_prophage_coords(contig, EXTEND_BY,
-                                                  mask=bacterial_masks[i])
+            prediction = predict_prophage_coords(contig, EXTEND_BY,
+                                                 mask=bacterial_masks[i])
 
-            filtered_contig_pred = []
-            for pred in contig_pred:
+            filtered_prediction = []
+            for pred in prediction:
                 if len(range(*pred)) < MIN_SIZE:
                     continue
 
-                filtered_contig_pred.append(pred)
+                filtered_prediction.append(pred)
 
-            prophage_preds.append(filtered_contig_pred)
+            prophage_predictions.append(filtered_prediction)
 
-        if all([not any(x) for x in prophage_preds]):
+        if all([not any(x) for x in prophage_predictions]):
             print(f"no complete prophages found in {str(infile)}. "
                   f"PHASTER may be able to find partial (dead) prophages.")
             shutil.rmtree(genome_tmp_dir)  # clean up after ourselves
@@ -253,18 +234,18 @@ def main():
             if verbose:
                 print("searching for phage gene homologs...")
 
-            find_homologs(contigs, prophage_preds, ESSENTIAL_DB,
+            find_homologs(contigs, prophage_predictions, ESSENTIAL_DB,
                           hhsearch_dir, cpus)
             product_threshold = MIN_PRODUCTS_NORMAL
 
             if runmode == "strict":
                 if verbose:
                     print("extending search for phage gene homologs...")
-                find_homologs(contigs, prophage_preds, EXTENDED_DB,
+                find_homologs(contigs, prophage_predictions, EXTENDED_DB,
                               hhsearch_dir, cpus, cache_scores=False)
                 product_threshold = MIN_PRODUCTS_STRICT
 
-        prophages = load_initial_prophages(contigs, prophage_preds,
+        prophages = load_initial_prophages(contigs, prophage_predictions,
                                            product_threshold,
                                            prefix=PROPHAGE_PREFIX,
                                            delimiter=PROPHAGE_DELIMITER)
@@ -278,7 +259,7 @@ def main():
             att_dir.mkdir()
 
         # Detect attachment sites, where possible, for the predicted prophage
-        search_space = att_sensitivity * EXTEND_BY
+        search_space = att_sens * EXTEND_BY
         detect_att_sites(prophages, BLASTN_DB, search_space, att_dir)
 
         prophages = [prophage for prophage in prophages
@@ -317,22 +298,23 @@ def main():
 
 # HELPER FUNCTIONS
 # -----------------------------------------------------------------------------
-def load_flat_file_contig_records(contigs):
-    """Function to clean up and format SeqRecord sequence contigs created
+def cleanup_flatfile_records(records):
+    """
+    Function to clean up and format SeqRecord sequence contigs created
     from imported flat file annotations.
 
-    :param contigs: Imported sequence contigs
-    :type contigs: list
+    :param records: imported records
+    :type records: list
     """
-    for contig in contigs:
+    for record in records:
         features = list()
-        for feature in contig.features:
+        for feature in record.features:
             if feature.type not in CODING_FEATURE_TYPES:
                 continue
 
             if feature.type == "CDS":
                 if not feature.qualifiers.get("translation"):
-                    dna = feature.extract(contig.seq)
+                    dna = feature.extract(record.seq)
                     translation = dna.translate(to_stop=True, table=11)
                     feature.qualifiers["translation"] = [str(translation)]
 
@@ -340,7 +322,7 @@ def load_flat_file_contig_records(contigs):
 
             features.append(feature)
 
-        contig.features = features
+        record.features = features
 
 
 def load_contigs(contig_records):
@@ -368,7 +350,7 @@ def load_initial_prophages(contigs, prophage_predictions,
     and their respective parent SeqRecord objects.
 
     :param contigs: SeqRecord nucleotide sequence objects
-    :type contigs: list[Bio.SeqRecord.SeqRecord]
+    :type contigs: list[Contig]
     :param prophage_predictions: coordinates for predicted prophages
     :type prophage_predictions: list[list]
     :param product_threshold: number of products
@@ -382,7 +364,7 @@ def load_initial_prophages(contigs, prophage_predictions,
     """
     prophages = []
     for contig_index, contig in enumerate(contigs):
-        # Retrieve the contig seqrecord associated with the coordinates
+        # Retrieve the contig SeqRecord associated with the coordinates
         contig_predictions = prophage_predictions[contig_index]
 
         prophage_index = 0
@@ -427,6 +409,8 @@ def detect_att_sites(prophages, reference_db_path, search_space,
     :type tmp_dir: pathlib.Path
     :param min_kmer_score: Minimum length threshold of attachment sites.
     :type min_kmer_score: int
+    :param sort_key: the blast column to sort possible att pairs on
+    :type sort_key: str
     """
     for prophage in prophages:
         # Create prophage working directory within temp directory
@@ -470,6 +454,10 @@ def write_prophage_output(outdir, contigs, prophages, tmp_dir, draw):
     :type contigs: list
     :param prophages: Identified prophages to be written to file
     :type prophages: list
+    :param tmp_dir: where this genome's temporary data are found
+    :type tmp_dir: pathlib.Path
+    :param draw: draw diagram(s) for this genome's prophage(s)?
+    :type draw: bool
     """
     for contig in contigs:
         name = contig.id
@@ -505,11 +493,10 @@ def write_contig_data(contig, outpath):
     :param contig: Bacterial sequence contig class
     :type contig: prophicient.classes.contig.Contig
     :param outpath: Path to the outputted data table file
-    :type outpath: pathlib.Path
-    :type outpath: str
+    :type outpath: pathlib.Path or str
     """
-    filehandle = open(outpath, "w")
-    csv_writer = csv.DictWriter(filehandle, fieldnames=CONTIG_DATA_HEADER)
+    handle = open(outpath, "w")
+    csv_writer = csv.DictWriter(handle, fieldnames=CONTIG_DATA_HEADER)
 
     csv_writer.writeheader()
 
@@ -524,7 +511,7 @@ def write_contig_data(contig, outpath):
 
         csv_writer.writerow(data_dict)
 
-    filehandle.close()
+    handle.close()
 
 
 if __name__ == "__main__":
