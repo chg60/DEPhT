@@ -336,7 +336,7 @@ def load_contigs(contig_records):
     """
     contigs = list()
     for record in contig_records:
-        contig = Contig(record, record.id)
+        contig = Contig(record, record.name)
         contigs.append(contig)
 
     return contigs
