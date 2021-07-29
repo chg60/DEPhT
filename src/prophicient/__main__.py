@@ -95,6 +95,8 @@ def parse_args():
     p.add_argument("-t", "--tmp-dir", type=pathlib.Path, default=TMP_DIR,
                    help=f"temporary directory to use for file I/O [default: "
                         f"{TMP_DIR}]")
+    p.add_argument("-P",  "--product_threshold", type=int, default=None,
+                   help="select a phage homolog product lower threshold")
 
     return p.parse_args()
 
@@ -244,6 +246,12 @@ def main():
                 find_homologs(contigs, prophage_predictions, EXTENDED_DB,
                               hhsearch_dir, cpus, cache_scores=False)
                 product_threshold = MIN_PRODUCTS_STRICT
+        else:
+            for contig in contigs:
+                contig.fill_hhsearch_scores()
+
+        if args.product_threshold is not None:
+            product_threshold = args.product_threshold
 
         prophages = load_initial_prophages(contigs, prophage_predictions,
                                            product_threshold,

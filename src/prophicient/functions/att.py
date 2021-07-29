@@ -366,6 +366,7 @@ def score_integrase_proximity(prophage, attL_pos, attR_pos, base_dist=1500,
 
     if int_dist is None:
         score = -1
+        int_dist = -1
     elif int_dist < 0:
         score = -1
     elif int_dist == 0:
