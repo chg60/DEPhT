@@ -6,6 +6,15 @@ import math
 
 
 def average(values, kind="arithmetic"):
+    """
+    Calculate the mean of given values.
+
+    :param values: the values to calculate mean for
+    :type values: list of int or list of float
+    :param kind: what kind of average to calculate
+    :type kind: str
+    :return: mean
+    """
     if kind == "arithmetic":
         numerator, denominator = sum(values), len(values)
     elif kind == "geometric":
@@ -14,14 +23,43 @@ def average(values, kind="arithmetic"):
         numerator, denominator = len(values), sum([1.0/x for x in values])
     else:
         raise ValueError(f"'{kind}' is not a supported kind of average")
-    return float(numerator)/denominator
+
+    mean = float(numerator)/denominator
+
+    return mean
 
 
-def stdev(values, mean=None):
+def variance(values, mean=None):
+    """
+    Calculate the variance (sigma squared) of given values.
+
+    :param values: the values to calculate variance for
+    :type values: list of int or list of float
+    :param mean: the arithmetic average of the given values
+    :type mean: int or float
+    :return: var
+    """
     if not mean:
         mean = average(values)
-    var = [(x - mean) ** 2 for x in values]
-    return average(var) ** 0.5
+
+    var = average([(x - mean) ** 2 for x in values])
+
+    return var
+
+
+def standard_dev(values, mean=None):
+    """
+    Calculate the standard deviation (sigma) of given values.
+
+    :param values: the values to calculate variance for
+    :type values: list of int or list of float
+    :param mean: the arithmetic average of the given values
+    :type mean: int or float
+    :return: st_dev
+    """
+    st_dev = variance(values, mean) ** 0.5
+
+    return st_dev
 
 
 def true_positive_rate(true_pos, false_neg):
@@ -140,7 +178,7 @@ def false_omission_rate(true_neg, false_neg):
 
 def f1_score(true_pos, false_pos, false_neg):
     """
-    Calculates the F1 score.
+    Calculate the F1 score.
 
     NOTE: harmonic mean of TPR and PPV
 
@@ -159,7 +197,7 @@ def f1_score(true_pos, false_pos, false_neg):
 
 def accuracy(true_pos, false_neg, true_neg, false_pos):
     """
-    Calculates the accuracy.
+    Calculate the accuracy.
 
     :param true_pos: number of correctly identified positives
     :type true_pos: int
@@ -178,7 +216,7 @@ def accuracy(true_pos, false_neg, true_neg, false_pos):
 
 def mcc(true_pos, false_neg, true_neg, false_pos):
     """
-    Calculates the Matthews correlation coefficient.
+    Calculate the Matthews correlation coefficient.
 
     NOTE: this can be thought of as a balanced accuracy metric
     that isn't skewed by differences in class size.
@@ -201,7 +239,7 @@ def mcc(true_pos, false_neg, true_neg, false_pos):
 
 def minmax(values):
     """
-    Identifies the minimum and maximum values in a list of floats in a
+    Identify the minimum and maximum values in a list of floats in a
     single pass (as opposed to calling min() and max() separately).
 
     :param values: a list of floats to find min() and max() values in
@@ -218,6 +256,17 @@ def minmax(values):
 
 
 def transform(values, min_t=0, max_t=0):
+    """
+    Transform (in-place) the given values to a new range indicated by
+    the range [min_t, max_t], inclusive.
+
+    :param values: the values to transform
+    :type values: list
+    :param min_t: desired new minimum
+    :type min_t: int or float
+    :param max_t: desired new maximum
+    :type max_t: int or float
+    """
     min_o, max_o = minmax(values)
 
     try:
