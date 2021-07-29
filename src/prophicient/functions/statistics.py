@@ -62,6 +62,23 @@ def standard_dev(values, mean=None):
     return st_dev
 
 
+def median(values):
+    """
+    Calculate the median of given values.
+
+    :param values: the values to calculate variance for
+    :type values: list of int or list of float
+    :return: med
+    """
+    temp_values = sorted(values)
+    if len(temp_values) % 2 == 0:
+        med = average([temp_values[len(temp_values)//2 - 1],
+                       temp_values[len(temp_values)//2]])
+    else:
+        med = temp_values[len(temp_values)//2]
+    return med
+
+
 def true_positive_rate(true_pos, false_neg):
     """
     Calculate the true positive rate.
