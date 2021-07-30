@@ -53,7 +53,7 @@ def draw_complete_diagram(outdir, contigs, prophages, tmp_dir,
         contig_prophages.append(prophage)
         contig_prophage_map[prophage.parent_record.id] = contig_prophages
 
-    filepath = outdir.joinpath(name).with_suffix(".html")
+    filepath = outdir.joinpath(f"{name}.html")
 
     filehandle = open(filepath, "w")
     for i in range(len(contigs)):

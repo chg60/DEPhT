@@ -495,7 +495,7 @@ def write_prophage_output(outdir, contigs, prophages, tmp_dir, draw):
 
     if draw:
         draw_complete_diagram(outdir, [contig.record for contig in contigs],
-                              prophages, tmp_dir, name=outdir.stem)
+                              prophages, tmp_dir, name=outdir.name)
 
 
 def write_contig_data(contig, outpath):
