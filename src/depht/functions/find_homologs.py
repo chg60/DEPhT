@@ -1,7 +1,7 @@
-from prophicient.classes.hhresult import HHResult
-from prophicient.functions.fasta import write_fasta
-from prophicient.functions.multiprocess import parallelize
-from prophicient.functions.run_command import run_command
+from depht.classes.hhresult import HHResult
+from depht.functions.fasta import write_fasta
+from depht.functions.multiprocess import parallelize
+from depht.functions.run_command import run_command
 
 HHSEARCH_EVALUE = 1E-04
 HHSEARCH_PROB = 90

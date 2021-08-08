@@ -1,16 +1,16 @@
 import argparse
 import binascii
-import bitarray
 import math
 import pathlib
 import sys
 
+import bitarray
 from Bio import SeqIO
 
-from prophicient_utils.functions.fileio import (
-                                        read_gene_index_file,
-                                        read_cluster_index_file,
-                                        write_gene_hex_value_file)
+from depht_utils.functions.fileio import (
+    read_gene_index_file,
+    read_cluster_index_file,
+    write_gene_hex_value_file)
 
 # GLOBAL VARIABLES
 # -----------------------------------------------------------------------------

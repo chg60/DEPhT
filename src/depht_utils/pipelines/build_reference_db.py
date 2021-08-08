@@ -4,8 +4,7 @@ import sys
 
 from Bio import SeqIO
 
-from prophicient_utils.functions import blastdb
-
+from depht_utils.functions import blastdb
 
 # GLOBAL VARIABLES
 # -----------------------------------------------------------------------------

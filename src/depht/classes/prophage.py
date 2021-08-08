@@ -3,7 +3,6 @@ import datetime
 from Bio.SeqFeature import FeatureLocation, SeqFeature
 from Bio.SeqRecord import SeqRecord
 
-
 # GLOBAL VARIABLES
 # -----------------------------------------------------------------------------
 DATE = datetime.date.today().strftime("%d-%b-%Y").upper()

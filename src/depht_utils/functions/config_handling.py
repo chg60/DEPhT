@@ -1,7 +1,6 @@
 import configparser
-from configparser import Error as ConfigError
 import sys
-
+from configparser import Error as ConfigError
 
 DEFAULT_CONFIG_SECTIONS = {"ncbi": {"api_key", "email", "tool"}}
 

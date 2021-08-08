@@ -3,8 +3,7 @@ databases from phage genomes."""
 import argparse
 from pathlib import Path
 
-from Prophicient.utilities import (config_handling, entrez, hhsuite,
-                                   path_basic)
+from Prophicient.utilities import (config_handling, entrez, path_basic)
 
 # GLOBAL VARIABLES
 # -----------------------------------------------------------------------------

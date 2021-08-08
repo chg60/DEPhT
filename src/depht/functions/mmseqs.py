@@ -1,8 +1,9 @@
-from bitarray import bitarray, util as bit_util
 import shutil
 
-from prophicient.functions.fasta import parse_fasta, write_fasta
-from prophicient.functions.run_command import run_command
+from bitarray import bitarray, util as bit_util
+
+from depht.functions.fasta import parse_fasta, write_fasta
+from depht.functions.run_command import run_command
 
 # GLOBAL VARIABLES
 # -----------------------------------------------------------------------------

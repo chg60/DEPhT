@@ -4,10 +4,10 @@ import sys
 
 from Bio import SeqIO
 
-from prophicient_utils.data.defaults import HHSUITEDB_DEFAULTS
-from prophicient_utils.functions.fileio import (
-                                        read_gene_index_file,
-                                        write_cluster_function_index_file)
+from depht_utils.data.defaults import HHSUITEDB_DEFAULTS
+from depht_utils.functions.fileio import (
+    read_gene_index_file,
+    write_cluster_function_index_file)
 
 # GLOBAL VARIABLES
 DEFAULTS = {"name": HHSUITEDB_DEFAULTS["name"],

@@ -4,7 +4,7 @@ import sys
 
 from Bio import SeqIO
 
-from prophicient_utils.functions import entrez
+from depht_utils.functions import entrez
 
 # GLOBAL VARIABLES
 # -----------------------------------------------------------------------------

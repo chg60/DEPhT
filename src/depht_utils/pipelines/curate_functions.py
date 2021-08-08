@@ -5,9 +5,8 @@ import sys
 
 from Bio import SeqIO, AlignIO
 
-from prophicient.functions import multiprocess
-from prophicient_utils.functions import clustalo
-
+from depht.functions import multiprocess
+from depht_utils.functions import clustalo
 
 # GLOBAL VARAIABLES
 DEFAULTS = {"cpus": 1, "min_size": 10}

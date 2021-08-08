@@ -1,11 +1,10 @@
 import argparse
 import time
 
-from prophicient_utils.pipelines import (
-                annotate_gene_clusters, build_reference_db, build_functions_db,
-                curate_functions, index_functions, phamerate, pull_sequences,
-                screen_conserved_phams, train_prophage_model)
-
+from depht_utils.pipelines import (
+    annotate_gene_clusters, build_reference_db, build_functions_db,
+    curate_functions, index_functions, phamerate, pull_sequences,
+    screen_conserved_phams, train_prophage_model)
 
 # GLOBAL VARIABLES
 # -----------------------------------------------------------------------------

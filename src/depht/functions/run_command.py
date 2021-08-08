@@ -1,5 +1,5 @@
-from subprocess import Popen, DEVNULL, PIPE
 import shlex
+from subprocess import Popen, DEVNULL, PIPE
 
 
 def run_command(command, verbose=False):

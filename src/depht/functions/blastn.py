@@ -1,7 +1,6 @@
 import csv
 
-from prophicient.functions.run_command import run_command
-
+from depht.functions.run_command import run_command
 
 # GLOBAL VARIABLES
 # -----------------------------------------------------------------------------

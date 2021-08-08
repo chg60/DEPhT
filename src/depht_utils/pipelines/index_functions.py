@@ -1,14 +1,12 @@
 import argparse
-import csv
 import pathlib
 import sys
 
 from Bio import SeqIO
 
-from prophicient_utils.data.defaults import HHSUITEDB_DEFAULTS
-from prophicient_utils.functions.fileio import (
-                                        read_cluster_table_file)
-
+from depht_utils.data.defaults import HHSUITEDB_DEFAULTS
+from depht_utils.functions.fileio import (
+    read_cluster_table_file)
 
 # GLOBAL VARIABLES
 # -----------------------------------------------------------------------------

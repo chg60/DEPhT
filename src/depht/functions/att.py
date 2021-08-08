@@ -3,12 +3,11 @@ import math
 from networkx import DiGraph
 from scipy.stats import zscore
 
-from prophicient.classes import kmers
-from prophicient.classes.prophage import DEFAULT_PRODUCT
-from prophicient.functions.blastn import blastn
-from prophicient.functions.fasta import write_fasta
-from prophicient.functions.statistics import transform
-
+from depht.classes import kmers
+from depht.classes.prophage import DEFAULT_PRODUCT
+from depht.functions.blastn import blastn
+from depht.functions.fasta import write_fasta
+from depht.functions.statistics import transform
 
 # GLOBAL VARIABLES
 # -----------------------------------------------------------------------------

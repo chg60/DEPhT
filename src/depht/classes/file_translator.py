@@ -1,6 +1,6 @@
 from dna_features_viewer import BiopythonTranslator
 
-from prophicient.classes.prophage import DEFAULT_PRODUCT
+from depht.classes.prophage import DEFAULT_PRODUCT
 
 # GLOBAL VARIABLES
 # -----------------------------------------------------------------------------

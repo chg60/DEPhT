@@ -1,8 +1,8 @@
-import sys
 import argparse
 import pathlib
-import matplotlib.pyplot as plt
+import sys
 
+import matplotlib.pyplot as plt
 from Bio import SeqIO
 
 # Defaults for bin width and window size, in kb

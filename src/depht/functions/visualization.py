@@ -1,16 +1,15 @@
+import pandas
+import pretty_html_table
 from bokeh import plotting
 from bokeh.embed import file_html
 from bokeh.models import HoverTool, Range1d, Title
 from bokeh.resources import CDN
 from dna_features_viewer import CircularGraphicRecord
 from matplotlib import pyplot
-import pandas
-import pretty_html_table
 
-from prophicient.classes.file_translator import (
+from depht.classes.file_translator import (
     CircularSourceFeatureTranslator, LinearFeatureTranslator,
     DEFAULT_FONT_FAMILY)
-
 
 # GLOBAL VARIABLES
 # -----------------------------------------------------------------------------

@@ -2,15 +2,15 @@
 Utility script to perform pham assembly with MMseqs2.
 """
 
-import sys
 import argparse
+import json
 import pathlib
 import shutil
-import json
+import sys
 
-from prophicient.functions import mmseqs
-from prophicient.functions.fasta import parse_fasta
-from prophicient_utils.classes.database import Database, Pham
+from depht.functions import mmseqs
+from depht.functions.fasta import parse_fasta
+from depht_utils.classes.database import Database, Pham
 
 
 def parse_phamerate_args(unparsed_args):

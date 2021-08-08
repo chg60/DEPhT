@@ -2,8 +2,7 @@ import argparse
 import pathlib
 import sys
 
-from prophicient_utils.functions import hhsuitedb
-
+from depht_utils.functions import hhsuitedb
 
 # GLOBAL VARIABLES
 # -----------------------------------------------------------------------------
