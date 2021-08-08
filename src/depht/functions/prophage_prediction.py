@@ -1,11 +1,14 @@
 import pickle
+
 import pandas as pd
 
-from prophicient import PACKAGE_DIR
-from prophicient.functions.sliding_window import *
-from prophicient.functions.statistics import average
+from depht import PACKAGE_DIR
+from depht.functions.sliding_window import *
+from depht.functions.statistics import average
 
 MODEL_PATH = PACKAGE_DIR.joinpath("data/prophage_model.pickle")
+with open(MODEL_PATH, "rb") as model_reader:
+    CLF = pickle.load(model_reader)
 
 WINDOW = 55         # Number of CDS features to consider in a window
 BACTERIA = 0        # Gene prediction state - bacterial
@@ -87,13 +90,15 @@ def average_strand_changes(strands, window=WINDOW):
     return leading_changes, center_changes, lagging_changes
 
 
-def build_contig_dataframe(contig):
+def build_contig_dataframe(contig, window=WINDOW):
     """
     Walks the features of the given contig and calculates the feature
     data to be used for model training and/or model prediction.
 
     :param contig: a contig to analyze features from
     :type contig: Bio.SeqRecord.SeqRecord
+    :param window: the window size to consider genes in
+    :type window: int
     :return: pd.DataFrame(feature_dict)
     """
     cds_features = [ftr for ftr in contig.features if ftr.type == "CDS"]
@@ -107,8 +112,9 @@ def build_contig_dataframe(contig):
         rights.append(feature.location.end)
         strands.append(feature.location.strand)
 
-    lead_len, ctr_len, lag_len = average_gene_size(lefts, rights, len(contig))
-    lead_str, ctr_str, lag_str = average_strand_changes(strands)
+    lead_len, ctr_len, lag_len = average_gene_size(lefts, rights,
+                                                   len(contig), window)
+    lead_str, ctr_str, lag_str = average_strand_changes(strands, window)
 
     temp_dict["contig_id"] = [contig.id] * len(lefts)
     temp_dict["start"] = lefts
@@ -153,8 +159,7 @@ def smooth_by_averaging(values, window_size=25):
     return smoothed_values
 
 
-def predict_prophage_genes(contig, model_path=MODEL_PATH, alpha=0.25,
-                           mask=None):
+def predict_prophage_genes(contig, classifier=CLF, alpha=0.25, mask=None):
     """
     Calculates the gene attributes used by the model to predict
     prophage vs bacterial genes. Then uses the classifier from
@@ -162,8 +167,8 @@ def predict_prophage_genes(contig, model_path=MODEL_PATH, alpha=0.25,
 
     :param contig: the contig to make prophage predictions in
     :type contig: prophicient.classes.contig.Contig
-    :param model_path: path to a binary file with sklearn model inside
-    :type model_path: pathlib.Path
+    :param classifier: path to a binary file with sklearn model inside
+    :type classifier: prophicient.classes.prophage_classifier.ProphageClassifier
     :param alpha: probability above which to keep prophage prediction
     :type alpha: float
     :param mask: bitwise and will mask known/theorized bacterial genes
@@ -181,10 +186,6 @@ def predict_prophage_genes(contig, model_path=MODEL_PATH, alpha=0.25,
     lag_df = pd.DataFrame()
     lag_df["ctr_size"] = dataframe.loc[:, "lag_size"]
     lag_df["ctr_strand"] = dataframe.loc[:, "lag_strand"]
-
-    model_reader = open(model_path, "rb")
-    classifier = pickle.load(model_reader)
-    model_reader.close()
 
     lead_p = classifier.predict_proba(lead_df)
     center_p = classifier.predict_proba(center_df)
