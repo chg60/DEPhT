@@ -17,14 +17,15 @@ def average(values, kind="arithmetic"):
     """
     if kind == "arithmetic":
         numerator, denominator = sum(values), len(values)
+        mean = float(numerator) / denominator
     elif kind == "geometric":
-        numerator, denominator = math.prod(values), len(values)
+        product, power = math.prod(values), 1.0/len(values)
+        mean = product ** power
     elif kind == "harmonic":
         numerator, denominator = len(values), sum([1.0/x for x in values])
+        mean = float(numerator) / denominator
     else:
         raise ValueError(f"'{kind}' is not a supported kind of average")
-
-    mean = float(numerator)/denominator
 
     return mean
 
