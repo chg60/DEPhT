@@ -1,4 +1,9 @@
 import pandas as pd
+import plotly.express as px
+
+
+blue, red = "#0008ff", "#ff0800"
+colormap = {"prophage": blue, "bacteria": red}
 
 
 class ProphageClassifier:
@@ -16,7 +21,7 @@ class ProphageClassifier:
     def n_features(self):
         return len(self.distributions_)
 
-    def fit(self, x, y):
+    def fit(self, x, y, plot=False):
         """
         Fits a model that attempts to differentiate between
 
@@ -24,6 +29,8 @@ class ProphageClassifier:
         :type x: pandas.DataFrame
         :param y: training data class labels
         :type y: list or numpy.ndarray or pd.DataFrame
+        :param plot: show distribution of feature space?
+        :type plot: bool
         """
         # Build a probability distribution for each feature
         prophage_df = x.iloc[[i for i, value in enumerate(y) if value == 1], :]
@@ -31,12 +38,32 @@ class ProphageClassifier:
 
         ratio = float(len(bacteria_df)) / len(prophage_df)
 
-        for feature in x.columns:
+        for i, feature in enumerate(x.columns):
             prophage_series = prophage_df.loc[:, feature]
             bacteria_series = bacteria_df.loc[:, feature]
 
             prophage_hist = Histogram(prophage_series)
             bacteria_hist = Histogram(bacteria_series, prophage_hist.bin_width)
+
+            if plot:
+                pdf = prophage_hist.as_dataframe()
+                pdf["class"] = ["prophage"] * len(pdf)
+                pdf["values"] = [float(x)/prophage_hist.n_samples * 100 for x
+                                 in pdf["values"]]
+                pdf["color"] = [blue] * len(pdf)
+
+                bdf = bacteria_hist.as_dataframe()
+                bdf["class"] = ["bacteria"] * len(bdf)
+                bdf["values"] = [float(x)/bacteria_hist.n_samples * 100 for x
+                                 in bdf["values"]]
+                bdf["color"] = [red] * len(bdf)
+
+                df = pd.concat([pdf, bdf])
+                fig = px.bar(data_frame=df, x="bins", y="values",
+                             color="class", barmode="overlay",
+                             color_discrete_map=colormap,
+                             template="simple_white")
+                fig.show()
 
             dist = ProbabilityDistribution(prophage_hist, bacteria_hist,
                                            weights=[1, ratio])
@@ -84,7 +111,7 @@ class ProphageClassifier:
 
         return temp_proba
 
-    def predict(self, x, feature_weights=None, alpha=0.55):
+    def predict(self, x, feature_weights=None, alpha=0.5):
         """
         Get binary class predictions by calling predict_proba and
         setting values to 0 if < alpha, else 1.
@@ -132,9 +159,6 @@ class Histogram:
                 self.bin_width = 1
             else:                           # Everything else
                 self.bin_width = 10
-            # else:
-            #     iqr = data.quantile(0.75) - data.quantile(0.25)
-            #     self.bin_width = (2 * iqr) / (len(data) ** (1 / 3))
 
         for value in data:
             index = round(value // self.bin_width * self.bin_width, 2)
@@ -142,6 +166,10 @@ class Histogram:
                 self.hist[index] += 1
             else:
                 self.hist[index] = 1
+
+    def as_dataframe(self):
+        return pd.DataFrame({"bins": self.hist.keys(),
+                             "values": self.hist.values()})
 
 
 class ProbabilityDistribution:
