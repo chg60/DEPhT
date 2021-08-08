@@ -3,21 +3,21 @@ Helper pipeline for training the model used by MycoPhinder on known
 phage/prophage and bacterial gene data.
 """
 
-import sys
 import argparse
 import pathlib
 import pickle
 import shutil
+import sys
 
 import pandas as pd
 from Bio import SeqIO
 
-from prophicient_utils.classes.kfold import KFold
-from prophicient.classes.prophage_classifier import ProphageClassifier
-from prophicient.functions.annotation import annotate_contig
-from prophicient.functions.prophage_prediction import MODEL_PATH
-from prophicient.functions.prophage_prediction import build_contig_dataframe
-from prophicient.functions.statistics import average, mcc, f1_score
+from depht.classes.prophage_classifier import ProphageClassifier
+from depht.functions.annotation import annotate_record
+from depht.functions.prophage_prediction import MODEL_PATH, WINDOW
+from depht.functions.prophage_prediction import build_contig_dataframe
+from depht.functions.statistics import average, mcc, f1_score
+from depht_utils.classes.kfold import KFold
 
 EPILOG = """
 Bacterial genomes used for training should be complete assemblies, free of 
@@ -39,13 +39,16 @@ def parse_args(arguments):
                    help="path to a directory containing (pro)phage FASTA files")
     p.add_argument("-b", "--bacteria-dir", type=pathlib.Path, required=True,
                    help="path to a directory containing bacterial FASTA files")
-    p.add_argument("--tmp-dir", type=pathlib.Path, default=TMP_DIR,
+    p.add_argument("-t", "--tmp-dir", type=pathlib.Path, default=TMP_DIR,
                    help=f"temporary directory for file I/O [default: "
                         f"{TMP_DIR}]")
+    p.add_argument("-w", "--window", type=int, default=WINDOW,
+                   help=f"number of CDS genes to consider at once [default: "
+                        f"{WINDOW}]")
     return p.parse_args(arguments)
 
 
-def get_dataframe(filepath, tmp_dir):
+def get_dataframe(filepath, tmp_dir, window):
     """
     Builds a bacterial/prophage dataframe from a directory of FASTA
     files.
@@ -54,6 +57,8 @@ def get_dataframe(filepath, tmp_dir):
     :type filepath: pathlib.Path
     :param tmp_dir: path where annotation files can be written
     :type tmp_dir: pathlib.Path
+    :param window: how many genes to consider in a window
+    :type window: int
     :return: dataframe
     """
     dataframes = list()
@@ -62,8 +67,8 @@ def get_dataframe(filepath, tmp_dir):
         if f.suffix not in (".fasta", ".fna"):
             continue
         record = SeqIO.read(f, "fasta")
-        annotate_contig(record, tmp_dir, trna=False)
-        df = build_contig_dataframe(record)
+        annotate_record(record, tmp_dir, trna=False)
+        df = build_contig_dataframe(record, window)
         dataframes.append(df)
 
     return pd.concat(dataframes, axis=0)
@@ -145,7 +150,7 @@ def train_prophage_classifier(prophage_data, bacteria_data):
     all_labels = pd.concat((prophage_data.iloc[:, -1],
                             bacteria_data.iloc[:, -1]), axis=0)
 
-    clf.fit(all_feats, all_labels)
+    clf.fit(all_feats, all_labels, plot=True)
 
     return clf, mean_mcc, mean_f1
 
@@ -184,7 +189,7 @@ def main(arguments):
         prophage_df = pd.read_csv(prophage_file)
     else:
         print("Annotating and analyzing (pro)phages...")
-        prophage_df = get_dataframe(prophage_dir, tmp_dir)
+        prophage_df = get_dataframe(prophage_dir, tmp_dir, args.window)
         prophage_df["is_prophage"] = [1] * len(prophage_df)
         prophage_df.to_csv(prophage_file, index=False)
     prophage_df = prophage_df.loc[:, ["ctr_size", "ctr_strand", "is_prophage"]]
@@ -196,7 +201,7 @@ def main(arguments):
         bacteria_df = pd.read_csv(bacteria_file)
     else:
         print("Annotating and analyzing bacteria...")
-        bacteria_df = get_dataframe(bacteria_dir, tmp_dir)
+        bacteria_df = get_dataframe(bacteria_dir, tmp_dir, args.window)
         bacteria_df["is_prophage"] = [0] * len(bacteria_df)
         bacteria_df.to_csv(bacteria_file, index=False)
     bacteria_df = bacteria_df.loc[:, ["ctr_size", "ctr_strand", "is_prophage"]]
@@ -205,7 +210,7 @@ def main(arguments):
     model, train_mcc, train_f1 = \
         train_prophage_classifier(prophage_df, bacteria_df)
     print(f"ProphageClassifier got average MCC, F1 = {train_mcc:.3f}, "
-          f"{train_f1:.3f}...")
+          f"{train_f1:.3f}")
 
     # Save old model file if it exists
     if MODEL_PATH.is_file():
