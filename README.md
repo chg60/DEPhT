@@ -1,19 +1,22 @@
-# Prophicient
+# Detection and Extraction of Prophages Tool (DEPHT)
 
-Prophicient (name not fully settled) will be a new tool for identifying prophages in bacteria.
+DEPHT is a new tool for identifying prophages in bacteria, with a particular focus on Mycobacteria.
 
-Some of the extant tools are:
+Popular extant tools primarily rely on homology detection techniques for identifying likely prophage regions:
   * [PHASTER](https://phaster.ca)
   * [ProphET](https://github.com/jaumlrc/ProphET)
   * [VirSorter2](https://github.com/jiarong/VirSorter2)
 
-These generally perform well at identifying core prophage regions, but struggle to accurately call
-phage boundaries.  Additionally, the effective runtime (server queue + program runtime) for some of
-these programs can exceed 24 hours.
+These techniques typically have good sensitivity, because every gene is tested for homology to known (pro)phage genes.  However, this sensitivity comes with a high computational cost (i.e. slow, without a high end server).  Additionally, these tools struggle with phage boundary detection - only rarely are the attL/attR properly called.
 
-The following workflow is our attempt at improving prophage boundary detection by anchoring the predictions to a reference genome:
-  * Auto-annotate protein-coding genes with [Prodigal](https://github.com/hyattpd/Prodigal)
-  * Auto-annotate tRNA genes with [Aragorn](http://www.ansikte.se/ARAGORN)
-  * Identify phage-like genes using [HHsuite3](https://github.com/soedinglab/hh-suite) against a custom database
-  * Identify regions with high phage character
-  * Use k-mer counting / blastn vs. reference genome / EMBOSS tool to find most likely _attL_/_attR_
+DEPHT uses two cheap features to identify regions likely to contain prophages:
+1.  Local average length of genes + intergenic regions, in 55-gene windows
+2.  Local number of strand changes, in 55-gene windows
+
+Each gene is assigned a probability of belonging to a prophage.  In general if a gene occurs in a 55-gene window where the average gene size is <800 bp and there are fewer than 10 strand changes, there is a very good chance it belongs to a prophage.  
+
+This approach is not perfect, so another cheap approach is taken to improve the specificity.  MMseqs2 is used to cluster each gene against a database of clade-specific Mycobacterial core genes, to 50% identity, 80% coverage, e-value 0.001.  Regions of high likelihood prophage genes designated as non-core are taken as high probability prophages.
+
+Depending on the selected runmode, these prophage regions are further scrutinized by functionally annotating them against HMMs of manually annotated mycobacteriophage phamilies from the [Actino_Draft Phamerator database](http://databases.hatfull.org/Actino_Draft).  Predicted prophages with too few high-probability hits into these HMMs may be culled as unlikely prophages.
+
+Finally, the remaining prophages are subjected to a blastn-based attL/attR detection scheme that gives DEPHT superior edge detection than any tool we are aware of.
