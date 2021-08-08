@@ -14,17 +14,16 @@ from tempfile import mkdtemp
 
 from Bio import SeqIO
 
-from prophicient import PACKAGE_DIR
-from prophicient.classes.prophage import ANNOTATIONS, DEFAULT_PRODUCT, Prophage
-from prophicient.classes.contig import CODING_FEATURE_TYPES, Contig
-from prophicient.functions.annotation import annotate_record, MIN_LENGTH, \
-                                             MIN_CDS_FEATURES
-from prophicient.functions.att import find_attachment_site
-from prophicient.functions.find_homologs import find_homologs
-from prophicient.functions.mmseqs import assemble_bacterial_mask
-from prophicient.functions.multiprocess import PHYSICAL_CORES
-from prophicient.functions.prophage_prediction import predict_prophage_coords
-from prophicient.functions.visualization import draw_complete_diagram
+from depht import PACKAGE_DIR
+from depht.classes.contig import CODING_FEATURE_TYPES, Contig
+from depht.classes.prophage import ANNOTATIONS, DEFAULT_PRODUCT, Prophage
+from depht.functions.annotation import annotate_record, MIN_LENGTH
+from depht.functions.att import find_attachment_site
+from depht.functions.find_homologs import find_homologs
+from depht.functions.mmseqs import assemble_bacterial_mask
+from depht.functions.multiprocess import PHYSICAL_CORES
+from depht.functions.prophage_prediction import predict_prophage_coords, WINDOW
+from depht.functions.visualization import draw_complete_diagram
 
 # GLOBAL VARIABLES
 # -----------------------------------------------------------------------------
@@ -32,6 +31,9 @@ from prophicient.functions.visualization import draw_complete_diagram
 TMP_DIR = pathlib.Path("/tmp/prophicient")
 CONTIG_DATA_HEADER = ["Gene ID", "Start", "End", "Prediction",
                       "Bacterial Homology", "Phage Homology"]
+
+# Model can't scan contigs with fewer CDS than window size
+MIN_CDS_FEATURES = WINDOW
 
 # For naming any identified prophages
 PROPHAGE_PREFIX = "prophi"
