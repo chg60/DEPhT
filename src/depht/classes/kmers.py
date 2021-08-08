@@ -2,8 +2,8 @@
 import math
 import random
 
-from bitarray import bitarray
 import mmh3
+from bitarray import bitarray
 
 RANDOM_MAX = 4294967290
 
