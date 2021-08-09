@@ -1,4 +1,4 @@
-# Detection and Extraction of Prophages Tool (DEPHT)
+# *D*etection and *E*xtraction of Pro*ph*ages *T*ool (DEPhT)
 
 DEPHT is a new tool for identifying prophages in bacteria, with a particular focus on Mycobacteria.
 
