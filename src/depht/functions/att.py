@@ -177,20 +177,23 @@ def graph_attachment_site(l_seq, r_seq, k=KMER_SIZE):
 
 
 def dump_attachment_sites(prophage, scored_kmer_contigs, outpath, r_seq_start):
-    with outpath.open(mode="w") as filehandle:
-        for kmer_contig, scores in scored_kmer_contigs:
-            new_start = prophage.start + kmer_contig[1]
-            new_end = r_seq_start + kmer_contig[2]
+    filehandle = outpath.open(mode="w")
 
-            att_line_data = [new_start, new_end, len(kmer_contig[0])]
-            score_line_data = [round(score, 2) for score in scores]
-            seq_data = [kmer_contig[0]]
+    for kmer_contig, scores in scored_kmer_contigs:
+        new_start = prophage.start + kmer_contig[1]
+        new_end = r_seq_start + kmer_contig[2]
 
-            line_data = att_line_data + score_line_data + seq_data
-            line_data = [str(line_entry) for line_entry in line_data]
+        att_line_data = [new_start, new_end, len(kmer_contig[0])]
+        score_line_data = [round(score, 2) for score in scores]
+        seq_data = [kmer_contig[0]]
 
-            filehandle.write("\t".join(line_data))
-            filehandle.write("\n")
+        line_data = att_line_data + score_line_data + seq_data
+        line_data = [str(line_entry) for line_entry in line_data]
+
+        filehandle.write("\t".join(line_data))
+        filehandle.write("\n")
+
+    filehandle.close()
 
 
 # REFERENCE BLASTING HELPER FUNCTIONS
