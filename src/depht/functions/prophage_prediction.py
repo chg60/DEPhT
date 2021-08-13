@@ -193,7 +193,7 @@ def predict_prophage_genes(contig, classifier=CLF, alpha=0.25, mask=None):
 
     predictions = list()
     for x, y, z in zip(lead_p, center_p, lag_p):
-        predictions.append(average([x, y, z]))
+        predictions.append(max([x, y, z]))
 
     # Store model predictions within the contig option
     contig.update_model_scores(predictions)

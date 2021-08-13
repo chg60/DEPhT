@@ -21,6 +21,7 @@ R_SEQ_NAME = "putative_attR_region"
 AQ_WEIGHT = 1
 IP_WEIGHT = 0.6
 MC_WEIGHT = 0.9
+TR_WEIGHT = 0
 RC_WEIGHT = 1
 
 DEFAULTS = {"k": 5, "fpp": 0.0001, "outfmt": 10}
@@ -177,20 +178,23 @@ def graph_attachment_site(l_seq, r_seq, k=KMER_SIZE):
 
 
 def dump_attachment_sites(prophage, scored_kmer_contigs, outpath, r_seq_start):
-    with outpath.open(mode="w") as filehandle:
-        for kmer_contig, scores in scored_kmer_contigs:
-            new_start = prophage.start + kmer_contig[1]
-            new_end = r_seq_start + kmer_contig[2]
+    filehandle = outpath.open(mode="w")
 
-            att_line_data = [new_start, new_end, len(kmer_contig[0])]
-            score_line_data = [round(score, 2) for score in scores]
-            seq_data = [kmer_contig[0]]
+    for kmer_contig, scores in scored_kmer_contigs:
+        new_start = prophage.start + kmer_contig[1]
+        new_end = r_seq_start + kmer_contig[2]
 
-            line_data = att_line_data + score_line_data + seq_data
-            line_data = [str(line_entry) for line_entry in line_data]
+        att_line_data = [new_start, new_end, len(kmer_contig[0])]
+        score_line_data = [round(score, 2) for score in scores]
+        seq_data = [kmer_contig[0]]
 
-            filehandle.write("\t".join(line_data))
-            filehandle.write("\n")
+        line_data = att_line_data + score_line_data + seq_data
+        line_data = [str(line_entry) for line_entry in line_data]
+
+        filehandle.write("\t".join(line_data))
+        filehandle.write("\n")
+
+    filehandle.close()
 
 
 # REFERENCE BLASTING HELPER FUNCTIONS
@@ -378,6 +382,32 @@ def score_integrase_proximity(prophage, attL_pos, attR_pos, base_dist=1500,
 
     weighted_score = score * weight
     return weighted_score, int_dist
+
+
+def score_trna_overlap(prophage, attL_pos, attR_pos, att_len,
+                       weight=TR_WEIGHT):
+    overlap = 0
+    for feature in prophage.record.features:
+        if feature.type != "tRNA":
+            continue
+
+        trna_range = set(range(feature.location.start, feature.location.end))
+
+        attL_range = set(range(attL_pos, attL_pos + att_len))
+        attR_range = set(range(attR_pos - att_len, attR_pos))
+
+        if trna_range.intersection(attL_range):
+            overlap = 1
+        elif trna_range.intersection(attR_range):
+            overlap = 1
+
+        if overlap > 0:
+            break
+
+    if overlap <= 0:
+        return (0, overlap)
+    else:
+        return (overlap * TR_WEIGHT, overlap)
 
 
 def score_model_coverage(putative_len, model_len, weight=MC_WEIGHT):
