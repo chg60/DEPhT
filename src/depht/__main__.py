@@ -1,5 +1,5 @@
 """
-Prophicient scans bacterial genomes looking for prophages. Regions
+DEPhT scans bacterial genomes looking for prophages. Regions
 identified as prophage candidates are further scrutinized, and
 attachment sites identified as accurately as possible before
 prophage extraction and generating the final report.
