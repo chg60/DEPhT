@@ -91,7 +91,7 @@ def _score(real_classes, predict_classes):
         else:
             tns += 1
 
-    # print(tps, tns, fps, fns)
+    print(tps, tns, fps, fns)
 
     return mcc(tps, fns, tns, fps), f1_score(tps, fps, fns)
 
@@ -182,26 +182,29 @@ def main(arguments):
         shutil.rmtree(tmp_dir)
     tmp_dir.mkdir(parents=True)
 
+    # window size
+    w = args.window
+
     # Deal with the phage data
-    prophage_file = prophage_dir.joinpath("data.csv")
+    prophage_file = prophage_dir.joinpath(f"_{w}_data.csv")
     if prophage_file.is_file():
         print("Using existing prophage data...")
         prophage_df = pd.read_csv(prophage_file)
     else:
         print("Annotating and analyzing (pro)phages...")
-        prophage_df = get_dataframe(prophage_dir, tmp_dir, args.window)
+        prophage_df = get_dataframe(prophage_dir, tmp_dir, w)
         prophage_df["is_prophage"] = [1] * len(prophage_df)
         prophage_df.to_csv(prophage_file, index=False)
     prophage_df = prophage_df.loc[:, ["ctr_size", "ctr_strand", "is_prophage"]]
 
     # Deal with bacteria data
-    bacteria_file = bacteria_dir.joinpath("data.csv")
+    bacteria_file = bacteria_dir.joinpath(f"_{w}_data.csv")
     if bacteria_file.is_file():
         print("Using existing bacterial data...")
         bacteria_df = pd.read_csv(bacteria_file)
     else:
         print("Annotating and analyzing bacteria...")
-        bacteria_df = get_dataframe(bacteria_dir, tmp_dir, args.window)
+        bacteria_df = get_dataframe(bacteria_dir, tmp_dir, w)
         bacteria_df["is_prophage"] = [0] * len(bacteria_df)
         bacteria_df.to_csv(bacteria_file, index=False)
     bacteria_df = bacteria_df.loc[:, ["ctr_size", "ctr_strand", "is_prophage"]]
