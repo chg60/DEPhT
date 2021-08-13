@@ -1,5 +1,6 @@
 import pandas
 import pretty_html_table
+import bokeh
 from bokeh import plotting
 from bokeh.embed import file_html
 from bokeh.models import HoverTool, Range1d, Title
@@ -78,6 +79,8 @@ def draw_complete_diagram(outdir, contigs, prophages, tmp_dir,
             filehandle.write("<br><br>")
 
     filehandle.close()
+
+    bokeh.io.reset_output()
 
 
 def scrub_host_records(contigs):
