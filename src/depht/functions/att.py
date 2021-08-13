@@ -21,6 +21,7 @@ R_SEQ_NAME = "putative_attR_region"
 AQ_WEIGHT = 1
 IP_WEIGHT = 0.6
 MC_WEIGHT = 0.9
+TR_WEIGHT = 0
 RC_WEIGHT = 1
 
 DEFAULTS = {"k": 5, "fpp": 0.0001, "outfmt": 10}
@@ -381,6 +382,32 @@ def score_integrase_proximity(prophage, attL_pos, attR_pos, base_dist=1500,
 
     weighted_score = score * weight
     return weighted_score, int_dist
+
+
+def score_trna_overlap(prophage, attL_pos, attR_pos, att_len,
+                       weight=TR_WEIGHT):
+    overlap = 0
+    for feature in prophage.record.features:
+        if feature.type != "tRNA":
+            continue
+
+        trna_range = set(range(feature.location.start, feature.location.end))
+
+        attL_range = set(range(attL_pos, attL_pos + att_len))
+        attR_range = set(range(attR_pos - att_len, attR_pos))
+
+        if trna_range.intersection(attL_range):
+            overlap = 1
+        elif trna_range.intersection(attR_range):
+            overlap = 1
+
+        if overlap > 0:
+            break
+
+    if overlap <= 0:
+        return (0, overlap)
+    else:
+        return (overlap * TR_WEIGHT, overlap)
 
 
 def score_model_coverage(putative_len, model_len, weight=MC_WEIGHT):
