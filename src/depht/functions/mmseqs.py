@@ -349,7 +349,7 @@ def mmseqs_cluster(sequence_db, cluster_db, tmp_dir, clustermode, clustersteps,
     c = (f"mmseqs cluster {str(sequence_db)} {str(cluster_db)} {str(tmp_dir)} "
          f"-v 3 --max-seqs 1000 --cluster-mode {clustermode} "
          f"--cluster-steps {clustersteps} -s {sensitivity} "
-         "--min-seq-id {minseqid} -c {coverage} -e {evalue}")
+         f"--min-seq-id {minseqid} -c {coverage} -e {evalue}")
     run_command(c)
 
 
