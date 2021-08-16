@@ -45,7 +45,7 @@ ATT_SENSITIVITY = 7
 REF_BLAST_SORT_KEY = "bitscore"
 
 # For deciding whether to cull predicted "prophages"
-MIN_SIZE = 10000
+MIN_SIZE = 20000
 MIN_PRODUCTS_NORMAL = 5
 MIN_PRODUCTS_STRICT = 10
 
@@ -158,11 +158,13 @@ def main():
         # Parse all contigs of annotation-worthy length
         if verbose:
             print(f"\nparsing '{str(infile)}'...")
+
         records = [x for x in SeqIO.parse(infile, fmt) if len(x) >= MIN_LENGTH]
 
-        if not records:
-            print(f"no {fmt}-formatted records found in '{str(infile)}' - "
-                  f"skipping it...")
+        if not records and verbose:
+            print(f"no {fmt}-formatted records of at least {MIN_LENGTH}bp "
+                  f"found in '{str(infile)}' - skipping it...")
+
             shutil.rmtree(genome_tmp_dir)  # clean up after ourselves
             continue
 
@@ -190,8 +192,9 @@ def main():
                                                     MIN_CDS_FEATURES)]
 
         if not records:
-            print(f"no contigs long enough to analyze in '{str(infile)}' - "
-                  f"skipping it...")
+            print(f"no contigs with enough CDS features to analyze in "
+                  f"'{str(infile)}' - skipping it...")
+
             shutil.rmtree(genome_tmp_dir)  # clean up after ourselves
             continue
 
@@ -227,8 +230,8 @@ def main():
             prophage_predictions.append(filtered_prediction)
 
         if all([not any(x) for x in prophage_predictions]) and not dump:
-            print(f"no complete prophages found in {str(infile)}. "
-                  f"PHASTER may be able to find partial (dead) prophages.")
+            print(f"no complete prophages found in '{str(infile)}'...")
+
             shutil.rmtree(genome_tmp_dir)  # clean up after ourselves
             continue
 
@@ -264,7 +267,7 @@ def main():
                                            prefix=PROPHAGE_PREFIX,
                                            delimiter=PROPHAGE_DELIMITER)
 
-        if verbose:
+        if verbose and prophages:
             print("searching for attL/R...")
 
         # Set up directory where we can do attL/R detection
@@ -280,8 +283,8 @@ def main():
                      if prophage.length >= min_length]
 
         if not prophages and not dump:
-            print(f"no complete prophages found in {str(infile)}. "
-                  f"PHASTER may be able to find partial (dead) prophages.")
+            print(f"no complete prophages found in '{str(infile)}'...")
+
             shutil.rmtree(genome_tmp_dir)  # clean up after ourselves
             continue
 
