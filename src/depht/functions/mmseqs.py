@@ -44,7 +44,8 @@ def assemble_bacterial_mask(contigs, bacterial_fasta, gene_bit_value_path,
     :rtype: list[list[int]]
     """
     # Parse hexadecimal clade representation file
-    bacterial_gene_bit_values = parse_gene_bit_value_file(gene_bit_value_path)
+    bacterial_gene_bit_values, clades = parse_gene_bit_value_file(
+                                                        gene_bit_value_path)
 
     # Create working file
     fasta_path = working_dir.joinpath(FASTA_PATH_NAME).with_suffix(".fasta")
@@ -53,12 +54,12 @@ def assemble_bacterial_mask(contigs, bacterial_fasta, gene_bit_value_path,
     bacterial_masks, gene_bit_values = initialize_bacterial_mask(
                                          contigs, bacterial_fasta, fasta_path)
 
-    # Cluster genes (Phamerate)
+    # Cluster genes
     clustering_map = cluster_bacterial_genes(fasta_path, working_dir)
 
     # Assign a clade representation bit array to each input gene
     assign_gene_bit_values(clustering_map, bacterial_gene_bit_values,
-                           gene_bit_values)
+                           gene_bit_values, bacterial_masks, clades)
 
     # Create a gene bit array mask from the value of the most represented clade
     clade_bit_mask = assign_clade(gene_bit_values)
@@ -165,7 +166,7 @@ def cluster_bacterial_genes(fasta_path, working_dir):
 
 
 def assign_gene_bit_values(clustering_map, bacterial_gene_bit_values,
-                           gene_bit_values):
+                           gene_bit_values, bacterial_masks, clades):
     """Assigns genes values contained in bit arrays depending on clade
     representation of reference bacterial genes.
 
@@ -175,10 +176,15 @@ def assign_gene_bit_values(clustering_map, bacterial_gene_bit_values,
     :type bacterial_gene_bit_values: list
     :param gene_bit_values: Initialized gene bit value list
     :type gene_bit_values: list
+    :param bacterial_masks: Initialized bacterial core gene bits
+    :type bacterial_masks: list
+    :param clades: Number of total clades
+    :type clades: int
     """
     for cluster, gene_names in clustering_map.items():
         gois = []
         cluster_bitarray = None
+        absolute_bitarray = None
         for gene_name in gene_names:
             # Identify and store indexed input sequence genes
             if "_" in gene_name:
@@ -188,7 +194,8 @@ def assign_gene_bit_values(clustering_map, bacterial_gene_bit_values,
             # Reidentify bacterial reference gene index
             gene_index = int(gene_name)
 
-            # Initialize / combine bitarray(s) given reference gene values
+            # Initialize / OR cluster member bitarray(s)
+            # given reference gene values, to determine clade representation
             if cluster_bitarray is None:
                 cluster_bitarray = bacterial_gene_bit_values[gene_index]
             else:
@@ -200,6 +207,18 @@ def assign_gene_bit_values(clustering_map, bacterial_gene_bit_values,
                 # OR reference gene bitarrays
                 cluster_bitarray = (cluster_bitarray | b_gene_bitarray)
 
+            # Intialize / AND cluster member bitarrays()
+            # given reference gene values, to determine high confidence
+            # bacterial genes
+            if absolute_bitarray is None:
+                absolute_bitarray = bacterial_gene_bit_values[gene_index]
+            else:
+                absolute_bitarray, b_gene_bitarray = equalize_bitarrays(
+                                        absolute_bitarray,
+                                        bacterial_gene_bit_values[gene_index])
+
+                absolute_bitarray = (absolute_bitarray & b_gene_bitarray)
+
         for goi in gois:
             goi_split = goi.split("_")
 
@@ -209,6 +228,10 @@ def assign_gene_bit_values(clustering_map, bacterial_gene_bit_values,
 
             # Assign input gene a value based on it's reference relatives
             gene_bit_values[contig_i][gene_i] = cluster_bitarray
+
+            if absolute_bitarray is not None:
+                if absolute_bitarray.count() >= clades:
+                    bacterial_masks[contig_i][gene_i] = 0
 
 
 def assign_clade(gene_bit_values, min_gcs=MIN_GCS):
@@ -260,7 +283,10 @@ def mark_bacterial_mask(bacterial_masks, gene_bit_values, clade_bit_mask):
     :type clade_bit_mask: bitarray
     """
     for contig_i, bacterial_mask in enumerate(bacterial_masks):
-        for gene_i in range(len(bacterial_mask)):
+        for gene_i, bacterial_bit in enumerate(bacterial_mask):
+            if bacterial_bit == 0:
+                continue
+
             gene_bitarray = gene_bit_values[contig_i][gene_i]
 
             if gene_bitarray is None:
@@ -551,14 +577,19 @@ def parse_gene_bit_value_file(filepath):
 
     hex_values = line.split(b"_")
 
+    clades = 0
     for hex_value in hex_values:
         if hex_value == b"":
             continue
 
         b_gene_bitarray = bit_util.hex2ba(hex_value, endian=ENDIANESS)
 
+        bitarray_count = b_gene_bitarray.count()
+        if bitarray_count > clades:
+            clades = bitarray_count
+
         bacterial_gene_bit_values.append(b_gene_bitarray)
 
     filehandle.close()
 
-    return bacterial_gene_bit_values
+    return bacterial_gene_bit_values, clades
