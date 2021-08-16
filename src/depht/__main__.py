@@ -98,7 +98,7 @@ def parse_args():
                    help=f"temporary directory to use for file I/O [default: "
                         f"{TMP_DIR}]")
     p.add_argument("-p",  "--product-threshold", type=int, default=None,
-                   help=f"select a phage homolog product lower threshold")
+                   help="select a phage homolog product lower threshold")
     p.add_argument("-l", "--length-threshold", type=int, default=MIN_SIZE,
                    help=f"select a minimum length for prophages [default: "
                         f"{MIN_SIZE}]")
@@ -226,7 +226,7 @@ def main():
 
             prophage_predictions.append(filtered_prediction)
 
-        if all([not any(x) for x in prophage_predictions]):
+        if all([not any(x) for x in prophage_predictions]) and not dump:
             print(f"no complete prophages found in {str(infile)}. "
                   f"PHASTER may be able to find partial (dead) prophages.")
             shutil.rmtree(genome_tmp_dir)  # clean up after ourselves
@@ -279,7 +279,7 @@ def main():
         prophages = [prophage for prophage in prophages
                      if prophage.length >= min_length]
 
-        if not prophages:
+        if not prophages and not dump:
             print(f"no complete prophages found in {str(infile)}. "
                   f"PHASTER may be able to find partial (dead) prophages.")
             shutil.rmtree(genome_tmp_dir)  # clean up after ourselves
@@ -495,7 +495,7 @@ def write_prophage_output(outdir, contigs, prophages, tmp_dir, draw):
         SeqIO.write(prophage.record, genbank_filename, "genbank")
         SeqIO.write(prophage.record, fasta_filename, "fasta")
 
-    if draw:
+    if draw and prophages:
         draw_complete_diagram(outdir, [contig.record for contig in contigs],
                               prophages, tmp_dir, name=outdir.name)
 
