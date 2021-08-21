@@ -137,7 +137,7 @@ def blast_attachment_site(l_seq_path, r_seq_path, tmp_dir, k=KMER_SIZE,
     """
     blast_results = blastn(
         l_seq_path, r_seq_path, tmp_dir, mode="subject", word_size=k,
-        evalue=evalue)
+        evalue=evalue, gapopen=10, gapextend=4)
 
     kmer_contigs = []
     for result in blast_results:
