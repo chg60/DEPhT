@@ -159,7 +159,8 @@ def smooth_by_averaging(values, window_size=25):
     return smoothed_values
 
 
-def predict_prophage_genes(contig, classifier=CLF, alpha=0.25, mask=None):
+def predict_prophage_genes(contig, classifier=CLF, alpha=0.25, min_prob=0.5,
+                           mask=None):
     """
     Calculates the gene attributes used by the model to predict
     prophage vs bacterial genes. Then uses the classifier from
@@ -171,6 +172,8 @@ def predict_prophage_genes(contig, classifier=CLF, alpha=0.25, mask=None):
     :type classifier: prophicient.classes.prophage_classifier.ProphageClassifier
     :param alpha: probability above which to keep prophage prediction
     :type alpha: float
+    :param min_prob: probability above which prophage signal is considered
+    :type min_prob: float
     :param mask: bitwise and will mask known/theorized bacterial genes
     :type mask: list of int
     :return: predictions
@@ -206,7 +209,38 @@ def predict_prophage_genes(contig, classifier=CLF, alpha=0.25, mask=None):
 
     predictions = smooth_by_averaging(predictions, window_size=5)
 
-    return [x >= alpha for x in predictions]
+    prophage_signal = [x >= alpha for x in predictions]
+
+    filter_prophage_signal(prophage_signal, predictions, min_prob)
+
+    return prophage_signal
+
+
+def filter_prophage_signal(prophage_signal, predictions, min_prob):
+    """Imposes a minimum prophage signal probability on regions in the genome
+    with a signal level above alpha"""
+
+    prophage_block = False
+    prophage_block_indicies = list()
+    for i in range(len(prophage_signal)):
+        prophage_bit_signal = prophage_signal[i]
+
+        if prophage_bit_signal and not prophage_block:
+            prophage_block = True
+            prophage_block_indicies = [i]
+
+        elif prophage_bit_signal and prophage_block:
+            prophage_block_indicies.append(i)
+
+        elif not prophage_bit_signal and prophage_block:
+            prophage_block = False
+
+            block_predictions = [predictions[j]
+                                 for j in prophage_block_indicies]
+
+            if max(block_predictions) < min_prob:
+                for j in prophage_block_indicies:
+                    prophage_signal[j] = False
 
 
 def predict_prophage_coords(contig, extend_by=0, mask=None):

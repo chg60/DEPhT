@@ -12,7 +12,7 @@ BLASTN_EVALUE = 1E-05
 # MAIN FUNCTIONS
 # -----------------------------------------------------------------------------
 def blastn(query, target, tmp_dir, mode="db", evalue=BLASTN_EVALUE,
-           word_size=None, gapopen=None):
+           word_size=None, gapopen=None, gapextend=None):
     """
     Runs blastn in either query/subject mode or query/database mode, as
     indicated by `mode`. Returns hits better than `evalue`.
@@ -58,6 +58,12 @@ def blastn(query, target, tmp_dir, mode="db", evalue=BLASTN_EVALUE,
 
     if gapopen:
         command += f" -gapopen {gapopen}"
+
+    # TODO:
+    #  Gap extend and gap open are dependant on each other, for the future,
+    #  there needs to be some logic mandating the use of either none or both
+    if gapextend:
+        command += f" -gapextend {gapextend}"
 
     run_command(command)
 
