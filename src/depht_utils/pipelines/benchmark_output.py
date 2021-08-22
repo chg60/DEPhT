@@ -195,10 +195,26 @@ def metrics(stats):
     fn = stats["FALSE_NEGATIVE"]
 
     # calculate metric values
-    sn = (tp/(tp+fn))*100
-    ppv = (tp/(tp+fp))*100
-    acc = ((tp+tn)/(tp+tn+fp+fn))*100
-    mcc = ((tn*tp) - (fn*fp))/math.sqrt((tp+fp)*(tp+fn)*(tn+fp)*(tn+fn))
+    if (tp + fn) == 0:
+        sn = 1
+    else:
+        sn = (tp/(tp+fn))*100
+
+    if tp + fp == 0:
+        ppv = 1
+    else:
+        ppv = (tp/(tp+fp))*100
+
+    if (tp+tn+fp+fn) == 0:
+        acc = 1
+    else:
+        acc = ((tp+tn)/(tp+tn+fp+fn))*100
+
+    confusion_matrix = (tp+fp)*(tp+fn)*(tn+fp)*(tn+fn)
+    if confusion_matrix == 0:
+        confusion_matrix = 1
+
+    mcc = ((tn*tp) - (fn*fp))/math.sqrt(confusion_matrix)
 
     # return metrics as dictionary
     return {"sensitivity": round(sn, 3),
@@ -269,50 +285,52 @@ def comparison(dir, manual_name, software_name, per_strain=False):
             software_strain_path = path_to_software/strain_name
 
             # data to csv is written as dictionaries with headers as keys
-            for prophage in sorted(manual_strain_path.iterdir()):
-                manual_ends = get_child_ends(prophage, ref_seq)
-                if manual_ends is None:
-                    # this should not happen
-                    print("ERROR: Prophage not found: ", prophage)
-                    dict = {"strain": strain_name,
-                            "software": "manual",
-                            "prophage": prophage.stem,
-                            "ends": "NONE"}
-                    writer.writerow(dict)
-                else:
-                    # data written for each manually annotated genome
-                    for ends_tuple in manual_ends:
+            if manual_strain_path.is_dir():
+                for prophage in sorted(manual_strain_path.iterdir()):
+                    manual_ends = get_child_ends(prophage, ref_seq)
+                    if manual_ends is None:
+                        # this should not happen
+                        print("ERROR: Prophage not found: ", prophage)
                         dict = {"strain": strain_name,
                                 "software": "manual",
                                 "prophage": prophage.stem,
-                                "ends": ends_tuple}
+                                "ends": "NONE"}
                         writer.writerow(dict)
+                    else:
+                        # data written for each manually annotated genome
+                        for ends_tuple in manual_ends:
+                            dict = {"strain": strain_name,
+                                    "software": "manual",
+                                    "prophage": prophage.stem,
+                                    "ends": ends_tuple}
+                            writer.writerow(dict)
 
-            for prophage in sorted(software_strain_path.iterdir()):
-                # check that no hidden files are being read in
-                # only read in fasta files
-                if prophage.suffix == ".fasta":
-                    software_ends = get_child_ends(prophage, ref_seq)
-                else:
-                    continue
+            if software_strain_path.is_dir():
+                for prophage in sorted(software_strain_path.iterdir()):
+                    # check that no hidden files are being read in
+                    # only read in fasta files
+                    if prophage.suffix == ".fasta":
+                        software_ends = get_child_ends(prophage, ref_seq)
+                    else:
+                        continue
 
-                # same logic as above for software data
-                if software_ends is None:
-                    # if the prophage found by the software not found in host
-                    # this should not happen
-                    dict = {"strain": strain_name,
-                            "software": software_name,
-                            "prophage": prophage.stem,
-                            "ends": "NONE"}
-                    writer.writerow(dict)
-                else:
-                    # write software data to the csv
-                    for ends_tuple in software_ends:
+                    # same logic as above for software data
+                    if software_ends is None:
+                        # if the prophage found by the software not found in
+                        # host this should not happen
                         dict = {"strain": strain_name,
                                 "software": software_name,
                                 "prophage": prophage.stem,
-                                "ends": ends_tuple}
+                                "ends": "NONE"}
                         writer.writerow(dict)
+                    else:
+                        # write software data to the csv
+                        for ends_tuple in software_ends:
+                            dict = {"strain": strain_name,
+                                    "software": software_name,
+                                    "prophage": prophage.stem,
+                                    "ends": ends_tuple}
+                            writer.writerow(dict)
         csv_file.close()    # close csv file
 
         # collect the statistics
