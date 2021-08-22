@@ -2,16 +2,17 @@ import argparse
 import time
 
 from depht_utils.pipelines import (
-    annotate_gene_clusters, build_reference_db, build_functions_db,
-    curate_functions, index_functions, phamerate, pull_sequences,
-    screen_conserved_phams, train_prophage_model)
+    annotate_gene_clusters, benchmark_output, build_reference_db,
+    build_functions_db, curate_functions, index_functions, phamerate,
+    pull_sequences, screen_conserved_phams, train_prophage_model)
 
 # GLOBAL VARIABLES
 # -----------------------------------------------------------------------------
 PIPELINES = [
-        "annotate_gene_clusters", "build_reference_db", "build_functions_db",
-        "curate_functions", "index_functions", "phamerate", "pull_sequences",
-        "screen_conserved_phams", "train_prophage_model"]
+        "annotate_gene_clusters", "benchmark_output", "build_reference_db",
+        "build_functions_db", "curate_functions", "index_functions",
+        "phamerate", "pull_sequences", "screen_conserved_phams",
+        "train_prophage_model"]
 
 
 def main(unparsed_args):
@@ -21,6 +22,8 @@ def main(unparsed_args):
 
     if args.pipeline == "annotate_gene_clusters":
         annotate_gene_clusters.main(unparsed_args[1:])
+    elif args.pipeline == "benchmark_output":
+        benchmark_output.main(unparsed_args[1:])
     elif args.pipeline == "build_reference_db":
         build_reference_db.main(unparsed_args[1:])
     elif args.pipeline == "build_functions_db":
