@@ -159,7 +159,7 @@ def smooth_by_averaging(values, window_size=25):
     return smoothed_values
 
 
-def predict_prophage_genes(contig, classifier=CLF, alpha=0.25, min_prob=0.5,
+def predict_prophage_genes(contig, classifier=CLF, alpha=0.25, min_prob=0.80,
                            mask=None):
     """
     Calculates the gene attributes used by the model to predict
@@ -211,7 +211,7 @@ def predict_prophage_genes(contig, classifier=CLF, alpha=0.25, min_prob=0.5,
 
     prophage_signal = [x >= alpha for x in predictions]
 
-    filter_prophage_signal(prophage_signal, predictions, min_prob)
+    filter_prophage_signal(prophage_signal, contig.model_scores, min_prob)
 
     return prophage_signal
 
