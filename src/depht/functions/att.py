@@ -3,9 +3,8 @@ import math
 from networkx import DiGraph
 from scipy.stats import zscore
 
-from depht.classes import kmers
 from depht.classes.prophage import DEFAULT_PRODUCT
-from depht.functions.blastn import blastn
+from depht.functions.blastn import blastn, REF_BLASTN_OUTFMT
 from depht.functions.fasta import write_fasta
 from depht.functions.statistics import transform
 
@@ -60,12 +59,7 @@ def find_attachment_site(prophage, l_seq, r_seq,
     r_seq_path = tmp_dir.joinpath(f"{r_name}.fasta")
     write_fasta([r_name], [r_seq], r_seq_path)
     # Calculate and store right region's coordinate start for easy access
-    r_seq_start = prophage.end - len(r_seq)
-
-    paired_ref_map = find_reference_att_sites(l_seq_path, r_seq_path,
-                                              reference_db_path, tmp_dir,
-                                              k, sort_key,
-                                              prophage.start, r_seq_start)
+    r_seq_start = prophage.end - len(r_seq) 
 
     # Use BLASTn to retrieve putative attachment site sequences
     kmer_contigs = blast_attachment_site(l_seq_path, r_seq_path, tmp_dir, k=k,
@@ -75,6 +69,11 @@ def find_attachment_site(prophage, l_seq, r_seq,
         return
 
     transform_kmer_contig_bitscores(kmer_contigs)
+
+    paired_ref_map = find_reference_att_sites(l_seq_path, r_seq_path,
+                                              reference_db_path, tmp_dir,
+                                              k, sort_key,
+                                              prophage.start, r_seq_start)
 
     # Score putative attachment site sequences
     # TODO paramaterize and allow access to change the 'exponent' variable
@@ -90,6 +89,9 @@ def find_attachment_site(prophage, l_seq, r_seq,
     att_table_path = tmp_dir.joinpath("att.txt")
     dump_attachment_sites(prophage, scored_kmer_contigs, att_table_path,
                           r_seq_start)
+
+    attB_table_path = tmp_dir.joinpath("attB.txt")
+    dump_reference_attB_sites(paired_ref_map, attB_table_path)
 
     kmer_contig, scores = scored_kmer_contigs[0]
 
@@ -197,6 +199,18 @@ def dump_attachment_sites(prophage, scored_kmer_contigs, outpath, r_seq_start):
     filehandle.close()
 
 
+def dump_reference_attB_sites(paired_ref_map, outpath):
+    filehandle = outpath.open(mode="w")
+
+    for ref_id, ref_data in paired_ref_map.items():
+        line_data = [str(ref_data_entry) for ref_data_entry in ref_data[4:9]]
+
+        filehandle.write("\t".join(line_data))
+        filehandle.write("\n")
+
+    filehandle.close()
+
+
 # REFERENCE BLASTING HELPER FUNCTIONS
 # -----------------------------------------------------------------------------
 def build_reference_map(sequence_path, reference_db_path, tmp_dir):
@@ -212,7 +226,8 @@ def build_reference_map(sequence_path, reference_db_path, tmp_dir):
     :return: A map of aligned reference genome IDs to alignment result data
     """
     # Try to retrieve reference results for the sequence to the references
-    blast_results = blastn(sequence_path, reference_db_path, tmp_dir)
+    blast_results = blastn(sequence_path, reference_db_path, tmp_dir,
+                           outfmt=REF_BLASTN_OUTFMT)
 
     reference_map = dict()
     for blast_result in blast_results:
@@ -260,7 +275,10 @@ def pair_reference_maps(ref_ids, left_map, right_map, k, sort_key,
                     new_end = (r_seq_start + int(r_qstart) + overlap_len)
 
                     score = float(l_data[sort_key]) + float(r_data[sort_key])
-                    att_data = (new_start, new_end, overlap_len, score)
+                    att_data = (new_start, new_end, overlap_len, score,
+                                ref_id,
+                                l_data["sstart"], l_data["send"],
+                                r_data["sstart"], r_data["send"])
 
                     ref_data.append(att_data)
 
@@ -460,355 +478,3 @@ def score_reference_concurrence(attL_pos, attR_pos, att_len, paired_ref_map,
 
     weighted_score = score * weight
     return weighted_score, ref_bitscore
-
-
-# DEB-GRAPH KMER-COUNTING HELPER FUNCTIONS
-# -----------------------------------------------------------------------------
-
-
-def load_bfilter(sequence, k=KMER_SIZE):
-    """Loads a Bloom Filter with the kmers from a given sequence.
-
-    :param sequence: A sequence to load a Bloom Filter with.
-    :type sequence: str
-    :param k: Length of the word size stored in the DeBruijn graph.
-    :type k: int
-    :return: A Bloom Filter loaded with the kmers from the given sequence
-    :rtype: prophicient.classes.kmer.BloomFilter
-    """
-    bfilter = kmers.BloomFilter(len(sequence))
-
-    for pos, kmer in count_kmers(sequence, k):
-        bfilter.add(kmer)
-
-    return bfilter
-
-
-def create_debruijn_graph(bfilter, sequence, k=KMER_SIZE):
-    """Create a DeBruijn graph from a sequence with a loaded Bloom Filter
-    as a guide.
-
-    :param bfilter: A Bloom Filter that has been loaded with a sequence.
-    :type bfilter: prophicient.classes.kmer.BloomFilter
-    :param sequence: A sequence to construct a DeBruijn graph from.
-    :type sequence: str
-    :param k: Length of the word size to store in the DeBruijn graph.
-    :type k: int
-    :return: A DeBruijn graph loaded from the given sequence.
-    :rtype: networkx.DiGraph
-    """
-    # Initialize the DiGraph
-    deb_graph = DiGraph()
-
-    # Initialize anchor position and previous kmer variables
-    anchor_pos = None
-    prev_kmer = None
-    # Iterate over the kmers and their positions in the given sequence
-    for pos, kmer in count_kmers(sequence, k):
-        # If the kmer has not been seen by the Bloom Filter, continue
-        if not bfilter.check(kmer):
-            anchor_pos = None
-            prev_kmer = None
-            continue
-
-        # If the anchor position for the current stretch of kmers has not been
-        # set, set the anchor position to the current kmer position
-        if anchor_pos is None:
-            anchor_pos = pos
-
-        # Try to get a node associated with the current kmer
-        node = deb_graph.nodes.get(kmer)
-        # If no node exists, create the node associated with the kmer
-        if node is None:
-            # Create a set with the current anchor position
-            anchors = set()
-            anchors.add(anchor_pos)
-
-            # Find the kmer's relative position to the current anchor
-            rel_pos_lookup = dict()
-            rel_pos = set()
-            rel_pos.add(pos - anchor_pos)
-            rel_pos_lookup[anchor_pos] = rel_pos
-
-            # Add the new node to the DeBruijn graph, along with
-            # the set of anchor positions and relative positions
-            deb_graph.add_node(kmer, anchors=anchors,
-                               rel_pos_lookup=rel_pos_lookup)
-        # If the node exists, update the node's position metadata
-        else:
-            # Add the current anchor position to the node's metadata
-            anchors = node.get("anchors")
-            anchors.add(anchor_pos)
-
-            rel_pos_lookup = node.get("rel_pos_lookup")
-
-            # Add the kmer's relative position to the current anchor
-            # to the node's metadata
-            rel_pos = rel_pos_lookup.get(anchor_pos, set())
-            rel_pos.add(pos - anchor_pos)
-            rel_pos_lookup[anchor_pos] = rel_pos
-
-        # Set the previous kmer variable
-        if prev_kmer is None:
-            prev_kmer = kmer
-            continue
-
-        # If no edge between the previous kmer and the current kmer had existed
-        # create a new edge
-        edge = deb_graph[prev_kmer].get(kmer)
-        if edge is None:
-            deb_graph.add_edge(prev_kmer, kmer)
-
-        prev_kmer = kmer
-
-    return deb_graph
-
-
-def traverse_debruijn_graph(deb_graph, sequence, k=KMER_SIZE):
-    """Iterate over a sequence and, with a DeBruijn graph as a guide,
-    find kmer contigs.
-
-    :param deb_graph: A DeBruijn graph of words in a sequence.
-    :type deb_graph: networkx.DiGraph
-    :param sequence: A generator yielding tuples of kmers and their positions.
-    :type sequence: str
-    :param k: Length of the word size stored in the DeBruijn graph.
-    :type k: int
-    :return: A list of contigs and their positions in the sequence and graph.
-    :rtype: list(tuple(str, int, int))
-    """
-    kmer_contigs = []
-
-    # Initialize the kmer generator
-    kmer_gen = count_kmers(sequence, k)
-    while True:
-        # Try to iterate to the next kmer and position
-        try:
-            pos, kmer = next(kmer_gen)
-        except StopIteration:
-            break
-
-        # Get the graph node associated with the current kmer
-        node = deb_graph.nodes.get(kmer)
-        if node is not None:
-            # Try to find and stitch together a multiple kmer contig
-            graph_pos, contig = stitch_kmer_contigs(deb_graph, kmer_gen,
-                                                    kmer, k)
-            kmer_contigs.append((contig, pos, graph_pos))
-
-    return kmer_contigs
-
-
-def stitch_kmer_contigs(deb_graph, kmer_gen, kmer, k):
-    """Stitches together kmers from a contiguous sequence represented in
-    a DeBruijn graph beginning with a given kmer.
-
-    :param deb_graph: A DeBruijn graph of words in a sequence.
-    :type deb_graph: networkx.DiGraph
-    :param kmer_gen: A generator yielding tuples of kmers and their positions.
-    :type kmer_gen: generator
-    :param kmer: The kmer word to begin the current contig.
-    :type kmer: str
-    :param k: Length of the word size stored in the DeBruijn graph.
-    :type k: int
-    :return: A tuple of the position and sequence of a DeBruijn graph contig
-    :rtype: tuple(int, str)
-    """
-    # Intializes the contig variable
-    contig = kmer
-    # Retrieves the node associated with the beginning kmer
-    node = deb_graph.nodes[kmer]
-    # Retrieves the anchor positions associated with the beginning kmer
-    graph_anchor_set = node["anchors"]
-    # Retrieves the positions relative to an anchor
-    # associated with the beginning kmer
-    graph_rel_pos_set = build_graph_rel_pos_set(node, graph_anchor_set)
-    # Retrieves the loosest (rightmost) value the kmer could appear at
-    graph_pos = get_graph_pos(graph_anchor_set, graph_rel_pos_set, k)
-
-    # Iterates until the next kmer in the generator cannot yield a proper path
-    # or the generator runs out of values
-    prev_kmer = kmer
-    while True:
-        # Breaks if the generator runs out of values
-        try:
-            pos, kmer = next(kmer_gen)
-        except StopIteration:
-            break
-
-        # Breaks if the next kmer does not exist within the DeBruijn  graph
-        node = deb_graph.nodes.get(kmer)
-        if node is None:
-            break
-
-        # Test if the next kmer has ever appeared next to the currrent kmer
-        # If yes, return the anchor positions they appear together on
-        # with the set of the previous kmers in sequence
-        graph_anchor_set = test_valid_kmer_path(deb_graph, graph_anchor_set,
-                                                prev_kmer, kmer)
-
-        # If the anchor positions for the kmer pair do not align
-        # with the rest of the kmers in sequence, break
-        if not graph_anchor_set:
-            break
-
-        # If the relative positions for the kmer pair indicate that
-        # the the kmers cannot exist adjacent to each other with the rest
-        # of the kmers in sequence, break
-        graph_rel_pos_set, graph_anchor_set = test_valid_kmer_position(
-                                                 deb_graph, graph_rel_pos_set,
-                                                 graph_anchor_set, kmer)
-        if (not graph_rel_pos_set) or (not graph_anchor_set):
-            break
-
-        # Update kmer, contig, and loosest graph position
-        prev_kmer = kmer
-        contig += kmer[-1]
-        graph_pos = get_graph_pos(graph_anchor_set, graph_rel_pos_set, k)
-
-    return graph_pos, contig
-
-
-def test_valid_kmer_path(deb_graph, graph_anchor_set, prev_kmer, kmer):
-    """Determines if a kmer has ever appeared adjacent to a previous kmer
-    in a DeBruijn graph.
-
-    :param deb_graph: A DeBruijn graph of words in a sequence.
-    :type deb_graph: networkx.DiGraph
-    :param graph_anchor_set: Positions that the contig could be anchored at.
-    :type graph_anchor_set: set(int)
-    :param prev_kmer: The previous kmer in a DeBruijn graph.
-    :type prev_kmer: str
-    :param kmer: The kmer to append to the current contig.
-    :type kmer: str
-    :return: The positions that the kmer's contigs could appear at
-    :rtype: set(int)
-    """
-    node = deb_graph.nodes[kmer]
-
-    # Tests if the kmer has ever appeared adjacent to the previous kmer
-    edge = deb_graph[prev_kmer].get(kmer)
-    if edge is None:
-        return
-
-    # Retrieves the graph contig anchor positions that this edge belongs to
-    graph_anchor_set = graph_anchor_set.intersection(node["anchors"])
-    return graph_anchor_set
-
-
-def test_valid_kmer_position(deb_graph, graph_rel_pos_set, graph_anchor_set,
-                             kmer):
-    """Tests whether the kmer can be appended to the given contig
-    by using the relative positions that the kmer appears in the
-    DeBruijn graph.
-
-    :param deb_graph: A DeBruijn graph of words in a sequence.
-    :type deb_graph: networkx.DiGraph
-    :param graph_rel_pos_set: Positions that the previous kmer could appear at.
-    :type graph_rel_pos_set: set(int)
-    :param graph_anchor_set: Positions that the contig could be anchored at.
-    :type graph_anchor_set: set(int)
-    :param kmer: The kmer word to append to the current contig.
-    :type kmer: str
-    :return: The positions that the kmer and its contigs could appear at
-    :rtype: tuple(set(int), set(int))
-    """
-    # Increments the previous kmer's valid positions
-    inc_graph_rel_pos_set = increment_graph_rel_pos_set(graph_rel_pos_set)
-
-    graph_rel_pos_anchor_set = set()
-    int_graph_rel_pos_set = set()
-
-    # Iterates over the known relative positions for the given kmer
-    for anchor, rel_pos_set in deb_graph.nodes[kmer]["rel_pos_lookup"].items():
-        # Finds positions where the kmer exists adjacent to the previous kmer
-        for rel_pos in rel_pos_set:
-            # If there is such a position, store this as well as
-            # the graph contig that the relative position belongs to
-            if rel_pos in inc_graph_rel_pos_set:
-                graph_rel_pos_anchor_set.add(anchor)
-                int_graph_rel_pos_set.add(rel_pos)
-
-    # Find the graph contig positions that this particular ordering of kmers
-    # could appear at, through set intersection of their positions
-    graph_anchor_set = graph_anchor_set.intersection(graph_rel_pos_anchor_set)
-
-    return int_graph_rel_pos_set, graph_anchor_set
-
-
-def build_graph_rel_pos_set(node, graph_anchor_set):
-    """Builds a set of all of the relative positions that a kmer appears in
-    with respect to the position of the start of their contig.
-
-    :param node: A DeBruijn graph node.
-    :type node: networkx.Graph.node
-    :param graph_anchor_set: Positions of the contigs that contain the kmer.
-    :type graph_anchor_set: set(int)
-    :return: A set of all of the relative positions a kmer appears in
-    :rtype: set(int)
-    """
-    graph_rel_pos_set = set()
-
-    # Iterates over all the DeBruij graph contigs that the kmer node appears in
-    for graph_anchor in graph_anchor_set:
-        # Finds all the relative positions where the kmer appears in the contig
-        node_rel_pos_set = node["rel_pos_lookup"][graph_anchor]
-
-        # Adds each relative position to the set
-        for rel_pos in node_rel_pos_set:
-            graph_rel_pos_set.add(rel_pos)
-
-    return graph_rel_pos_set
-
-
-def increment_graph_rel_pos_set(graph_rel_pos_set):
-    """Takes a set of DeBruijn graph word positions and increments each
-    position by one.
-
-    :param graph_rel_pos_set: A set of DeBruijn graph word positions.
-    :type graph_rel_pos_set: set(int)
-    :returns: A deep copy of the positions of each word, incremented by one.
-    :rtype: set(int)
-    """
-    inc_graph_rel_pos_set = set()
-
-    for rel_pos in graph_rel_pos_set:
-        inc_graph_rel_pos_set.add(rel_pos + 1)
-
-    return inc_graph_rel_pos_set
-
-
-def get_graph_pos(graph_anchor_set, graph_rel_pos_set, k):
-    """Returns the loosest value permitted by the relative positions stored
-    within a nucleotide sequence DeBruijn graph.
-
-    :param graph_anchor_set: Position of the beginning of related graph contigs
-    :type graph_anchor_set: set(int)
-    :param graph_rel_pos_set: Positions of the beginning of a graph kmer (node)
-    :type graph_anchor_set: set(int)
-    :param k: Length of the word size stored in the DeBruijn graph
-    :type k: int
-    :rtype: int
-    """
-    # Returns the right-most value the kmer could appear at.
-    return max(graph_anchor_set) + max(graph_rel_pos_set) + k
-
-
-def count_kmers(sequence, k):
-    """A generator function that takes a sequence and splits it into word
-    sizes of k and the index of the word with respect to the sequence.
-
-    :param sequence: A sequence to split into k sized word.
-    :type sequence: str
-    :param k: The size of words to split the specified sequence into.
-    :type k: int
-    :returns: Generator that yields k length words from the sequence.
-    """
-    # If the sequence is not long enough, return a faux generator result
-    if k >= len(sequence):
-        return [(0, sequence)]
-
-    # Generator that returns k-mers and their 0-indexed position
-    for i in range(len(sequence) - k):
-        kmer = sequence[i:i+k]
-        yield i, kmer
