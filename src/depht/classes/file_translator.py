@@ -122,7 +122,7 @@ class LinearFeatureTranslator(BiopythonTranslator):
                 label = ""
 
             properties["product"] = label
-            properties["codon"] = feature.qualifiers.get("note", "")[0]
+            properties["codon"] = feature.qualifiers.get("note", [""])[0]
 
         return properties
 
