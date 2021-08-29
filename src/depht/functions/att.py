@@ -203,7 +203,8 @@ def dump_reference_attB_sites(paired_ref_map, outpath):
     filehandle = outpath.open(mode="w")
 
     for ref_id, ref_data in paired_ref_map.items():
-        line_data = [str(ref_data_entry) for ref_data_entry in ref_data[4:9]]
+        line_data = [str(ref_data_entry)
+                     for ref_data_entry in list(ref_data[4:9]) + [ref_data[3]]]
 
         filehandle.write("\t".join(line_data))
         filehandle.write("\n")
