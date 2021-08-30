@@ -6,13 +6,16 @@ from depht.functions.run_command import run_command
 # -----------------------------------------------------------------------------
 BLASTN_OUTFMT = "10 sseqid qstart qend sstart send length gapopen " \
                 "mismatch evalue bitscore qseq"
+
+REF_BLASTN_OUTFMT = "10 sseqid qstart qend sstart send length gapopen " \
+                    "mismatch evalue bitscore"
 BLASTN_EVALUE = 1E-05
 
 
 # MAIN FUNCTIONS
 # -----------------------------------------------------------------------------
 def blastn(query, target, tmp_dir, mode="db", evalue=BLASTN_EVALUE,
-           word_size=None, gapopen=None, gapextend=None):
+           word_size=None, gapopen=None, gapextend=None, outfmt=BLASTN_OUTFMT):
     """
     Runs blastn in either query/subject mode or query/database mode, as
     indicated by `mode`. Returns hits better than `evalue`.
@@ -48,7 +51,7 @@ def blastn(query, target, tmp_dir, mode="db", evalue=BLASTN_EVALUE,
         command = f"blastn -query {query} -subject {target}"
     else:
         raise ValueError("valid blastn modes are: 'db', 'subject'")
-    command += f" -out {outfile} -outfmt '{BLASTN_OUTFMT}'"
+    command += f" -out {outfile} -outfmt '{outfmt}'"
 
     if evalue:
         command += f" -evalue {evalue}"
