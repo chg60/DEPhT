@@ -1,6 +1,5 @@
 import math
 
-from networkx import DiGraph
 from scipy.stats import zscore
 
 from depht.classes.prophage import DEFAULT_PRODUCT
@@ -11,7 +10,7 @@ from depht.functions.statistics import transform
 # GLOBAL VARIABLES
 # -----------------------------------------------------------------------------
 KMER_SIZE = 5
-MIN_ATT_SCORE = 2.3
+MIN_ATT_SCORE = 2.2
 EVALUE_FILTER = 10000
 
 L_SEQ_NAME = "putative_attL_region"
@@ -21,7 +20,7 @@ AQ_WEIGHT = 1
 IP_WEIGHT = 0.6
 MC_WEIGHT = 0.9
 TR_WEIGHT = 0
-RC_WEIGHT = 1
+RC_WEIGHT = 1.5
 
 DEFAULTS = {"k": 5, "fpp": 0.0001, "outfmt": 10}
 
