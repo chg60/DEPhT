@@ -2,7 +2,7 @@
 
 DEPHT is a new tool for identifying prophages in bacteria, with a particular focus on Mycobacteria.
 
-Popular extant tools primarily rely on homology detection techniques for identifying likely prophage regions:
+Popular extant tools primarily rely on homology detection, or protein/nucleotide k-mer based techniques for identifying likely prophage regions:
   * [PHASTER](https://phaster.ca)
   * [ProphET](https://github.com/jaumlrc/ProphET)
   * [VirSorter2](https://github.com/jiarong/VirSorter2)
