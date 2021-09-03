@@ -26,7 +26,7 @@ From there, print DEPhT's help menu by running it as a python module without arg
 
     python3 -m depht
 
-Which shows:
+Which shows something like this (default # CPUs will vary from computer to computer):
 
     usage: __main__.py [-h] -i INFILE [INFILE ...] [-f {fasta,genbank}] -o OUTDIR [-c CPUS] [-n] [-m {fast,normal,strict}]
                        [-s ATT_SENSITIVITY] [-d] [-v] [-t TMP_DIR] [-p PRODUCT_THRESHOLD] [-l LENGTH_THRESHOLD]
