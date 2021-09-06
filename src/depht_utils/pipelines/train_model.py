@@ -7,13 +7,26 @@ import argparse
 import pathlib
 
 
-def parse_args():
+def parse_args(unparsed_args=None):
     p = argparse.ArgumentParser(description=__doc__)
-    return p.parse_args()
+    p.add_argument("-b", "--bact-dir", type=pathlib.Path,
+                   help="path to directory containing bacterial file(s) for "
+                        "training")
+    p.add_argument("-p", "--phage-dir", type=pathlib.Path,
+                   help="path to directory containing phage file(s) for "
+                        "training")
+    p.add_argument("-n", "--model-name", type=str,
+                   help="name for the new model (e.g. 'Streptomyces')")
+
+    if unparsed_args:
+        return p.parse_args(unparsed_args)
+    else:
+        return p.parse_args()
 
 
-def main():
-    pass
+def main(unparsed_args=None):
+    args = parse_args(unparsed_args)
+    print(args)
 
 
 if __name__ == "__main__":
