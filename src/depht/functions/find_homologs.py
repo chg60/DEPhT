@@ -77,7 +77,8 @@ def find_single_homologs(header, sequence, db, tmp_dir, prob=HHSEARCH_PROB,
         best_match = hhresult.matches[0].target_id
         best_probability = hhresult.matches[0].probability
     else:
-        output_file.unlink()
+        if output_file.is_file():
+            output_file.unlink()
 
     query_file.unlink()
 
@@ -145,8 +146,16 @@ def find_homologs(contigs, prophage_coords, db, tmp_dir, cpus, min_length=150,
             if len(translation) < min_length:
                 continue
 
-            # Only check features that overlap or are in prophages
+            # Only check features that overlap or are in prophages or haven't been
+            # searched before
+            search = False
             if __feature_in_prophage(feature, contig_prophage_coords):
+                search = True
+                if contig.hhsearch_scores:
+                    if contig.hhsearch_scores[i] > 0:
+                        search = False
+
+            if search:
                 map_geneid_to_feature[geneid] = feature
                 batch_geneids.append(geneid)
                 batch_sequences.append(translation)

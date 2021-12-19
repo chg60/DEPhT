@@ -14,7 +14,6 @@ from tempfile import mkdtemp
 
 from Bio import SeqIO
 
-from depht import PACKAGE_DIR
 from depht.classes.contig import CODING_FEATURE_TYPES, Contig
 from depht.classes.prophage import ANNOTATIONS, DEFAULT_PRODUCT, Prophage
 from depht.functions.annotation import annotate_record, MIN_LENGTH
@@ -23,14 +22,27 @@ from depht.functions.find_homologs import find_homologs
 from depht.functions.mmseqs import assemble_bacterial_mask
 from depht.functions.multiprocess import PHYSICAL_CORES
 from depht.functions.prophage_prediction import predict_prophage_coords, WINDOW
+from depht.functions.sniff_format import sniff_format
 from depht.functions.visualization import draw_complete_diagram
 
 # GLOBAL VARIABLES
 # -----------------------------------------------------------------------------
-# For temporary file I/O
-TMP_DIR = pathlib.Path("/tmp/prophicient")
-CONTIG_DATA_HEADER = ["Gene ID", "Start", "End", "Prediction",
-                      "Bacterial Homology", "Phage Homology"]
+DEPHT_DIR = pathlib.Path().home().joinpath(".depht")
+if not DEPHT_DIR.is_dir():
+    DEPHT_DIR.mkdir()
+
+MODEL_DIR = DEPHT_DIR.joinpath("models")
+if not MODEL_DIR.is_dir():
+    MODEL_DIR.mkdir()
+
+LOCAL_MODELS = [x.name for x in MODEL_DIR.iterdir() if x.name != ".DS_Store"]
+if len(LOCAL_MODELS) == 0:
+    print("No DEPhT models found in ~/.depht/models. Please create one using "
+          "'depht_train', or download models from https://osf.io/zt4n3/")
+    sys.exit(0)
+
+# Where temporary file I/O should happen
+TMP_DIR = DEPHT_DIR.joinpath("tmp")
 
 # Model can't scan contigs with fewer CDS than window size
 MIN_CDS_FEATURES = WINDOW
@@ -49,15 +61,8 @@ MIN_SIZE = 20000
 MIN_PRODUCTS_NORMAL = 5
 MIN_PRODUCTS_STRICT = 10
 
-# DEFAULT FILE PATHS
-# -----------------------------------------------------------------------------
-BLASTN_DB = PACKAGE_DIR.joinpath("data/blastn/mycobacteria")
-
-ESSENTIAL_DB = PACKAGE_DIR.joinpath("data/hhsearch/essential/essential")
-EXTENDED_DB = PACKAGE_DIR.joinpath("data/hhsearch/extended/extended")
-
-BACTERIAL_REF_FASTA = PACKAGE_DIR.joinpath("data/mmseqs/bacterial_genes.fasta")
-BACTERIAL_REF_VALUES = PACKAGE_DIR.joinpath("data/mmseqs/bacterial_genes.pbv")
+CONTIG_DATA_HEADER = ["Gene ID", "Start", "End", "Prediction",
+                      "Bacterial Homology", "Phage Homology"]
 
 
 def parse_args():
@@ -66,42 +71,46 @@ def parse_args():
 
     :return: parsed_args
     """
-    p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument("-i", "--infile",
-                   type=pathlib.Path, nargs="+", required=True,
+    p = argparse.ArgumentParser(description=__doc__, prog="depht")
+    # Positional arguments
+    p.add_argument("infile", type=pathlib.Path, nargs="+",
                    help="path to genome file(s) to scan for prophages")
-    p.add_argument("-f", "--input-format",
-                   choices=("fasta", "genbank"), default="fasta", type=str,
-                   help="input which format your input file(s) are in")
-    p.add_argument("-o", "--outdir",
-                   type=pathlib.Path, required=True,
-                   help="path where outputs can be written")
+    p.add_argument("outdir",  type=pathlib.Path,
+                   help="path where output files can be written")
+
+    # Optional arguments
+    p.add_argument("--model", type=str,
+                   choices=set(LOCAL_MODELS), default=LOCAL_MODELS[0],
+                   help=f"which local model should be used [default: "
+                        f"{LOCAL_MODELS[0]}]")
     p.add_argument("-c", "--cpus",
-                   default=PHYSICAL_CORES, type=int,
+                   metavar="", default=PHYSICAL_CORES, type=int,
                    help=f"number of CPU cores to use [default: "
                         f"{PHYSICAL_CORES}]")
-    p.add_argument("-n", "--no-draw",
-                   action="store_false", dest="draw",
+    p.add_argument("-n", "--no-draw", action="store_false", dest="draw",
                    help="don't draw genome diagram for identified prophage(s)")
     p.add_argument("-m", "--mode",
                    choices=("fast", "normal", "strict"), default="normal",
                    help="select a runmode that favors speed or accuracy")
-    p.add_argument("-s", "--att_sensitivity", type=float,
-                   default=ATT_SENSITIVITY,
+    p.add_argument("-s", "--att_sens", type=float,
+                   default=ATT_SENSITIVITY, metavar="",
                    help="sensitivity parameter for att site detection.")
     p.add_argument("-d", "--dump-data", action="store_true",
                    help="dump all support data to outdir")
     p.add_argument("-v", "--verbose",
                    action="store_true",
                    help="print progress messages as the program runs")
-    p.add_argument("-t", "--tmp-dir", type=pathlib.Path, default=TMP_DIR,
-                   help=f"temporary directory to use for file I/O [default: "
-                        f"{TMP_DIR}]")
-    p.add_argument("-p",  "--product-threshold", type=int, default=None,
-                   help="select a phage homolog product lower threshold")
-    p.add_argument("-l", "--length-threshold", type=int, default=MIN_SIZE,
-                   help=f"select a minimum length for prophages [default: "
-                        f"{MIN_SIZE}]")
+    p.add_argument("-t", "--tmp-dir",
+                   type=pathlib.Path, default=TMP_DIR, metavar="",
+                   help=f"temporary directory to use for file I/O "
+                        f"[default: {TMP_DIR}]")
+    p.add_argument("-p", "--products",
+                   type=int, default=None, metavar="",
+                   help="minimum number of phage homologs to report a prophage")
+    p.add_argument("-l", "--length",
+                   type=int, default=MIN_SIZE, metavar="",
+                   help=f"minimum length to report a prophage "
+                        f"[default: {MIN_SIZE}]")
 
     return p.parse_args()
 
@@ -113,15 +122,15 @@ def main():
     """
     args = parse_args()
 
-    infiles = args.infile       # What input file(s)?
-    fmt = args.input_format     # What is the input file format?
+    infiles = args.infile       # What input file(s) did the user give?
+    model = args.model          # Which model was selected?
     draw = args.draw            # Are we going to draw genome diagrams?
     dump = args.dump_data       # Are we dumping data into outdir when done?
     runmode = args.mode         # What runmode are we using?
     verbose = args.verbose      # Print verbose outputs?
     cpus = args.cpus            # How many physical cores can we use?
-    att_sens = args.att_sensitivity     # What's the att sensitivity modifier?
-    min_length = args.length_threshold  # Minimum prophage length in bp
+    att_sens = args.att_sens    # What's the att sensitivity modifier?
+    min_length = args.length    # Minimum prophage length in bp
 
     # Get output dir and make sure it's a valid path
     outdir = pathlib.Path(args.outdir).resolve()
@@ -131,9 +140,17 @@ def main():
 
     # Get the temporary directory, refresh it if it exists
     tmpdir = pathlib.Path(args.tmp_dir).resolve()
-    if tmpdir.is_dir():
-        shutil.rmtree(tmpdir)
-    tmpdir.mkdir(parents=True)
+    if not tmpdir.is_dir():
+        tmpdir.mkdir(parents=True)
+
+    # Set up model directories
+    model_dir = MODEL_DIR.joinpath(model)
+    bact_ref_fasta = model_dir.joinpath("mmseqs/bacterial_genes.fasta")
+    bact_ref_values = model_dir.joinpath("mmseqs/bacterial_genes.pbv")
+    essential_db = model_dir.joinpath("hhsearch/essential")
+    extended_db = model_dir.joinpath("hhsearch/extended")
+    blast_db = model_dir.joinpath("blastn/references")
+    classifier = model_dir.joinpath("classifier.pkl")
 
     # Mark program start time
     mark = datetime.now()
@@ -155,15 +172,20 @@ def main():
         if not genome_tmp_dir.is_dir():
             genome_tmp_dir.mkdir()
 
+        # Automatically check the file format
+        fmt = sniff_format(infile)
+
         # Parse all contigs of annotation-worthy length
         if verbose:
-            print(f"\nparsing '{str(infile)}'...")
+            print(f"\nparsing '{str(infile)}' as {fmt}...")
 
+        # Parse the file and retain contigs above cutoff length
         records = [x for x in SeqIO.parse(infile, fmt) if len(x) >= MIN_LENGTH]
 
-        if not records and verbose:
-            print(f"no {fmt}-formatted records of at least {MIN_LENGTH}bp "
-                  f"found in '{str(infile)}' - skipping it...")
+        if not records:
+            if verbose:
+                print(f"no {fmt}-formatted records of at least {MIN_LENGTH}bp "
+                      f"found in '{str(infile)}' - skipping it...")
 
             shutil.rmtree(genome_tmp_dir)  # clean up after ourselves
             continue
@@ -209,7 +231,7 @@ def main():
 
         # Detect conserved bacterial genes for each contig
         bacterial_masks = assemble_bacterial_mask(
-            contigs, BACTERIAL_REF_FASTA, BACTERIAL_REF_VALUES, mmseqs_dir)
+            contigs, bact_ref_fasta, bact_ref_values, mmseqs_dir)
 
         if verbose:
             print("looking for high-probability prophage regions...")
@@ -217,8 +239,8 @@ def main():
         # Predict prophage coordinates for each contig
         prophage_predictions = list()
         for i, contig in enumerate(contigs):
-            prediction = predict_prophage_coords(contig, EXTEND_BY,
-                                                 mask=bacterial_masks[i])
+            prediction = predict_prophage_coords(
+                contig, classifier, EXTEND_BY, mask=bacterial_masks[i])
 
             filtered_prediction = []
             for pred in prediction:
@@ -245,22 +267,22 @@ def main():
             if verbose:
                 print("searching for phage gene homologs...")
 
-            find_homologs(contigs, prophage_predictions, ESSENTIAL_DB,
+            find_homologs(contigs, prophage_predictions, essential_db,
                           hhsearch_dir, cpus)
             product_threshold = MIN_PRODUCTS_NORMAL
 
             if runmode == "strict":
                 if verbose:
                     print("extending search for phage gene homologs...")
-                find_homologs(contigs, prophage_predictions, EXTENDED_DB,
+                find_homologs(contigs, prophage_predictions, extended_db,
                               hhsearch_dir, cpus, cache_scores=False)
                 product_threshold = MIN_PRODUCTS_STRICT
         else:
             for contig in contigs:
                 contig.fill_hhsearch_scores()
 
-        if args.product_threshold is not None:
-            product_threshold = args.product_threshold
+        if args.products is not None:
+            product_threshold = args.products
 
         prophages = load_initial_prophages(contigs, prophage_predictions,
                                            product_threshold,
@@ -277,7 +299,7 @@ def main():
 
         # Detect attachment sites, where possible, for the predicted prophage
         search_space = att_sens * EXTEND_BY
-        detect_att_sites(prophages, BLASTN_DB, search_space, att_dir)
+        detect_att_sites(prophages, blast_db, search_space, att_dir)
 
         prophages = [prophage for prophage in prophages
                      if prophage.length >= min_length]
@@ -438,6 +460,8 @@ def detect_att_sites(prophages, reference_db_path, search_space,
         half_len = len(prophage.seq) // 2
         if search_space > half_len:
             search_space = half_len
+
+        search_space = int(search_space)
 
         l_seq = str(prophage.seq[:search_space])
         r_seq = str(prophage.seq[-1*search_space:])

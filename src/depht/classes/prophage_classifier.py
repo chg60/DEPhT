@@ -38,6 +38,7 @@ class ProphageClassifier:
 
         ratio = float(len(bacteria_df)) / len(prophage_df)
 
+        figs = list()
         for i, feature in enumerate(x.columns):
             prophage_series = prophage_df.loc[:, feature]
             bacteria_series = bacteria_df.loc[:, feature]
@@ -63,12 +64,14 @@ class ProphageClassifier:
                              color="class", barmode="overlay",
                              color_discrete_map=colormap,
                              template="simple_white")
-                fig.show()
+                figs.append((feature, fig))
 
             dist = ProbabilityDistribution(prophage_hist, bacteria_hist,
                                            weights=[1, ratio])
 
             self.distributions_[feature] = dist
+
+        return figs
 
     def predict_proba(self, x, feature_weights=None):
         """
@@ -133,6 +136,9 @@ class ProphageClassifier:
                 temp_predict.append(0)
 
         return temp_predict
+
+    def __len__(self):
+        return len(self.distributions_)
 
 
 class Histogram:

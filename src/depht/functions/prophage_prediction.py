@@ -2,13 +2,8 @@ import pickle
 
 import pandas as pd
 
-from depht import PACKAGE_DIR
 from depht.functions.sliding_window import *
 from depht.functions.statistics import average
-
-MODEL_PATH = PACKAGE_DIR.joinpath("data/prophage_model.pickle")
-with open(MODEL_PATH, "rb") as model_reader:
-    CLF = pickle.load(model_reader)
 
 WINDOW = 55         # Number of CDS features to consider in a window
 BACTERIA = 0        # Gene prediction state - bacterial
@@ -159,7 +154,7 @@ def smooth_by_averaging(values, window_size=25):
     return smoothed_values
 
 
-def predict_prophage_genes(contig, classifier=CLF, alpha=0.25, min_prob=0.80,
+def predict_prophage_genes(contig, classifier, alpha=0.25, min_prob=0.75,
                            mask=None):
     """
     Calculates the gene attributes used by the model to predict
@@ -168,7 +163,7 @@ def predict_prophage_genes(contig, classifier=CLF, alpha=0.25, min_prob=0.80,
 
     :param contig: the contig to make prophage predictions in
     :type contig: prophicient.classes.contig.Contig
-    :param classifier: path to a binary file with sklearn model inside
+    :param classifier: path to a binary file with prophage classifier inside
     :type classifier: prophicient.classes.prophage_classifier.ProphageClassifier
     :param alpha: probability above which to keep prophage prediction
     :type alpha: float
@@ -190,13 +185,19 @@ def predict_prophage_genes(contig, classifier=CLF, alpha=0.25, min_prob=0.80,
     lag_df["ctr_size"] = dataframe.loc[:, "lag_size"]
     lag_df["ctr_strand"] = dataframe.loc[:, "lag_strand"]
 
+    with open(classifier, "rb") as model_reader:
+        classifier = pickle.load(model_reader)
+
     lead_p = classifier.predict_proba(lead_df)
     center_p = classifier.predict_proba(center_df)
     lag_p = classifier.predict_proba(lag_df)
 
     predictions = list()
     for x, y, z in zip(lead_p, center_p, lag_p):
-        predictions.append(max([x, y, z]))
+        a = float(x + y)/2
+        b = float(y + z)/2
+        predictions.append(max([a, y, b]))
+        # predictions.append(max([x, y, z]))
 
     # Store model predictions within the contig option
     contig.update_model_scores(predictions)
@@ -218,10 +219,18 @@ def predict_prophage_genes(contig, classifier=CLF, alpha=0.25, min_prob=0.80,
 
 def filter_prophage_signal(prophage_signal, predictions, min_prob):
     """Imposes a minimum prophage signal probability on regions in the genome
-    with a signal level above alpha"""
+    with a signal level above alpha.
 
+    :param prophage_signal:
+    :type prophage_signal:
+    :param predictions:
+    :type predictions:
+    :param min_prob:
+    :type min_prob:
+    """
     prophage_block = False
     prophage_block_indicies = list()
+
     for i in range(len(prophage_signal)):
         prophage_bit_signal = prophage_signal[i]
 
@@ -242,8 +251,14 @@ def filter_prophage_signal(prophage_signal, predictions, min_prob):
                 for j in prophage_block_indicies:
                     prophage_signal[j] = False
 
+    if prophage_block:
+        block_predictions = [predictions[j] for j in prophage_block_indicies]
+        if max(block_predictions) < min_prob:
+            for j in prophage_block_indicies:
+                prophage_signal[j] = False
 
-def predict_prophage_coords(contig, extend_by=0, mask=None):
+
+def predict_prophage_coords(contig, classifier, extend_by=0, mask=None):
     """
     Predicts prophage genes on the contig, then tries to approximate
     the coordinates associated with phage <-> bacterial transitions.
@@ -257,7 +272,7 @@ def predict_prophage_coords(contig, extend_by=0, mask=None):
     :return: prophage_coords
     :rtype: list of (int, int)
     """
-    gene_predictions = predict_prophage_genes(contig, mask=mask)
+    gene_predictions = predict_prophage_genes(contig, classifier, mask=mask)
 
     prophage_coords = list()
     left, right = None, None
