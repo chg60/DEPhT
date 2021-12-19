@@ -90,7 +90,7 @@ def parse_args():
     p.add_argument("-n", "--no-draw", action="store_false", dest="draw",
                    help="don't draw genome diagram for identified prophage(s)")
     p.add_argument("-m", "--mode",
-                   choices=("fast", "normal", "strict"), default="normal",
+                   choices=("fast", "normal", "sensitive"), default="normal",
                    help="select a runmode that favors speed or accuracy")
     p.add_argument("-s", "--att_sens", type=float,
                    default=ATT_SENSITIVITY, metavar="",
@@ -258,7 +258,7 @@ def main():
             continue
 
         product_threshold = 0
-        if runmode in ("normal", "strict"):
+        if runmode in ("normal", "sensitive"):
             hhsearch_dir = genome_tmp_dir.joinpath("hhsearch")
             if not hhsearch_dir.is_dir():
                 hhsearch_dir.mkdir()
@@ -271,7 +271,7 @@ def main():
                           hhsearch_dir, cpus)
             product_threshold = MIN_PRODUCTS_NORMAL
 
-            if runmode == "strict":
+            if runmode == "sensitive":
                 if verbose:
                     print("extending search for phage gene homologs...")
                 find_homologs(contigs, prophage_predictions, extended_db,
