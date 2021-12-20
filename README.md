@@ -17,17 +17,13 @@ boundary detection than any tool we are aware of.
 
 # Installation
 
-DEPhT has several dependencies, and by far the easiest way to install it is to use 
+DEPhT has several dependencies, and as a result by far the easiest way to install it is to use 
 [Anaconda](https://www.anaconda.com/products/individual) or the lightweight 
-[Miniconda](https://docs.conda.io/en/latest/miniconda.html):
+[Miniconda](https://docs.conda.io/en/latest/miniconda.html) with this single command:
 
-    conda create -n depht -c laa89 -c bioconda -c conda-forge depht
+    conda create -n depht -c laa89 -c bioconda -c conda-forge depht -y
 
-Optionally, DEPhT's dependancies can be installed with Anaconda and DEPhT installed with PyPI:
-
-    conda create -n depht python=3.9 -y && conda activate depht
-    conda install -c bioconda -c conda-forge prodigal aragorn mmseqs2=13.45111 hhsuite=3 blast=2.9 -y
-    pip install depht
+It may take up to a couple of minutes to complete.
 
    
 # Setup
