@@ -1,61 +1,68 @@
 # *D*etection and *E*xtraction of *Ph*ages *T*ool (DEPhT)
 
-DEPhT is a new tool for identifying prophages in bacteria, with a particular focus on Mycobacteria. It uses two cheap features to identify regions likely to contain prophages:
-1.  Local average length of genes + intergenic regions, in 55-gene windows
-2.  Local number of strand changes, in 55-gene windows
+DEPhT is a new tool for identifying prophages in bacteria, and was developed with a particular interest in being 
+able to rapidly scan hundreds to thousands of genomes and accurately extract complete (likely active) prophages 
+from them.
 
-Each gene is assigned a probability of belonging to a prophage.  In general if a gene occurs in a 55-gene window where the average gene size is <800 bp and there are fewer than 10 strand changes, there is a very good chance it belongs to a prophage.  
+A detailed manuscript has been submitted to Nucleic Acids Research, but in brief DEPhT works by using genome 
+architecture (rather than homology) to identify genomic regions likely to contain a prophage. Any regions with 
+phage-like architecture (characterized as regions with high gene density and few transcription direction changes) 
+are then further scrutinized using two passes of homology detection. The first pass identifies genes on putative 
+prophages that are homologs of (species/clade/genus-level) conserved bacterial genes, and uses any such genes to 
+disrupt the prophage prediction. The second pass (disabled in the 'fast' runmode) identifies genes on putative 
+prophages that are homologs of conserved, functionally annotated phage genes. Finally, prophage regions that got 
+through the previous filters are subjected to a BLASTN-based attL/attR detection scheme that gives DEPhT better 
+boundary detection than any tool we are aware of.
 
-This approach is not perfect, so another cheap approach is taken to improve the specificity.  MMseqs2 is used to cluster each gene against a database of clade-specific Mycobacterial core genes, to 50% identity, 80% coverage, e-value 0.001.  Regions of high likelihood prophage genes designated as non-core are taken as high probability prophages.
-
-Depending on the selected runmode, these prophage regions are further scrutinized by functionally annotating them against HMMs of manually annotated mycobacteriophage phamilies from the [Actino_Draft Phamerator database](http://databases.hatfull.org/Actino_Draft).  Predicted prophages with too few high-probability hits into these HMMs may be culled as unlikely prophages.
-
-Finally, the remaining prophages are subjected to a blastn-based attL/attR detection scheme that gives DEPhT superior edge detection than any tool we are aware of.
-
-# General Information
-
-- Current version is 1.0.0
-- Most recent stable version is 1.0.0
-- Our current supported bacterial genera are the following.  If you wish to contact us regarding expanding this set, please reach out to either chg60@pitt.edu or laa89@pitt.edu.
-    - Mycobacterium
-    - Gordonia
-    - Pseudomonas 
 
 # Installation
 
-DEPhT requires several dependancies, and while these can be installed and run by manually compiling each of its dependancies, by far the easiest approach is to use Anaconda:
+DEPhT has several dependencies, and by far the easiest way to install it is to use 
+[Anaconda](https://www.anaconda.com/products/individual) or the lightweight 
+[Miniconda](https://docs.conda.io/en/latest/miniconda.html):
 
     conda create -n depht python=3.9 -y && conda activate depht
     conda install -c bioconda -c conda-forge prodigal aragorn mmseqs2=13.45111 hhsuite=3 blast=2.9 -y
 
-After installing dependancies, DEPhT can be installed with PyPI
+After installing dependencies, DEPhT can be installed from PyPI:
     
     pip install depht
 
    
 # Setup
 
-As a part of its components, DEPhT requires several databases to be locally installed.
+DEPhT requires at least one genus-specific model to be installed before it will be able to run. At present, there 
+are a few models available in [our repository at the Open Science Framework](https://osf.io/zt4n3). Creating new 
+models is currently non-trivial, but we have a script nearly finished that should make the process much simpler. 
+This script (and relevant documentation) should be available by early January 2022.
 
-These databases can be manually installed at the command line.  The first step is to download these databases from DEPhT's Open Science Framework repository at https://osf.io/zt4n3/
+Once a model has been downloaded (easiest way is through a web browser), it needs to be decompressed and moved into 
+a directory for DEPhT. For example, if you downloaded the Mycobacterium model:
 
-From there, downloaded compressed databases should be moved to DEPhT's default data directory and de-compressed.  Example:
+    if ! [[ -d ~/.depht/models ]]; then
+        mkdir ~/.depht/models
 
     mv ~/Downloads/Mycobacterium.zip ~/.depht/models/
-    unzip ~/.depht/models/Mycobacterium.zip
+    unzip ~/.depht/models/Mycobacterium.zip -d ~/.depht/models/Mycobacterium
+
+Models trained using `depht_utils` will be put in this directory by default. We are generally amenable to aiding in 
+the construction of new models - the easiest way to accomplish this is by emailing either chg60@pitt.edu or 
+laa89@pitt.edu. Note that some genera are better suited than others for DEPhT model creation.
+
 
 # Running DEPhT
 
 ## Basics
 
-After installation and setup, check that DEPhT can be run on the command line.  Typing 'depht' at the command line should display something similar to the following:
+After installation and setup, check that DEPhT can be run on the command line. Typing `depht` at the commandline 
+should display something similar to the following (number of CPUs and models available will vary):
 
-    usage: __main__.py [-h] [--model] [-c] [-n] [-m {fast,normal,strict}] [-s] [-d] [-v] [-t] [-p] [-l]
-                       infile [infile ...] outdir
+    usage: depht [-h] [--model] [-c] [-n] [-m {fast,normal,strict}] [-s] [-d] [-v] [-t] [-p] [-l]
+                 infile [infile ...] outdir
 
-
-    DEPhT scans bacterial genomes looking for prophages. Regions identified as prophage candidates are further scrutinized, and
-    attachment sites identified as accurately as possible before prophage extraction and generating the final report.
+    DEPhT scans bacterial genomes looking for prophages. Regions identified as prophage 
+    candidates are further scrutinized, and attachment sites identified as accurately as 
+    possible before prophage extraction and generating the final report.
 
     optional arguments:
       -h, --help            show this help message and exit
@@ -68,69 +75,153 @@ After installation and setup, check that DEPhT can be run on the command line.  
       -s , --att_sens       sensitivity parameter for att site detection.
       -d, --dump-data       dump all support data to outdir
       -v, --verbose         print progress messages as the program runs
-      -t , --tmp-dir temporary directory to use for file I/O [default: ~/.depht.tmp]
+      -t , --tmp-dir        temporary directory to use for file I/O [default: ~/.depht/tmp]
       -p , --products       minimum number of phage homologs to report a prophage
       -l , --length         select a minimum length for prophages [default: 20000]
 
-DEPhT requires two arguments:
-1. A fasta/genbank-formatted sequence file
-2. A location to store results
-    
-    depht path/to/sequence_file path/to/results/directory
+In order to run DEPhT, you will need to provide two arguments:
+1. One or more genome sequences in either FASTA or Genbank flatfile format
+2. A desired output directory 
 
-In the event that a prophage region is discovered, or if `-d` is specified, DEPhT will create a directory at the specified location with the name of the inputted sequence.  DEPhT outputs an .html file with visualization of the prophage regions discovered as well as fasta and genbank-formatted sequence files for each of these regions.  See [below](#output) for more details about individual files in DEPhT's output.
+DEPhT will infer the input file type(s) when it parses the files. This makes DEPhT somewhat unusual among 
+prophage-detection tools, as in a single run you can provide a set of files with multiple file formats. FASTA files 
+will be treated as un-annotated and the sequences parsed from these input files will be auto-annotated prior to 
+prophage detection. Genbank flatfiles will be treated as annotated genomes, and will therefore bypass the 
+auto-annotation step and run ~20-30 seconds faster than their FASTA counterparts.
+
+Run DEPhT on a single FASTA file like this:
+
+    depht /path/to/my/sequence.fna /path/to/my/output/directory
+
+Run DEPhT on a directory of FASTA files like this:
+
+    depht /path/to/my/directory/*.fna /path/to/my/output/directory
+
+A large set of mixed FASTA and Genbank flatfiles can be run like this:
+
+    depht /path/to/my/directory/*.fna /path/to/my/directory/*.gb /path/to/my/output/directory
+
+In theory, you're limited only by the number of files your Terminal will let you expand by using `*`.
+
+For Mac users who are uncomfortable with entering paths at the commandline, modern versions of MacOS let you drag files 
+from a Finder window into the Terminal and will automatically populate the path in the Terminal for you. Some Linux 
+distributions may also support this kind of action.
+
+In the event that a prophage region is discovered, or if the `-d` argument is specified, DEPhT will create a 
+directory at the specified output directory for each of the input sequences. For those sequences that have predicted 
+prophages, DEPhT will write an .html file with a visualization of the discovered prophage region(s). It will also 
+output a FASTA (sequence) file and a Genbank (annotation) file for each extracted prophage sequence. See 
+[below](#output) for more details DEPhT's output files.
 
 Progress updates during DEPhT's runtime can be toggled with `-v`.
 
-    depht path/to/sequence_file path/to/results/directory -v
+    depht /path/to/my/sequence.fna /path/to/my/output/directory -v
 
-The amount of resources (virtual cores) that DEPhT is allowed to utilize can be specified with `-c`.
+The amount of resources (CPU cores) that DEPhT is allowed to utilize can be specified with `-c`. Note that some of 
+DEPhT's dependencies utilize hyper-threading, so on most modern computers DEPhT will utilize 2 threads per specified 
+CPU core.
 
-    depht path/to/sequence_file path/to/results/directory -c 6
+    depht /path/to/my/sequence.fna /path/to/my/output/directory -c 6
 
-## Options
 
-DEPhT was originally designed for the precise and efficient discovery and extraction of *Mycobacterium* prophages, but can be adapted for other genera with the `--model` flag.  See [above](#general-information) for genera currently supported, as well [here](#setup) for how to download databases for our other supported genera.
+## Other Options
 
-    depht path/to/sequence_file path/to/results/directory --model Pseudomonas
+What follows is a description of DEPhT's optional arguments. These are described in isolation, but can be mixed and 
+matched using different values to specifically tune the behavior of DEPhT to suit your needs. Default parameters 
+were all set to optimize performance in _Mycobacterium_ genomes.
 
-DEPhT is a multi-modal program, and can incoorporate more/less data into its discernment of prophage regions directly resulting in greater/lesser average runtime.  DEPhT's other runtime modes can be selected with `-m`, with options of:
--fast: DEPhT discovers prophage regions as fast as possible using gene size and transctiptional strand changes.  Regions are trimmed/dampened using the identified shell genome content of the selected genera.
--normal:  DEPhT discovers prophage regions as described above, and then seeks to differentiate between active and decrepit prophages by identifying phage homologs essential to phage viability.
--sensitive: DEPhT discovers prophage regions as described above, and then seeks to differentiate between active and decrepit prophages by identifying phage homologs with a clear function.
+### Model Selection
 
-    depht path/to/sequence_file path/to/results/directory -m fast
+DEPhT was originally designed for the precise and efficient discovery and extraction of *Mycobacterium* prophages, 
+but can be adapted for other genera with the `--model` flag.  See [above](#setup) for instructions to download 
+models that we have already trained, and [below](#general-information) for the list of currently available models.
 
-DEPhT attempts to differentiate between active and decrepit prophages based on the number of identified prophage homologs in a region.  The number of products can be lowered or raised with the `-p` flag and is set at 5 by default.
+If you have more than one model installed locally, you will need to tell DEPhT which model you'd like to use. 
+Otherwise, it will choose one more-or-less at random, which will likely result in unexpectedly low-quality outputs.
 
-    depht path/to/sequence_file> <path/to/results/directory -p 2
+    depht /path/to/my/sequence.fna /path/to/my/output/directory --model Pseudomonas
 
-DEPhT employs a multi-feature scoring algorithm and a library of reference sequences to determine the best possible attachment sequence (or if there is no appropriate sequence).  This runtime of this is heavily influenced by the runtime of the BLASTn algorithm, and so the more/less sequence searched directly results in greater/lesser average runtime.  The amount of sequence that is searched for an attachment sequence can be controlled by the `-s` flag which defines the sequence space searched in units of 5000 base pairs and is set at 7 by default.
+### Runmode Selection
 
-    depht path/to/sequence_file path/to/results/directory -s 2
+DEPhT has multiple runmodes, intended to serve as a dial tuning the trade-off between runtime and accuracy. The `-m` 
+argument lets you select one of the available runmodes:
 
-DEPhT mandates a minimum length for prophage regions reported for output quality assurance.  This minimum length threshold can be lowered or raised with the `-l` flag, and is set at 20000 base pairs by default.
+- fast: DEPhT discovers prophage regions as fast as possible using gene size and transcription direction changes. 
+  Regions are trimmed using the identified shell genome content of the selected genera, and an effort is made to 
+  identify attL/attR, but are likely not as accurate as in the other runmodes.
+- normal: DEPhT discovers prophage regions as in fast mode, then tries to differentiate between active and defective 
+  prophages by identifying homologs of phage genes essential for viability.
+- sensitive: DEPhT discovers prophage regions as in normal mode, and then tries to further differentiate between active 
+  and defective prophages by identifying homologs of phage genes with a consensus annotated function.
 
-    depht path/to/sequence_file path/to/results/directory -l 10000
+DEPhT will run in normal mode by default (e.g. if `-m` is not given), but if one is interested in getting an 
+estimate of the number of prophages as quickly as possible, they may run DEPhT like this:
 
-DEPhT utilizes various software that require outputs and data intermediates that are written to file.  These files are stored at a temporary directory that can be moved using the `-t` flag, and is set at ~/.depht/tmp/ by default.
+    depht /path/to/my/sequence.fna /path/to/my/output/directory -m fast
 
-    depht path/to/sequence_file path/to/results/directory -t /path/to/desired/directory
+Alternatively, if one wants only the most likely prophages, with as many detailed functional annotations as possible,
+they might run:
 
-## Output
+    depht /path/to/my/sequence.fna /path/to/my/output/directory -m sensitive
 
-DEPhT's output is comprised of three main files
-1. A .html file with a visualization of the discovered prophage regions
-2. A .csv spreadsheet with the primary data used to discern prophage regions
-3. A genbank-formatted sequence file of the inputted sequence file after analysis/annotation by DEPhT
+### Product Threshold
 
-DEPhT's graphical .html output displays a cirular input genome map and linear phage region genome map with [DnaFeaturesViewer](https://github.com/Edinburgh-Genome-Foundry/DnaFeaturesViewer) as well as the coordinates of the regions discovered in a colored table with [pretty-html-table](https://github.com/sbi-rviot/ph_table).
+In normal and sensitive runmodes, DEPhT attempts to differentiate between active and defective prophages based on the 
+number of identified prophage homologs in a region. This number of phage products can be raised or lowered by using 
+the `-p` argument. In normal mode, the default value is 5; in sensitive mode, it is 10. If one feels that the 
+default value is too high and would rather use 2 for example, this can be done by running:
+
+    depht /path/to/my/sequence.fna /path/to/my/output/directory -p 2
+
+### Attachment Site Tuning
+
+DEPhT employs a multi-feature scoring algorithm and a library of reference sequences to determine the best possible 
+attachment site core (or if there is no appropriate sequence). The runtime of this component is heavily influenced by 
+the runtime of the BLASTN algorithm, so runtime scales with the amount of sequence that is searched. However, the 
+precision of extraction may benefit from searching a larger sequence space, particularly in genera where few 
+high-quality reference sequences are available. The sequence space that is searched for an attachment site core 
+can be controlled by using the `-s` flag, which acts as a multiplier against 5000 bp. By default, DEPhT uses `-s 7`, 
+which corresponds to a search space of up to 7 x 5,000 = 35,000 bp at the left and right ends of each identified 
+prophage. This can be raised to 50,000 bp by setting `-s` to 10, at the expense of some additional runtime:
+
+    depht /path/to/my/sequence.fna /path/to/my/output/directory -s 10
+
+### Prophage Size
+
+DEPhT mandates a minimum length for prophage regions reported for output quality assurance. This minimum length 
+threshold can be lowered or raised with the `-l` flag, and is set at 20,000 base pairs by default - just over half 
+the length of the shortest known Mycobacterium prophage. Reduce this threshold to 10,000 bases like this:
+
+    depht /path/to/my/sequence.fna /path/to/my/output/directory -l 10000
+
+### Temporary Directory
+
+DEPhT utilizes various software that require outputs and data intermediates that are written to file. These files 
+are stored in a temporary directory, and removed once DEPhT finishes running. By default, DEPhT will use `~/.depht/tmp` 
+can use any other directory that your user account has read/write permissions in, by using the `-t` argument.
+
+    depht /path/to/my/sequence.fna /path/to/my/output/directory -t /path/to/temporary/directory
+
+
+# Output
+
+DEPhT's output consists of three main files:
+1. An `.html` file with a visualization of the discovered prophage regions
+2. A `.csv` spreadsheet with the primary data used to discern prophage regions - one file per contig
+3. A `.gbk` Genbank flatfile with DEPhT's annotation of the inputted sequence - one file per contig
+
+DEPhT's graphical `.html` output displays a cirular input genome map and linear phage region genome map with 
+[DnaFeaturesViewer](https://github.com/Edinburgh-Genome-Foundry/DnaFeaturesViewer) as well as the coordinates of the 
+regions discovered in a colored table with [pretty-html-table](https://github.com/sbi-rviot/ph_table).
 
 ![DEPhT's graphical output for prophages identified in M. *abscessus* strain GD43A](/resources/images/result_visualization_example.png)
 
-In each of these genome maps and coordinate tables, prophage and/or protein-coding sequence features are colored green for forward-oriented features and colored red for reverse-oriented features.  Above those prophage features in the circular genome map is annotated the prophage region name as given by DEPhT.  Above those protein-coding features in the linear genome map(s) is annotated phage products as identified by DEPhT.
+In each of these genome maps and coordinate tables, prophage and/or protein-coding sequence features are colored 
+green for forward-oriented features and colored red for reverse-oriented features. Above those prophage features in 
+the circular genome map is annotated the prophage region name as given by DEPhT. Above those protein-coding features 
+in the linear genome map(s) is annotated phage products as identified by DEPhT.
 
-DEPhT's data .csv output contains data for each protein-coding feature in the inputted sequence file.
+DEPhT's data `.csv` output contains data for each protein-coding feature in the inputted sequence file.
 
 ![DEPhT's data output for prophages identified in M. *abscessus* strain GD43A](/resources/images/data_spreadsheet_example.png)
 
@@ -141,3 +232,14 @@ The columns in this output are the following:
 - Prediction: The probability of a feature belonging to a prophage as analyzed by DEPhT 
 - Bacterial Homology: The identity of a feature as shell genome content as analyzed by DEPhT
 - Phage Homology: The probability given by an alignment of a feature to a HMM profile of phage amino acid sequences
+
+
+# General Information
+
+- Current version is 1.0.1
+- Most recent stable version is 1.0.1
+- We currently have models available for these bacterial genera:
+    - Mycobacterium
+    - Gordonia
+    - Pseudomonas
+- If you'd like to contact us about expanding this set, please email either chg60@pitt.edu or laa89@pitt.edu

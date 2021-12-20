@@ -37,6 +37,7 @@ if not MODEL_DIR.is_dir():
 
 LOCAL_MODELS = [x.name for x in MODEL_DIR.iterdir() if x.name != ".DS_Store"]
 if len(LOCAL_MODELS) == 0:
+    # TODO: automatically retrieve models from OSF if the user says we can
     print("No DEPhT models found in ~/.depht/models. Please create one using "
           "'depht_train', or download models from https://osf.io/zt4n3/")
     sys.exit(0)
@@ -120,6 +121,10 @@ def main():
     Main function that interfaces with command line args and the
     program workflow.
     """
+    # Invoke the help menu if no args given
+    if len(sys.argv) == 1:
+        sys.argv.append("-h")
+
     args = parse_args()
 
     infiles = args.infile       # What input file(s) did the user give?
@@ -556,6 +561,4 @@ def write_contig_data(contig, outpath):
 
 
 if __name__ == "__main__":
-    if len(sys.argv) == 1:
-        sys.argv.append("-h")
     main()
