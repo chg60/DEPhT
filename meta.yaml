@@ -1,0 +1,58 @@
+{% set name = "depht" %}
+{% set version = "1.0.1" %}
+
+
+package:
+  name: {{ name|lower }}
+  version: {{ version }}
+
+source:
+  url: https://pypi.io/packages/source/{{ name[0] }}/{{ name }}/depht-{{ version }}.tar.gz
+  sha256: c623361560ccb615d9ec68467e99bac0e97dca43754d8e86a904ad940e6404a5
+
+build:
+  number: 0
+  noarch: python
+  script: {{ PYTHON }} -m pip install . -vv
+
+requirements:
+  host:
+    - pip
+    - python ==3.7
+  run:
+    - biopython ~=1.79
+    - bitarray ~=2.0.0
+    - bokeh ~=2.2.2 
+    - matplotlib-base ~=3.4.1
+    - numpy ~=1.20.2
+    - pandas ~=1.2.4
+    - plotly ~=5.1.0
+    - pretty_html_table ~=0.9.10
+    - python >=3.6
+    - scipy ~=1.7.0
+    - dna_features_viewer ~=3.0.3
+    - python-kaleido ~=0.2.1
+    - hhsuite ~=3.3.0
+    - prodigal ~=2.6.3
+    - aragorn ~=1.2.38
+    - mmseqs2 ==13.45111
+    - blast ==2.9.0
+
+test:
+  imports:
+    - depht
+  commands:
+    - pip check
+  requires:
+    - pip
+
+about:
+  home: https://github.com/chg60/DEPhT
+  summary: Discovery and Extraction of Phages Tool
+  license: GPL-3.0
+  license_file: LICENSE
+
+extra:
+  recipe-maintainers:
+    - laa89 
+    - chg60

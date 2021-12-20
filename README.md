@@ -21,11 +21,12 @@ DEPhT has several dependencies, and by far the easiest way to install it is to u
 [Anaconda](https://www.anaconda.com/products/individual) or the lightweight 
 [Miniconda](https://docs.conda.io/en/latest/miniconda.html):
 
+    conda create -n depht -c laa89 -c bioconda -c conda-forge depht
+
+Optionally, DEPhT's dependancies can be installed with Anaconda and DEPhT installed with PyPI:
+
     conda create -n depht python=3.9 -y && conda activate depht
     conda install -c bioconda -c conda-forge prodigal aragorn mmseqs2=13.45111 hhsuite=3 blast=2.9 -y
-
-After installing dependencies, DEPhT can be installed from PyPI:
-    
     pip install depht
 
    
