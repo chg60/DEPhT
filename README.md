@@ -42,6 +42,7 @@ a directory for DEPhT. For example, if you downloaded the Mycobacterium model:
 
     if ! [[ -d ~/.depht/models ]]; then
         mkdir ~/.depht/models
+    fi
 
     mv ~/Downloads/Mycobacterium.zip ~/.depht/models/
     unzip ~/.depht/models/Mycobacterium.zip -d ~/.depht/models/Mycobacterium
