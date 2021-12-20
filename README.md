@@ -29,9 +29,10 @@ It may take up to a couple of minutes to complete.
 # Setup
 
 DEPhT requires at least one genus-specific model to be installed before it will be able to run. At present, there 
-are a few models available in [our repository at the Open Science Framework](https://osf.io/zt4n3). Creating new 
-models is currently non-trivial, but we have a script nearly finished that should make the process much simpler. 
-This script (and relevant documentation) should be available by early January 2022.
+are a few models available in [our repository at the Open Science Framework](https://osf.io/zt4n3). New models can
+be trained [instructions below](#training_new_models), though this process is currently not very streamlined. We
+have a script nearly finished that should make the process much simpler, which should be available by late December
+2021 or early January 2022.
 
 Once a model has been downloaded (easiest way is through a web browser), it needs to be decompressed and moved into 
 a directory for DEPhT. For example, if you downloaded the Mycobacterium model:
@@ -232,10 +233,95 @@ The columns in this output are the following:
 - Phage Homology: The probability given by an alignment of a feature to a HMM profile of phage amino acid sequences
 
 
+# Training New Models
+
+For now, models need to be trained by using a module only available in the GitHub repository. To obtain a local copy
+of the repository, click [here](https://github.com/chg60/DEPhT/archive/refs/heads/main.zip) and unzip it in whatever
+directory you'd like, or if you have git installed on your machine, you can clone the repository like this:
+
+    cd /path/where/you/want/DEPhT
+    git clone https://github.com/chg60/DEPhT.git
+    
+What follows will describe the workflow for training new models, as well as explain the thought process.
+    
+## Selection of Training Genomes
+
+This is by far the highest hurdle for training new models. The better the training genomes are selected, the better
+the model will perform. We *highly* recommend only training against completely sequenced bacteria and manually
+annotated phages.
+
+There's an important tradeoff you'll need to make when training models: volume of data versus quality of data. A
+relatively small dataset (~100 phages and 30-45 bacteria) can yield incredibly high-quality models if the genomes are
+chosen well and especially if the phage genomes are well-annotated. Assuming all the training data is high-quality,
+increasing the amount of training data will likely improve the quality of predictions made by DEPhT, with the caveat
+that larger models will necessarily increase the DEPhT runtime, which will be most noticeable in the fast runmode.
+
+Ok so let's suppose you want to train a new model for Mycobacteria. A good start would be to head to 
+[PATRIC](https://www.patricbrc.org/view/Taxonomy/2#view_tab=taxontree) and navigate to the Mycobacteriaceae.
+
+### Retrieve Bacterial Genomes
+
+In the taxonomy tree, the steps to get here are: 
+
+Terrabacteria group >> Actinobacteria >> Actinomycetia >> Corynebacteriales >> Mycobacteriaceae
+
+The red box below shows where to click to get to the home page for the family or genus of interest.
+
+![patric mycobacteriaceae](/resources/images/patric_mycobacteriaceae.png)
+
+From there, navigate to the "Genomes" tab to see all the available genomes in the chosen taxon. Click "Filters", and
+a good choice might be to select only those genomes where "Genome Status" is "Complete", and "Reference Genome" is
+either "Representative" or "Reference", and "Genome Quality" is "Good". Hit "Apply" to apply those filters. You can 
+download FASTA files for these genomes by selecting all the genomes in the table, and clicking the "DWNLD" button.
+
+![patric download](/resources/images/patric_download.png) 
+
+Click "More Options", and in the popup dialog box, check the box next to "Genomic Sequences in FASTA (\*.fna)" 
+before pressing "Download". 
+
+![patric dialog box](/resources/images/patric_download_options.png)
+
+Of course you are free to add any additional genomes you'd like to better 
+populate the spectrum of diversity in the genus. In our case, we added several _Mycobacterium abscessus_ strains to 
+fill in the so-called _Mycobacterium abscessus complex_ (MAC).
+
+### Check Bacteria for Prophages
+
+Ideally, you'll run these genomes through PHASTER or some other prophage prediction tool to get the approximate
+coordinates of any complete prophages in these strains, and recording them in a CSV file that you'll pass to the 
+training module. The coordinates don't have to be perfect, though the better they are the better the resultant model 
+will perform. This step will reduce the probability that DEPhT treats a prophage found in multiple strains as 
+"conserved bacterial genes", and also give the model an idea what integrated prophages are supposed to look, as 
+opposed to only knowing what extracted phages/prophages look like.
+
+![example csv](/resources/images/prophage_csv.png)
+
+### Retrieve Phage Genomes
+
+Lastly, you'll need to retrieve functionally annotated phages from Genbank or elsewhere. Like the bacteria, it's
+important that these phages represent the spectrum of diversity of phages infecting hosts in the genus. Ideally there
+will also be clusters of at least somewhat-related phages in this dataset.
+
+## Training the Gene Size and TDC Classifier
+
+More info soon
+
+## Training the Bacterial Shell Genome
+
+More info soon
+
+## Training the Phage HMMs
+
+More info soon
+
+## Creating the Reference BLAST Database
+
+More info soon
+
 # General Information
 
-- Current version is 1.0.1
-- Most recent stable version is 1.0.1
+- Current version is 1.0.2
+- Most recent stable version is 1.0.2
 - We currently have models available for these bacterial genera:
     - Mycobacterium
     - Gordonia
