@@ -41,7 +41,7 @@ Once a model has been downloaded (easiest way is through a web browser), it need
 a directory for DEPhT. For example, if you downloaded the Mycobacterium model:
 
     if ! [[ -d ~/.depht/models ]]; then
-        mkdir ~/.depht/models
+        mkdir -p ~/.depht/models
     fi
 
     mv ~/Downloads/Mycobacterium.zip ~/.depht/models/
