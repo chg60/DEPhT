@@ -17,6 +17,11 @@ boundary detection than any tool we are aware of.
 
 # Installation
 
+DEPhT runs natively on MacOS and Linux operating systems, and in theory should work on Windows using 
+[WSL](https://docs.microsoft.com/en-us/windows/wsl/install).
+
+## Conda install
+
 DEPhT has several dependencies, and as a result by far the easiest way to install it is to use 
 [Anaconda](https://www.anaconda.com/products/individual) or the lightweight 
 [Miniconda](https://docs.conda.io/en/latest/miniconda.html) with this single command:
@@ -25,24 +30,45 @@ DEPhT has several dependencies, and as a result by far the easiest way to instal
 
 It may take up to a couple of minutes to complete.
 
+## Manual install
+
+For users that would prefer to manage their own dependencies, you'll need to install each of the following:
+- [BLAST](https://ftp.ncbi.nlm.nih.gov/blast/executables/blast+/) 2.9 or higher
+- [HHsuite3](https://github.com/soedinglab/hh-suite)
+- [MMseqs2](https://github.com/soedinglab/mmseqs2)
+- [Prodigal](https://github.com/hyattpd/Prodigal)
+- [Aragorn](http://www.ansikte.se/ARAGORN/Downloads/)
+- [Python](https://www.python.org/downloads/) 3.6 or higher
+- Python dependencies:
+  - [biopython](https://pypi.org/project/biopython/)~=1.78
+  - [bitarray](https://pypi.org/project/bitarray/)~=2.0.0
+  - [bokeh](https://pypi.org/project/bokeh/)~=2.2.2
+  - [dna-features-viewer](https://pypi.org/project/dna-features-viewer/)~=3.0.3
+  - [kaleido](https://pypi.org/project/kaleido/)~=0.2.1
+  - [matplotlib](https://pypi.org/project/matplotlib/)~=3.4.1
+  - [numpy](https://pypi.org/project/numpy/)~=1.20.2
+  - [pandas](https://pypi.org/project/pandas/)~=1.2.4
+  - [pretty-html-table](https://pypi.org/project/pretty-html-table/)~=0.9.10
+  - [plotly](https://pypi.org/project/plotly/)~=5.1.0
+  - [scipy](https://pypi.org/project/scipy/)~=1.7.0
+
    
 # Setup
 
 DEPhT requires at least one genus-specific model to be installed before it will be able to run. At present, there 
 are a few models available in [our repository at the Open Science Framework](https://osf.io/zt4n3). New models can
-be trained [instructions below](#training_new_models), though this process is currently not very streamlined. We
+be trained ([instructions below](#training-new-models)), though this process is currently not very streamlined. We
 have a script nearly finished that should make the process much simpler, which should be available by late December
 2021 or early January 2022.
 
-Once a model has been downloaded (easiest way is through a web browser), it needs to be decompressed and moved into 
-a directory for DEPhT. For example, if you downloaded the Mycobacterium model:
+Once a model has been downloaded (the easiest way is through a web browser), it needs to be decompressed and moved 
+into a directory for DEPhT. For example, if you downloaded the Mycobacterium model:
 
     if ! [[ -d ~/.depht/models ]]; then
         mkdir -p ~/.depht/models
     fi
 
-    mv ~/Downloads/Mycobacterium.zip ~/.depht/models/
-    unzip ~/.depht/models/Mycobacterium.zip -d ~/.depht/models/Mycobacterium
+    unzip ~/Downloads/Mycobacterium.zip -d ~/.depht/models/
 
 Models trained using `depht_utils` will be put in this directory by default. We are generally amenable to aiding in 
 the construction of new models - the easiest way to accomplish this is by emailing either chg60@pitt.edu or 
@@ -53,7 +79,8 @@ laa89@pitt.edu. Note that some genera are better suited than others for DEPhT mo
 
 ## Basics
 
-After installation and setup, check that DEPhT can be run on the command line. Typing `depht` at the commandline 
+After installation and setup, check that DEPhT can be run on the command line. NOTE: If you installed using conda, 
+you'll need to activate your environment first (e.g. `conda activate depht`). Typing `depht` at the commandline 
 should display something similar to the following (number of CPUs and models available will vary):
 
     usage: depht [-h] [--model] [-c] [-n] [-m {fast,normal,strict}] [-s] [-d] [-v] [-t] [-p] [-l]
@@ -82,23 +109,23 @@ In order to run DEPhT, you will need to provide two arguments:
 1. One or more genome sequences in either FASTA or Genbank flatfile format
 2. A desired output directory 
 
-DEPhT will infer the input file type(s) when it parses the files. This makes DEPhT somewhat unusual among 
-prophage-detection tools, as in a single run you can provide a set of files with multiple file formats. FASTA files 
-will be treated as un-annotated and the sequences parsed from these input files will be auto-annotated prior to 
-prophage detection. Genbank flatfiles will be treated as annotated genomes, and will therefore bypass the 
-auto-annotation step and run ~20-30 seconds faster than their FASTA counterparts.
+DEPhT will infer the input file type(s) when it parses the files, *not using the file extensions*. As far as we are 
+aware, this makes DEPhT somewhat unusual among prophage-detection tools, as in a single run you can provide a set 
+of files with multiple file formats. FASTA files will be treated as un-annotated and the sequences parsed from these 
+input files will be auto-annotated prior to prophage detection. Genbank flatfiles will be treated as annotated genomes, 
+and will therefore bypass the auto-annotation step and run ~20-30 seconds faster than their FASTA counterparts.
 
-Run DEPhT on a single FASTA file like this:
+Run DEPhT on a single FASTA file like this (use your own file paths/extensions):
 
-    depht /path/to/my/sequence.fna /path/to/my/output/directory
+    depht /path/to/my/sequence.fasta /path/to/my/output/directory
 
 Run DEPhT on a directory of FASTA files like this:
 
-    depht /path/to/my/directory/*.fna /path/to/my/output/directory
+    depht /path/to/my/directory/*.fasta /path/to/my/output/directory
 
-A large set of mixed FASTA and Genbank flatfiles can be run like this:
+A large set of mixed FASTA (here using .fasta extension) and Genbank (here using .gbk extension) flatfiles can be run like this:
 
-    depht /path/to/my/directory/*.fna /path/to/my/directory/*.gb /path/to/my/output/directory
+    depht /path/to/my/directory/*.fasta /path/to/my/directory/*.gbk /path/to/my/output/directory
 
 In theory, you're limited only by the number of files your Terminal will let you expand by using `*`.
 
@@ -114,13 +141,13 @@ output a FASTA (sequence) file and a Genbank (annotation) file for each extracte
 
 Progress updates during DEPhT's runtime can be toggled with `-v`.
 
-    depht /path/to/my/sequence.fna /path/to/my/output/directory -v
+    depht /path/to/my/sequence.fasta /path/to/my/output/directory -v
 
 The amount of resources (CPU cores) that DEPhT is allowed to utilize can be specified with `-c`. Note that some of 
 DEPhT's dependencies utilize hyper-threading, so on most modern computers DEPhT will utilize 2 threads per specified 
 CPU core.
 
-    depht /path/to/my/sequence.fna /path/to/my/output/directory -c 6
+    depht /path/to/my/sequence.fasta /path/to/my/output/directory -c 6
 
 
 ## Other Options
@@ -136,9 +163,9 @@ but can be adapted for other genera with the `--model` flag.  See [above](#setup
 models that we have already trained, and [below](#general-information) for the list of currently available models.
 
 If you have more than one model installed locally, you will need to tell DEPhT which model you'd like to use. 
-Otherwise, it will choose one more-or-less at random, which will likely result in unexpectedly low-quality outputs.
+Otherwise, it will choose one more-or-less at random, which may result in unexpectedly low-quality outputs.
 
-    depht /path/to/my/sequence.fna /path/to/my/output/directory --model Pseudomonas
+    depht /path/to/my/sequence.fasta /path/to/my/output/directory --model Pseudomonas
 
 ### Runmode Selection
 
@@ -156,12 +183,12 @@ argument lets you select one of the available runmodes:
 DEPhT will run in normal mode by default (e.g. if `-m` is not given), but if one is interested in getting an 
 estimate of the number of prophages as quickly as possible, they may run DEPhT like this:
 
-    depht /path/to/my/sequence.fna /path/to/my/output/directory -m fast
+    depht /path/to/my/sequence.fasta /path/to/my/output/directory -m fast
 
 Alternatively, if one wants only the most likely prophages, with as many detailed functional annotations as possible,
 they might run:
 
-    depht /path/to/my/sequence.fna /path/to/my/output/directory -m sensitive
+    depht /path/to/my/sequence.fasta /path/to/my/output/directory -m sensitive
 
 ### Product Threshold
 
@@ -170,7 +197,7 @@ number of identified prophage homologs in a region. This number of phage product
 the `-p` argument. In normal mode, the default value is 5; in sensitive mode, it is 10. If one feels that the 
 default value is too high and would rather use 2 for example, this can be done by running:
 
-    depht /path/to/my/sequence.fna /path/to/my/output/directory -p 2
+    depht /path/to/my/sequence.fasta /path/to/my/output/directory -p 2
 
 ### Attachment Site Tuning
 
@@ -183,7 +210,7 @@ can be controlled by using the `-s` flag, which acts as a multiplier against 500
 which corresponds to a search space of up to 7 x 5,000 = 35,000 bp at the left and right ends of each identified 
 prophage. This can be raised to 50,000 bp by setting `-s` to 10, at the expense of some additional runtime:
 
-    depht /path/to/my/sequence.fna /path/to/my/output/directory -s 10
+    depht /path/to/my/sequence.fasta /path/to/my/output/directory -s 10
 
 ### Prophage Size
 
@@ -191,15 +218,15 @@ DEPhT mandates a minimum length for prophage regions reported for output quality
 threshold can be lowered or raised with the `-l` flag, and is set at 20,000 base pairs by default - just over half 
 the length of the shortest known Mycobacterium prophage. Reduce this threshold to 10,000 bases like this:
 
-    depht /path/to/my/sequence.fna /path/to/my/output/directory -l 10000
+    depht /path/to/my/sequence.fasta /path/to/my/output/directory -l 10000
 
 ### Temporary Directory
 
-DEPhT utilizes various software that require outputs and data intermediates that are written to file. These files 
-are stored in a temporary directory, and removed once DEPhT finishes running. By default, DEPhT will use `~/.depht/tmp` 
-can use any other directory that your user account has read/write permissions in, by using the `-t` argument.
+DEPhT utilizes various software that require outputs and data intermediates that are written to files. These files 
+are stored in a temporary directory, and removed once DEPhT finishes running. By default, DEPhT will use `~/.depht/tmp`,
+but can use any other directory that your user account has read/write permissions in, by using the `-t` argument.
 
-    depht /path/to/my/sequence.fna /path/to/my/output/directory -t /path/to/temporary/directory
+    depht /path/to/my/sequence.fasta /path/to/my/output/directory -t /path/to/temporary/directory
 
 
 # Output
@@ -323,7 +350,7 @@ More info soon
 - Current version is 1.0.2
 - Most recent stable version is 1.0.2
 - We currently have models available for these bacterial genera:
-    - Mycobacterium
-    - Gordonia
-    - Pseudomonas
+    - [Mycobacterium](https://osf.io/aw4up/download)
+    - [Gordonia](https://osf.io/djwsb/download)
+    - [Pseudomonas](https://osf.io/5puze/download)
 - If you'd like to contact us about expanding this set, please email either chg60@pitt.edu or laa89@pitt.edu
