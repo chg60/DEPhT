@@ -3,14 +3,14 @@ import time
 
 from depht_utils.pipelines import (
     annotate_gene_clusters, benchmark_output, build_reference_db,
-    build_functions_db, curate_functions, index_functions, phamerate,
-    pull_sequences, screen_conserved_phams, train_prophage_model, train_model)
+    build_functions_db, curate_functions, index_sequences, phamerate,
+    pull_sequences, screen_conserved_phams)
 
 # GLOBAL VARIABLES
 # -----------------------------------------------------------------------------
 PIPELINES = [
         "annotate_gene_clusters", "benchmark_output", "build_reference_db",
-        "build_functions_db", "curate_functions", "index_functions",
+        "build_functions_db", "curate_functions", "index_sequences",
         "phamerate", "pull_sequences", "screen_conserved_phams",
         "train_prophage_model", "train_model"]
 
@@ -30,8 +30,8 @@ def main(unparsed_args):
         build_functions_db.main(unparsed_args[1:])
     elif args.pipeline == "curate_functions":
         curate_functions.main(unparsed_args[1:])
-    elif args.pipeline == "index_functions":
-        index_functions.main(unparsed_args[1:])
+    elif args.pipeline == "index_sequences":
+        index_sequences.main(unparsed_args[1:])
     elif args.pipeline == "phamerate":
         phamerate.main(unparsed_args[1:])
     elif args.pipeline == "pull_sequences":
