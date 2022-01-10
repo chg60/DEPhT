@@ -39,6 +39,7 @@ For users that would prefer to manage their own dependencies, you'll need to ins
 - [Prodigal](https://github.com/hyattpd/Prodigal)
 - [Aragorn](http://www.ansikte.se/ARAGORN/Downloads/)
 - [Python](https://www.python.org/downloads/) 3.6 or higher
+- [DEPhT](https://pypi.org/project/depht/)~=1.0.2
 - Python dependencies:
   - [biopython](https://pypi.org/project/biopython/)~=1.78
   - [bitarray](https://pypi.org/project/bitarray/)~=2.0.0
