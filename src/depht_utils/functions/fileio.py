@@ -1,4 +1,5 @@
 import csv
+import json
 
 
 # READ FUNCTIONS
@@ -67,16 +68,19 @@ def read_cluster_index_file(cluster_index):
     return cluster_data
 
 
+def read_functions_config_file(functions_file):
+    accepted_functions = []
+    with functions_file.open(mode="r") as filehandle:
+        functions_config = json.load(filehandle)
+
+    accepted_functions = functions_config.get("LIKE", list())
+    ignored_functions = functions_config.get("NOT LIKE", list())
+
+    return accepted_functions, ignored_functions
+
 
 # WRITE FUNCTIONS
 # -----------------------------------------------------------------------------
-
-def write_cluster_function_index_file(gene_cluster_data, index_file):
-    with index_file.open(mode="w") as filehandle:
-        for gene_cluster in gene_cluster_data:
-            filehandle.write("\t".join(gene_cluster + ["\n"]))
-
-
 def write_gene_hex_value_file(gene_hex_value_file, gene_rep_hex_values):
     with gene_hex_value_file.open(mode="wb") as filehandle:
         for hex_value in gene_rep_hex_values:

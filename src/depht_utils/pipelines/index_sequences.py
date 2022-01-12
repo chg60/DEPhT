@@ -165,7 +165,7 @@ def write_cluster_index_file(clustered_records, cluster_table):
     :param cluster_table: Path to write cluster metadata to.
     :type cluster_table: pathlib.Path
     """
-    with cluster_file.open(mode="w") as cluster_filehandle:
+    with cluster_table.open(mode="w") as cluster_filehandle:
             for cluster_index, record_names in enumerate(clustered_records):
                 cluster_filehandle.write("".join(
                                               [">", str(cluster_index), "\n"]))

@@ -2,15 +2,15 @@ import argparse
 import time
 
 from depht_utils.pipelines import (
-    annotate_gene_clusters, benchmark_output, build_reference_db,
-    build_functions_db, curate_functions, index_sequences, phamerate,
+    benchmark_output, build_reference_db,
+    build_HMM_db, curate_gene_clusters, index_sequences, phamerate,
     pull_sequences, screen_conserved_phams)
 
 # GLOBAL VARIABLES
 # -----------------------------------------------------------------------------
 PIPELINES = [
-        "annotate_gene_clusters", "benchmark_output", "build_reference_db",
-        "build_functions_db", "curate_functions", "index_sequences",
+        "benchmark_output", "build_reference_db",
+        "build_HMM_db", "curate_gene_clusters", "index_sequences",
         "phamerate", "pull_sequences", "screen_conserved_phams",
         "train_prophage_model", "train_model"]
 
@@ -20,16 +20,14 @@ def main(unparsed_args):
 
     start = time.time()
 
-    if args.pipeline == "annotate_gene_clusters":
-        annotate_gene_clusters.main(unparsed_args[1:])
-    elif args.pipeline == "benchmark_output":
+    if args.pipeline == "benchmark_output":
         benchmark_output.main(unparsed_args[1:])
     elif args.pipeline == "build_reference_db":
         build_reference_db.main(unparsed_args[1:])
-    elif args.pipeline == "build_functions_db":
-        build_functions_db.main(unparsed_args[1:])
-    elif args.pipeline == "curate_functions":
-        curate_functions.main(unparsed_args[1:])
+    elif args.pipeline == "build_HMM_db":
+        build_HMM_db.main(unparsed_args[1:])
+    elif args.pipeline == "curate_gene_clusters":
+        curate_gene_clusters.main(unparsed_args[1:])
     elif args.pipeline == "index_sequences":
         index_sequences.main(unparsed_args[1:])
     elif args.pipeline == "phamerate":
