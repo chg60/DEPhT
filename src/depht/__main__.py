@@ -137,8 +137,18 @@ def main():
     att_sens = args.att_sens    # What's the att sensitivity modifier?
     min_length = args.length    # Minimum prophage length in bp
 
-    # Get output dir and make sure it's a valid path
+    # Get output_dir
     outdir = pathlib.Path(args.outdir).resolve()
+
+    run_depht(infiles, outdir, model=model, cpus=cpus, draw=draw, dump=dump,
+              verbose=verbose, runmode=runmode, att_sens=att_sens,
+              min_length=min_length)
+
+
+def run_depht(infiles, outdir, model=LOCAL_MODELS[0], cpus=PHYSICAL_CORES,
+              draw=True, dump=False, verbose=False, runmode="normal",
+              att_sens=ATT_SENSITIVITY, min_length=MIN_SIZE):
+    # Make sure output dir is a valid path
     if not outdir.is_dir():
         print(f"'{str(outdir)}' does not exist - creating it...")
         outdir.mkdir(parents=True)
@@ -338,6 +348,7 @@ def main():
         shutil.rmtree(genome_tmp_dir)  # clean up after ourselves
 
     print(f"\nTotal runtime: {str(datetime.now() - mark)}")
+    pass
 
 
 # HELPER FUNCTIONS
