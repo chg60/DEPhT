@@ -1,0 +1,21 @@
+{% extends 'base.html' %}
+
+{% block stylelink %}
+  "{{ url_for('static', filename='css/program_style.css') }}"
+{% endblock %}
+{% block script %}
+  "{{url_for('static', filename='js/arguments.js')}}"
+{% endblock %}
+
+{% block content %}
+
+  {% block heading %}{% endblock %}
+
+
+  <form class="inner args_form" method="get">
+    {% block  form_content %}
+    {% endblock %}
+    <br>
+    <br>
+  </form>
+{% endblock %}

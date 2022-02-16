@@ -1,0 +1,290 @@
+{% extends 'base.html' %}
+
+{% block stylelink %}"{{ url_for('static', filename='css/documentation_style.css') }}"{% endblock %}
+
+{% block content %}
+<!-- TODO: LOGO!!! -->
+
+<div class="inner">
+  <h2>General Information</h2>
+  <ul>
+    <li>Current version is 1.0.2</li>
+    <li>We currently have models available for these bacterial genera:</li>
+    <ul>
+      <li>
+        <a class="ext_links" href="https://osf.io/aw4up/download">
+          <i>Mycobacterium</i></a></li>
+      <li>
+        <a class="ext_links" href="https://osf.io/djwsb/download">
+          <i>Gordonia</i></a></li>
+      <li>
+        <a class="ext_links" href="https://osf.io/5puze/download">
+          <i>Pseuodomonas</i></a></li> </ul>
+  </ul>
+  If you'd like to contact us about expanding this set,
+  please email either <a class="ext_links" href="mailto:chg60@pitt.edu?subject=feedback">chg60@pitt.edu</a>
+  or <a class="ext_links" href="mailto:laa89@pitt.edu?subject=feedback">laa89@pitt.edu</a>.
+  <br>
+  <br>
+  Report an <a class="ext_links" href="https://github.com/chg60/DEPhT/issues/new/choose">issue</a>.
+</div>
+
+<br>
+<br>
+
+<div class="inner">
+
+  DEPhT is a new tool for identifying prophages in bacteria, and was developed
+  with a particular interest in being able to rapidly scan hundreds to thousands
+  of genomes and accurately extract complete (likely active) prophages from them.
+  <br>
+  A detailed manuscript has been submitted to Nucleic Acids Research, but in
+  brief DEPhT works by using genome architecture (rather than homology) to
+  identify genomic regions likely to contain a prophage. Any regions with
+  phage-like architecture (characterized as regions with high gene density and
+  few transcription direction changes) are then further scrutinized using two
+  passes of homology detection. The first pass identifies genes on putative
+  prophages that are homologs of (species/clade/genus-level) conserved
+  bacterial genes, and uses any such genes to disrupt the prophage
+  prediction. The second pass (disabled in the 'fast' runmode) identifies genes
+  on putative prophages that are homologs of conserved, functionally annotated
+  phage genes. Finally, prophage regions that got through the previous filters
+  are subjected to a BLASTN-based attL/attR detection scheme that gives DEPhT
+  better boundary detection than any tool we are aware of.
+
+  <br>
+
+  <br>
+  <div class="contents">
+    <b>Contents</b>
+    <ul>
+      <li><a href="#run_depht">Running DEPhT</a></li>
+      <ul>
+        <li><a href="#depht_args">Arguments</a></li>
+        <li><a href="#other_opts">Other options</a></li>
+        <ul>
+          <li><a href="#model">Model Selection</a></li>
+          <li><a href="#runmode">Runmode Selection</a></li>
+          <li><a href="#prod_thresh">Product Threshold</a></li>
+          <li><a href="#att_tuning">Attachment Site Tuning</a></li>
+          <li><a href="#proph_size">Prophage Size</a></li>
+        </ul>
+        <li><a href="#depht_output">Output</a></li>
+      </ul>
+      <li><a href="#train_model">Training New Models</a></li>
+      <ul>
+        <li><a href="#genomes">Selection of Training Genomes</a></li>
+        <ul>
+          <li><a href="#retrieve_bact">Retrieve Bacterial Genomes</a></li>
+          <li><a href="#check">Check Bacteria for Prophages</a></li>
+          <li><a href="#retrieve_phage">Retrieve Phage Genomes</a></li>
+        </ul>
+      </ul>
+    </ul>
+  </div>
+
+  <br>
+  <hr>
+  <br>
+  <h2 id="run_depht">
+    <a href="{{url_for('depht.depht')}}">Running DEPhT</a></h2>
+  <h3 id="depht_args">Arguments</h3>
+  In order to run DEPhT, you will need to provide two arguments:
+  <br>
+  <ol type="1">
+    <li>One or more genome sequences in either FASTA or Genbank flatfile format</li>
+    <li>A desired output directory</li>
+  </ol>
+  <br>
+  DEPhT will infer the input file type(s) when it parses the files, not using the
+  file extensions. As far as we are aware, this makes DEPhT somewhat unusual
+  among prophage-detection tools, as in a single run you can provide a set of
+  files with multiple file formats. FASTA files will be treated as un-annotated
+  and the sequences parsed from these input files will be auto-annotated prior to
+  prophage detection. Genbank flatfiles will be treated as annotated genomes, and
+  will therefore bypass the auto-annotation step and run ~20-30 seconds faster
+  than their FASTA counterparts.
+  <br>
+  <br>
+  In the event that a prophage region is discovered, or if the "Dump data" option
+  is selected, DEPhT will create a directory at the specified output directory
+  for each of the input sequences. For those sequences that have predicted
+  prophages, DEPhT will write an .html file with a visualization of the
+  discovered prophage region(s). It will also output a FASTA (sequence) file and
+  a Genbank (annotation) file for each extracted prophage sequence. See below for
+  more details DEPhT's output files.
+
+  <h4>Other options</h4>
+  What follows is a description of DEPhT's optional arguments. These are
+  described in isolation, but can be mixed and matched using different values to
+  specifically tune the behavior of DEPhT to suit your needs. Default parameters
+  were all set to optimize performance in <i>Mycobacterium</i> genomes.
+  <ul>
+    <li>
+      <h5 id="model">Model Selection</h5>
+      DEPhT was originally designed for the precise and efficient discovery and
+      extraction of <i>Mycobacterium</i> prophages, but can be adapted for other
+      genera.
+      <!-- TODO: add links for download -->
+      <br>
+      See above for instructions to download models that we have already trained, and
+      below for the list of currently available models.
+      <br>  If you have more than one model installedlocally, you will need to tell DEPhT which model you'd like to use.
+      Otherwise, it will choose one more-or-less at random, which may result in
+      unexpectedly low-quality outputs
+    </li>
+    <li>
+      <h5 id="runmode">Runmode Selection</h5>
+      DEPhT has multiple runmodes, intended to serve as a dial
+      tuning the trade-off between runtime and accuracy. You can select from the
+      following runmodes:
+      <ul>
+        <li>
+          fast: DEPhT discovers prophage regions as fast
+          as possible using gene size and transcription direction changes. Regions are
+          trimmed using the identified shell genome content of the selected genera, and
+          an effort is made to identify attL/attR, but are likely not as accurate as in
+          the other runmodes.
+        </li>
+        <li>
+          normal: DEPhT discovers prophage regions as in
+          fast mode, then tries to differentiate between active and defective prophages
+          by identifying homologs of phage genes essential for viability.
+        </li>
+        <li>
+          sensitive: DEPhT discovers prophage regions as in normal mode, and then
+          tries to further differentiate between active and defective prophages by
+          identifying homologs of phage genes with a consensus annotated function.
+        </li>
+      </ul>
+      DEPhT will run in normal mode by default.
+    </li>
+    <li>
+      <h5 id="prod_thresh">Product Threshold</h5>
+      In normal and sensitive runmodes, DEPhT attempts to
+      differentiate between active and defective prophages based on the number of
+      identified prophage homologs in a region. This number of phage products can
+      be raised or lowered. In normal mode, the default value is 5; in sensitive
+      mode, it is 10.
+    </li>
+    <li>
+      <h5 id="att_tuning">Atachment Site Tuning</h5>
+      DEPhT employs a multi-feature scoring algorithm and a library of reference
+      sequences to determine the best possible attachment site core (or if there is
+      no appropriate sequence). The runtime of this component is heavily influenced
+      by the runtime of the BLASTN algorithm, so runtime scales with the amount of
+      sequence that is searched. However, the precision of extraction may benefit
+      from searching a larger sequence space, particularly in genera where few
+      high-quality reference sequences are available. The sequence space that is
+      searched for an attachment site core can be controlled by using the -s flag,
+      which acts as a multiplier against 5000 bp. By default, DEPhT uses -s 7, which
+      corresponds to a search space of up to 7 x 5,000 = 35,000 bp at the left and
+      right ends of each identified prophage.
+    </li>
+    <li>
+      <h5 id="proph_size">Prophage Size</h5>
+      DEPhT mandates a minimum length for prophage regions reported for output
+      quality assurance. This minimum length threshold can be lowered or raised and
+      is set at 20,000 base pairs by default - just over half the
+      length of the shortest known <i>Mycobacterium</i> prophage.
+    </li>
+  </ul>
+
+  <h3>Output</h3>
+  DEPhT's output consists of three main files:
+  <ol>
+    <li>An <code>.html</code> file with a visualization of the discovered prophage regions</li>
+    <li>A <code>.csv</code> spreadsheet with the primary data used to discern prophage regions - one file per contig</li>
+    <li>A <code>.gbk</code> Genbank flatfile with DEPhT's annotation of the inputted sequence - one file per contig</li>
+  </ol>
+  DEPhT's graphical .html output displays a cirular input genome map and linear
+  phage region genome map with
+  <a class="ext_links" href="https://github.com/Edinburgh-Genome-Foundry/DnaFeaturesViewer">DnaFeaturesViewer</a>
+  as well as the coordinates of the regions discovered in a colored table with
+  <a class="ext_links" href="https://github.com/sbi-rviot/ph_table">pretty-html-table</a>.
+  <br>
+  <!-- TODO: add images from github -->
+  <br>
+  In each of these genome maps and coordinate tables, prophage and/or protein-coding sequence features
+  are colored green for forward-oriented features and colored red for
+  reverse-oriented features. Above those prophage features in the circular
+  genome map is annotated the prophage region name as given by DEPhT. Above
+  those protein-coding features in the linear genome map(s) is annotated phage
+  products as identified by DEPhT.
+  <br>
+  DEPhT's data <code>.csv</code> output contains data for each protein-coding
+  feature in the inputted sequence file.
+  <br>
+  The columns in this output are the following:
+  <ul>
+    <li>Gene ID: A protein-coding feature ID assigned by DEPhT</li>
+    <li>Start: The start coordinate of a feature in the input sequence</li>
+    <li>End: The end coodinate of a feature in the input sequence</li>
+    <li>Prediction: The probability of a feature belonging to a prophage as analyzed by DEPhT</li>
+    <li>Bacterial Homology: The identity of a feature as shell genome content as analyzed by DEPhT</li>
+    <li>Phage Homology: The probability given by an alignment of a feature to a HMM profile of phage amino acid sequences</li>
+
+  </ul>
+
+  <br>
+  <hr>
+  <br><br>
+  <a href="{{url_for('depht_train.depht_train')}}"><h2 id="train_model">Training New Models</h2></a>
+    <h3 id="genomes">Selection of Training Genomes</h3>
+    This is by far the highest hurdle for training new models. The better the training genomes
+    are selected, the better the model will perform. We <i>highly</i> recommend only
+    training against completely sequenced bacteria and manually annotated phages.
+    <br>
+    There's an important tradeoff you'll need to make when training models:
+    volume of data versus quality of data. A relatively small dataset (~100 phages
+    and 30-45 bacteria) can yield incredibly high-quality models if the genomes are
+    chosen well and especially if the phage genomes are well-annotated. Assuming
+    all the training data is high-quality, increasing the amount of training data
+    will likely improve the quality of predictions made by DEPhT, with the caveat
+    that larger models will necessarily increase the DEPhT runtime, which will be most noticeable in the fast runmode.
+
+    Ok so let's suppose you want to train a new model for <i>Mycobacteria</i>.
+    A good start would be to head to <a class="ext_links" href="https://www.patricbrc.org/view/Taxonomy/2#view_tab=taxontree">PATRIC</a>
+    and navigate to the <i>Mycobacteriaceae</i>.
+    <h4 id="retrieve_bact">Retrieve Bacterial Genomes</h4>
+    In the taxonomy tree, the steps to get here are:
+    <br>
+    Terrabacteria group >> Actinobacteria >> Actinomycetia >> Corynebacteriales >> Mycobacteriaceae
+    <br>
+    The red box below shows where to click to get to the home page for the family or genus of interest.
+    <br>
+    From there, navigate to the "Genomes" tab to see all the available genomes in
+    the chosen taxon. Click "Filters", and a good choice might be to select only
+    those genomes where "Genome Status" is "Complete", and "Reference Genome" is
+    either "Representative" or "Reference", and "Genome Quality" is "Good". Hit
+    "Apply" to apply those filters. You can download FASTA files for these genomes
+    by selecting all the genomes in the table, and clicking the "DWNLD" button.
+    <br>
+    Click "More Options", and in the popup dialog box, check the box next to
+    "Genomic Sequences in FASTA (*.fna)" before pressing "Download".
+    <br>
+    Of course you are free to add any additional genomes you'd like to better
+    populate the spectrum of diversity in the genus. In our case, we added several
+    Mycobacterium abscessus strains to fill in the so-called <i>Mycobacterium
+    abscessus complex </i>(MAC).
+    <h4 id="check">Check bacteria for Prophages</h4>
+    Ideally, you'll run these genomes through PHASTER or some other prophage
+    prediction tool to get the approximate coordinates of any complete prophages in
+    these strains, and recording them in a CSV file that you'll pass to the
+    training module. The coordinates don't have to be perfect, though the better
+    they are the better the resultant model will perform. This step will reduce the
+    probability that DEPhT treats a prophage found in multiple strains as
+    "conserved bacterial genes", and also give the model an idea what integrated
+    prophages are supposed to look, as opposed to only knowing what extracted
+    phages/prophages look like.
+    <h4 id="retrieve_phage">Retrieve Phage Genomes</h4>
+    Lastly, you'll need to retrieve functionally annotated phages from Genbank or
+    elsewhere. Like the bacteria, it's important that these phages represent the
+    spectrum of diversity of phages infecting hosts in the genus. Ideally there
+    will also be clusters of at least somewhat-related phages in this dataset.
+
+</div>
+
+
+
+{% endblock %}

@@ -1,0 +1,113 @@
+@import "base_style.css";
+
+label {
+  margin-right: 2px;
+}
+
+.more {
+  font-size: var(--font_small);
+}
+
+.more:hover {
+  text-decoration: underline;
+}
+
+.opt, #depht_opt, #train_opt {
+  display: none;
+}
+
+.opt, #depht_opt, #train_opt {
+  display: none;
+}
+
+#show_opt, #t_show_opt {
+  display: block;
+}
+
+#hide_opt, #t_hide_opt {
+  display: none;
+}
+
+input {
+  text-align: left;
+}
+
+input[type=text] {
+  padding: 12px 20px;
+  margin: 8px;
+  border: 2px solid var(--input_mid);
+  border-radius: 5px;
+  color: var(--input_mid);
+}
+
+input[type=text]:focus {
+  border: 3px solid var(--input_dark);
+  border-radius: 5px;
+  color: var(--input_dark);
+}
+
+select, button, input[type=submit] {
+  padding: 10px 15px;
+  border-radius: 5px;
+  border: 2px solid var(--input_mid);
+  background: var(--input_light);
+  color: var(--text_dark);
+}
+
+select:hover {
+  color: var(--text_dark);
+}
+
+option {
+  color: var(--text_dark)
+}
+
+
+input[type=submit] {
+  padding: 10px 25px;
+  margin-left: 45%;
+}
+
+input[type=submit]:focus {
+  border: 3px solid var(--input_dark);
+}
+
+input[type=checkbox] {
+  font-size: 16px;
+}
+
+.help_icon {
+  height: 20px;
+  margin-top: 2px;
+  padding-top: 5px;
+}
+
+.help {
+  position: relative;
+  display: inline-block;
+  height: 10px;
+  font-size: var(--font_small)
+}
+
+.help .help_text {
+  visibility: hidden;
+  z-index: 1;
+  text-align: left;
+  transition: opacity 0.3s;
+  position: absolute;
+  padding: 15px;
+  margin-left: 10px;
+  width: 200px;
+  border-radius: 2px;
+  background-color: var(--color_lines_dark);
+  color: var(--text_dark);
+}
+
+.help:hover .help_text {
+  visibility: visible;
+  opacity: 1;
+}
+
+.num_input:invalid {
+  border: solid red;
+}

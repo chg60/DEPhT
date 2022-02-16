@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<title>{% block title %}{% endblock %} DEPhT</title>
+<head>
+    <link rel="stylesheet" href={% block stylelink %}{% endblock %} type="text/css">
+    <script type="text/javascript" src={% block script %} {% endblock %}></script>
+
+</head>
+
+<nav class="navbar">
+  <div id="buttons">
+    <a href="\">Run DEPhT</a>
+    <a href="{{url_for('depht_train.depht_train')}}">Train Model</a>
+    <a href="{{url_for('documentation.documentation')}}">Documentation</a>
+  </div>
+</nav>
+
+<div class="banner">
+  <a id="banner_link" href="https://github.com/chg60/DEPhT">
+    <h1>
+      <i>D</i>etection and <i>E</i>xtraction of <i>Ph</i>ages <i>T</i>ool (DEPhT)
+    </h1>
+  </a>
+</div>
+
+<div class="inner">
+  Please cite the following:<br><br>
+  <div class="citation">
+    Gauthier, C. H., Abad, L., Venbakkam, A. K., Malnak, J.,
+      Russell, D. A., Hatfull, G. F. (2022)
+    <cite>DEPhT: A novel approach for efficient prophage discovery and precise extraction.
+    </cite>
+  </div>
+</div>
+
+<br>
+<br>
+
+<section class="content">
+  <header>
+    {% block header %}{% endblock %}
+  </header>
+  {% for message in get_flashed_messages() %}
+    <div class="flash">{{ message }}</div>
+  {% endfor %}
+  {% block content %}{% endblock %}
+</section>
+
+<br>
+<br>
+
+<div class="footer">
+  <a href="https://seaphages.org"><img class="logos" id="sea_phages" src="{{url_for('static', filename='images/SEAPHAGES_Logo.png')}}"
+    alt="SEA PHAGES">
+  </a>
+  <a href="https://pitt.edu"><img class="logos" id="pitt_logo" src="{{url_for('static', filename='images/pitt_logo.png')}}"
+      alt="University of Pittsburgh">
+  </a>
+  <a href="https://www.hhmi.org/">
+    <img class="logos" id="hhmi_logo" src="{{url_for('static', filename='images/hhmi_logo.jpg')}}"
+      alt="HHMI">
+  </a>
+  <br>
+</div>

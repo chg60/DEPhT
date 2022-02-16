@@ -1,0 +1,7 @@
+@import "program_style.css";
+
+select {
+  margin: 2px;
+  padding: 1px;
+  color: var(--text_dark);
+}

@@ -1,0 +1,53 @@
+@import "base_style.css";
+
+
+#inner {
+  position: relative;
+  height: 500px;
+}
+
+.args, .loading_area {
+  position: absolute;
+  background: var(--color_lines_light);
+  color: var(--text_dark);
+  text-align: center;
+  margin: 20px;
+  border: 2px solid var(--box_background);
+  top: 10px;
+  padding: 20px;
+  border-radius: 10px;
+  height: inherit;
+}
+
+.args hr, .loading_area hr {
+  border: 2px solid var(--box_background);
+}
+
+.args {
+  width: 20%;
+  border-radius: 15px;
+  left: 10px;
+}
+
+.loading_area {
+  width: 68%;
+  right: 10px;
+  vertical-align: middle;
+}
+
+.loader {
+    border: 20px solid grey;
+    border-top: 20px solid #e0fffc;
+    border-radius: 50%;
+    margin: auto;
+    width: 100px;
+    height: 100px;
+    align-items: center;
+    animation: spin 2s linear infinite;
+    vertical-align: middle;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg);}
+}

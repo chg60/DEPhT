@@ -1,0 +1,112 @@
+{% extends 'program.html' %}
+
+{% block stylelink %}"{{ url_for('static', filename='css/depht_style.css') }}"{% endblock %}
+{% block script %}"{{url_for('static', filename='js/arguments.js')}}"{% endblock %}
+
+{% block heading %}
+    <h2 class="page_heading">Run DEPhT</h2>
+{% endblock %}
+
+{% block form_content %}
+
+  <script type="text/javascript">
+    window.onload = function() {
+      get_core_list("{{cpu_cores}}");
+    };
+  </script>
+
+  <label for="input_file">Input file</label>
+  <div class="help"><img src="{{url_for('static', filename='images/help_icon.png')}}"
+    alt="help" class="help_icon">
+    <span class="help_text">Genome file(s) to scan for prophages</span>
+  </div>
+  <input type="file" id="input_file" name="input_file" required>
+  <br>
+  <br>
+  <hr>
+  <a href="javascript:void(0)" name="show_opt" id="show_opt" class="more"
+    onclick="show_optional('depht_opt', id, 'hide_opt')">
+  <br>
+  <br>
+    Show optional arguments
+  </a>
+  <span id="depht_opt" class="opt">
+    <h4>Optional arguments</h4>
+    <label for="model">Local models to use</label>
+    <select class="model" name="model" id="model">
+      {% for model in local_models %}
+          <option value="{{model}}">{{model}}</option>
+      {% endfor %}
+    </select>
+    <div class="help"><img src="{{url_for('static', filename='images/help_icon.png')}}"
+      alt="help" class="help_icon">
+      <span class="help_text">
+        Choose from one of the loacal models available</span>
+    </div>
+    <br>
+    <br>
+    <label for="mode">Runmode</label>
+    <select class="mode" name="mode" id="mode">
+      <option value="fast">Fast</option>
+      <option value="normal">Normal</option>
+      <option value="sensitive">Sensitive</option>
+    </select>
+    <div class="help"><img src="{{url_for('static', filename='images/help_icon.png')}}"
+      alt="help" class="help_icon">
+      <span class="help_text">Runmode that favors speed or accuracy</span>
+    </div>
+    <br>
+    <br>
+    <br>
+    <br>
+    <label for="att">att Sensitivity</label>
+    <input type="text" name="att" class="num_input" id="att" placeholder={{att}} value={{att}} min=0>
+    <div class="help"><img src="{{url_for('static', filename='images/help_icon.png')}}"
+      alt="help" class="help_icon">
+      <span class="help_text">
+        Sensitivity parameter for att site detection</span>
+    </div>
+    <br>
+    <label for="products">Minimum phage homologs for prophage</label>
+    <input type="text" name="products" class="num_input" id="products" placeholder="0" value=0 min=0>
+    <div class="help"><img src="{{url_for('static', filename='images/help_icon.png')}}"
+      alt="help" class="help_icon">
+      <span class="help_text">
+        Minimum phage homologs for prophage</span>
+    </div>
+    <br>
+    <label for="length">Minimum length for prophage</label>
+    <input type="text" name="length" class="num_input" id="length" placeholder={{length}}
+      value={{length}} min=0>
+    <div class="help"><img src="{{url_for('static', filename='images/help_icon.png')}}"
+      alt="help" class="help_icon">
+      <span class="help_text">
+        Minimum length to report a prophage</span>
+    </div>
+    <br>
+    <label for="cores">CPU cores</label>
+    <select class="cores" id="cores", name="cores"></select>
+    <div class="help"><img src="{{url_for('static', filename='images/help_icon.png')}}"
+      alt="help" class="help_icon">
+      <span class="help_text">
+        Number of CPU cores to use</span>
+    </div>
+    <br>
+    <br>
+    <a href="javascript:void(0)" name="hide_opt" id="hide_opt" class="more"
+      onclick="show_optional('depht_opt','show_opt', id)">
+      Hide optional arguments
+    </a>
+  </span>
+
+  <br>
+  <input type="checkbox" id="no_draw" name="no_draw" value={{False}}>
+  <label for="no_draw">Don't draw a genome diagram for identified prophages</label>
+  <br>
+  <input type="checkbox" id="dump" name="dump" value={{True}}>
+  <label for="dump">Dump all supporting data to output directory</label>
+  <br>
+  <br>
+  <br>
+  <input type="submit" onclick="loading_page()">
+{% endblock %}

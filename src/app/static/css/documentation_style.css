@@ -1,0 +1,32 @@
+@import "base_style.css";
+
+.contents {
+  align-items: center;
+  margin-left: 15px;
+  padding-top: 5px;
+  padding-bottom: 5px;
+  padding-left: 10px;
+  padding-right: 25px;
+  font-size: 14px;
+  background-color: var(--input_light);
+  color: var(--dark_background);
+  border: 2px solid var(--dark_background);
+  border-radius: 2px;
+  text-align: left;
+  width: 15%;
+}
+
+.contents ul {
+  padding-left: 8%;
+  list-style-type: none;
+}
+
+.contents ul ul {
+  padding-left: 10%;
+  list-style-type: none;
+}
+
+.contents ul ul ul {
+  padding-left: 12%;
+  list-style-type: none;
+}
