@@ -1,0 +1,10 @@
+{
+    "phameration": {
+        "phage": "data/phage_phamerate_params.json",
+        "bacteria": "data/bacterial_phamerate_params.json"
+    },
+    "functions": {
+        "essential": "data/functions_params.json",
+        "extended": "data/extended_functions_params.json"
+    }
+}
