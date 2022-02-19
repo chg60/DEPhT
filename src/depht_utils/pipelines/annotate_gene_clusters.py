@@ -4,15 +4,15 @@ import sys
 
 from Bio import SeqIO
 
-from depht_utils.data.defaults import HHSUITEDB_DEFAULTS
+from depht_utils.data.defaults import HHSUITEDB_DEFAULTS as DEFAULTS
 from depht_utils.functions.fileio import (
     read_gene_index_file,
     write_cluster_function_index_file)
 
 # GLOBAL VARIABLES
-DEFAULTS = {"name": HHSUITEDB_DEFAULTS["name"],
-            "default_product": HHSUITEDB_DEFAULTS["default_product"],
-            "cutoff": 0.33}
+DEFAULTS = {"name": DEFAULTS["name"],
+            "default_product": DEFAULTS["default_product"],
+            "cutoff": DEFAULTS["consensus_annotation_cutoff"]}
 
 
 # MAIN FUNCTIONS
@@ -70,6 +70,8 @@ def annotate_gene_clusters(fasta_dir, index_file, output_dir,
     out_index_file = output_dir.joinpath(".".join([name, "ppi"]))
 
     write_cluster_function_index_file(gene_cluster_data, out_index_file)
+
+    return out_index_file
 
 
 def main(unparsed_args):

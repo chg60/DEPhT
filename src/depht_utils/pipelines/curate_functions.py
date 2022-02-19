@@ -8,8 +8,7 @@ from Bio import SeqIO, AlignIO
 from depht.functions import multiprocess
 from depht_utils.functions import clustalo
 
-# GLOBAL VARAIABLES
-DEFAULTS = {"cpus": 1, "min_size": 10}
+from depht_utils.data.defaults import HHSUITE_DB_DEFAULTS as DEFAULTS
 
 
 # MAIN FUNCTIONS
@@ -23,7 +22,6 @@ def parse_curate_functions(unparsed_args):
     parser.add_argument("functions_config", type=pathlib.Path)
 
     parser.add_argument("-v", "--verbose", action="store_true")
-    parser.add_argument("-n", "--name", type=str)
     parser.add_argument("-np", "--cpus", type=int)
 
     parser.add_argument("-all", "--accept_all", action="store_true")

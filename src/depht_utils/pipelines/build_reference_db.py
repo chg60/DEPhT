@@ -5,10 +5,8 @@ import sys
 from Bio import SeqIO
 
 from depht_utils.functions import blastdb
+from depht_utils.data.defaults import REF_DB_DEFAULTS as DEFAULTS 
 
-# GLOBAL VARIABLES
-# -----------------------------------------------------------------------------
-DEFAULTS = {"name": "Mycobacteria"}
 
 
 # MAIN FUNCTIONS
