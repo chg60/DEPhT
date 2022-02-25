@@ -1,0 +1,17 @@
+{% extends 'results_base.html' %}
+
+{% block stylelink %}"{{ url_for('static', filename='css/results_style.css') }}"{% endblock %}
+
+{% block args_content %}
+
+  {% for key, val in args.items() %}
+    <tr>
+      <td class="arg_name">{{key}}</td>
+      <td>&nbsp{{val}}</td>
+    </tr>
+    <tr>
+    </tr>
+  {% endfor %}
+{% endblock %}
+
+{% block loading_link %}{{ url_for('depht.results') }}{% endblock %}

@@ -46,12 +46,16 @@ input[type=text]:focus {
   color: var(--input_dark);
 }
 
-select, button, input[type=submit] {
+select, input[type=submit] {
   padding: 10px 15px;
   border-radius: 5px;
   border: 2px solid var(--input_mid);
   background: var(--input_light);
   color: var(--text_dark);
+}
+
+select {
+  padding: 5px;
 }
 
 select:hover {
@@ -106,8 +110,4 @@ input[type=checkbox] {
 .help:hover .help_text {
   visibility: visible;
   opacity: 1;
-}
-
-.num_input:invalid {
-  border: solid red;
 }

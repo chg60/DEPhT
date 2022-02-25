@@ -1,6 +1,5 @@
 @import "base_style.css";
 
-
 #inner {
   position: relative;
   height: 500px;
@@ -45,6 +44,16 @@
     align-items: center;
     animation: spin 2s linear infinite;
     vertical-align: middle;
+}
+
+.args_list {
+  font-size: var(--font_mid);
+  text-align: left;
+}
+
+td {
+  border-bottom: 2px solid var(--box_background);
+  border-collapse: collapse;
 }
 
 @keyframes spin {

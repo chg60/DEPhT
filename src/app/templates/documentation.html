@@ -1,9 +1,27 @@
 {% extends 'base.html' %}
 
 {% block stylelink %}"{{ url_for('static', filename='css/documentation_style.css') }}"{% endblock %}
+{% block script %}
+  "{{url_for('static', filename='js/doc_functions.js')}}"
+{% endblock %}
 
 {% block content %}
 <!-- TODO: LOGO!!! -->
+
+<script type="text/javascript">
+  window.onscroll = function() {
+    scroll_function();
+  }
+
+  function scroll_function() {
+    var scroll_btn = document.getElementById("top");
+    if(document.documentElement.scrollTop > 500) {
+      scroll_btn.style.display = "block";
+    } else {
+      scroll_btn.style.display = "none";
+    }
+  }
+</script>
 
 <div class="inner">
   <h2>General Information</h2>
@@ -285,6 +303,11 @@
 
 </div>
 
+
+<br>
+<br>
+
+<button onclick="back_to_top()" type="button" id="top">Back to top</button>
 
 
 {% endblock %}

@@ -15,6 +15,7 @@
   --input_light: #d1d1d1;
 
   --font_normal: 20px;
+  --font_mid: 14px;
   --font_small: 12px;
 }
 
@@ -138,6 +139,17 @@ a:visited {
   border-radius: 2px;
 }
 
+button {
+  border: none;
+  outline: none;
+  cursor: pointer;
+  padding: 15px;
+  border-radius: 5px;
+  font-size: 18px;
+  background-color: var(--color_lines_dark);
+  color: var(--text_dark_2);
+}
+
 .banner {
   text-decoration: none;
   background: var(--mid_background);
@@ -195,10 +207,8 @@ h4 {
 }
 
 .footer {
-  height: 50px;
-  padding: 10px;
-  padding-left: 35%;
-  left: 0;
+  height: 75px;
+  padding-left: 30%;
   bottom: 0;
   position: fixed;
   margin-bottom: 0;
@@ -208,8 +218,10 @@ h4 {
 }
 
 .logos {
-  height: 40px;
+  height: 45px;
   margin-left: 20px;
+  padding: 20px;
   padding-left: 20px;
+  right: 0;
   margin: auto;
 }

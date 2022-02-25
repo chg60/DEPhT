@@ -17,7 +17,7 @@ def depht_train():
     phages = request.args.get("phage")
     bacteria = request.args.get("bact")
     prophage_csv = request.args.get("csv")
-    window_size = request.args.get("window")
+    window = request.args.get("window")
     cores = request.args.get("cpu")
 
     # train_model

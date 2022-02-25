@@ -9,13 +9,17 @@
 
 {% block content %}
 
+<script type="text/javascript">
+  window.onload = function() {
+    get_core_list("{{cpu_cores}}");
+  };
+
+</script>
+
   {% block heading %}{% endblock %}
 
+  {% block form_content %}
+  {% endblock %}
 
-  <form class="inner args_form" method="get">
-    {% block  form_content %}
-    {% endblock %}
-    <br>
-    <br>
-  </form>
+
 {% endblock %}

@@ -13,10 +13,18 @@
   <div class="args">
     Arguments
     <hr>
+    <br>
+    <table class="args_list">
+      {% block args_content %}{% endblock %}
+    </table>
   </div>
   <div class="loading_area">
     <br><br>
     <div class="loader"></div>
   </div>
 </div>
+
+<script type="text/javascript">
+  // window.location.replace('{% block loading_link %}{% endblock %}');
+</script>
 {% endblock %}
