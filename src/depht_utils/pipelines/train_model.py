@@ -109,17 +109,21 @@ def main():
     prophages = namespace.prophage_csv
     cpus = namespace.cpu_cores
 
-    print(name)
+    train_model(name, phg_dir, bct_dir, window=window, prophages=prophages,
+                cpus=cpus)
 
+
+def train_model(name, phg_dir, bct_dir,
+                window=WINDOW, prophages=None, cpus=LOGICAL_CORES):
     if not phg_dir.is_dir():
         print(f"specified phage directory '{str(phg_dir)}' is not a valid "
               f"directory")
-        sys.exit(1)
+        return
 
     if not bct_dir.is_dir():
         print(f"specified bacteria directory '{str(bct_dir)}' is not a valid "
               f"directory")
-        sys.exit(1)
+        return
 
     model_dir = MODEL_DIR.joinpath(name)
 
@@ -176,7 +180,6 @@ def main():
     clf_path = model_dir.joinpath("classifier.pkl")
     with open(clf_path, "wb") as classifier_writer:
         pickle.dump(clf, classifier_writer)
-
 
 if __name__ == "__main__":
     if len(sys.argv) == 1:

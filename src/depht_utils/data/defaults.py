@@ -5,3 +5,10 @@ HHSUITEDB_DEFAULTS = {"name": "essential",
                       "min_size": 10}
 
 REF_DB_DEFAULTS = {"name": "references"}
+
+SHELL_DB_DEFAULTS = {"name": "bacterial_genes"}
+
+MODEL_SCHEMA_DEFAULTS = {"reference_db": "blastn",
+                         "phage_homologs_db": "hhsearch",
+                         "shell_db": "mmseqs",
+                         "classifier": "classifier.pkl"}

@@ -7,7 +7,7 @@ import pickle
 
 import pandas as pd
 
-from depht_train.classes.kfold import KFold
+from depht_utils.classes.kfold import KFold
 from depht.classes.prophage_classifier import ProphageClassifier
 
 

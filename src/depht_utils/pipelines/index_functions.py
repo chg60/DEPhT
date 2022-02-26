@@ -6,7 +6,7 @@ from Bio import SeqIO
 
 from depht_utils.data.defaults import HHSUITEDB_DEFAULTS
 from depht_utils.functions.fileio import (
-    read_cluster_table_file)
+    read_cluster_table_file, write_cluster_file)
 
 # GLOBAL VARIABLES
 # -----------------------------------------------------------------------------
@@ -99,18 +99,15 @@ def index_functions(input_dir, output_dir,
                                        [str(index), locus_tag, product,
                                         parent, "\n"]))
 
+    cluster_file = None
     if cluster_table is not None:
-        clustered_records = get_clustered_records(cluster_table)
+        clustered_ids = get_clustered_records(cluster_table)
 
         cluster_file = output_dir.joinpath(".".join([name, "ci"]))
 
-        with cluster_file.open(mode="w") as cluster_filehandle:
-            for cluster_index, record_names in enumerate(clustered_records):
-                cluster_filehandle.write("".join(
-                                              [">", str(cluster_index), "\n"]))
+        write_cluster_file(clustered_ids, cluster_file)
 
-                cluster_filehandle.write("".join(
-                                              ["\0".join(record_names), "\n"]))
+    return fasta_file, index_file, cluster_file
 
 
 def get_clustered_records(cluster_table_path):

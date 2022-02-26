@@ -30,7 +30,7 @@ def build_reference_db(input_dir, output_dir, name=DEFAULTS["name"],
                        verbose=False):
     output_dir.mkdir(exist_ok=True, parents=True)
 
-    cc_fasta_path = output_dir.joinpath("references.fasta") 
+    cc_fasta_path = output_dir.joinpath(f"{name}.fasta") 
     write_concatenated_fasta(input_dir, cc_fasta_path)
 
     blastdb.create_blastdb(cc_fasta_path, output_dir, name, verbose=verbose)

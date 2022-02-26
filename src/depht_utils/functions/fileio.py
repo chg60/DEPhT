@@ -63,6 +63,15 @@ def read_cluster_index_file(cluster_index):
 # WRITE FUNCTIONS
 # -----------------------------------------------------------------------------
 
+def write_cluster_file(clustered_ids, cluster_file):
+    with cluster_file.open(mode="w") as cluster_filehandle:
+        for cluster_index, record_names in enumerate(clustered_ids):
+            cluster_filehandle.write("".join(
+                                          [">", str(cluster_index), "\n"]))
+
+            cluster_filehandle.write("".join(
+                                          ["\0".join(record_names), "\n"]))
+
 def write_cluster_function_index_file(gene_cluster_data, index_file):
     with index_file.open(mode="w") as filehandle:
         for gene_cluster in gene_cluster_data:

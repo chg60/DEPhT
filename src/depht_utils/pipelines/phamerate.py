@@ -194,6 +194,8 @@ def execute_phamerate_pipeline(fasta, outdir, param_file):
     # Clean up temporary directory
     shutil.rmtree(tempdir)
 
+    nr_fasta.unlink()
+
 
 def main(unparsed_args):
     args = parse_phamerate_args(unparsed_args)

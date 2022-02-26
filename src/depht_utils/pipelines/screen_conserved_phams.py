@@ -7,6 +7,7 @@ import sys
 import bitarray
 from Bio import SeqIO
 
+from depht_utils.data.defaults import SHELL_DB_DEFAULTS as DEFAULTS
 from depht_utils.functions.fileio import (
     read_gene_index_file,
     read_cluster_index_file,
@@ -14,7 +15,7 @@ from depht_utils.functions.fileio import (
 
 # GLOBAL VARIABLES
 # -----------------------------------------------------------------------------
-NAME = "bacterial_genes"
+NAME = DEFAULTS["name"]
 
 BINARY_TO_HEX_PLACES = 4
 
@@ -65,7 +66,7 @@ def screen_conserved_phams(input_dir, output_dir, gene_index, cluster_index,
     gene_rep_hex_values = [binascii.b2a_hex(bitarray.tobytes())
                            for bitarray in gene_rep_bitarrays]
 
-    gene_hex_value_file = output_dir.joinpath(name).with_suffix(".phv")
+    gene_hex_value_file = output_dir.joinpath(name).with_suffix(".pbv")
     write_gene_hex_value_file(gene_hex_value_file, gene_rep_hex_values)
 
 

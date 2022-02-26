@@ -8,7 +8,7 @@ from Bio import SeqIO, AlignIO
 from depht.functions import multiprocess
 from depht_utils.functions import clustalo
 
-from depht_utils.data.defaults import HHSUITE_DB_DEFAULTS as DEFAULTS
+from depht_utils.data.defaults import HHSUITEDB_DEFAULTS as DEFAULTS
 
 
 # MAIN FUNCTIONS
