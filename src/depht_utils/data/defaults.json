@@ -6,5 +6,16 @@
     "functions": {
         "essential": "data/functions_params.json",
         "extended": "data/extended_functions_params.json"
+    },
+    "parameters": {
+        "classifier": {
+            "window": 55
+        },
+        "shell": {
+            "rep_threshold": 0.60
+        },
+        "phage_homologs": {
+            "min_HMM_count": 10
+        }
     }
 }

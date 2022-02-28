@@ -14,9 +14,11 @@ from tempfile import mkdtemp
 
 from Bio import SeqIO
 
-from depht.classes.contig import CODING_FEATURE_TYPES, Contig
-from depht.classes.prophage import ANNOTATIONS, DEFAULT_PRODUCT, Prophage
-from depht.functions.annotation import annotate_record, MIN_LENGTH
+from depht.classes.contig import Contig
+from depht.classes.prophage import ANNOTATIONS, Prophage
+from depht.functions.annotation import (annotate_record,
+                                        cleanup_flatfile_records,
+                                        MIN_LENGTH)
 from depht.functions.att import find_attachment_site
 from depht.functions.find_homologs import find_homologs
 from depht.functions.mmseqs import assemble_bacterial_mask
@@ -107,7 +109,8 @@ def parse_args():
                         f"[default: {TMP_DIR}]")
     p.add_argument("-p", "--products",
                    type=int, default=None, metavar="",
-                   help="minimum number of phage homologs to report a prophage")
+                   help=("minimum number of phage homologs "
+                         "to report a prophage"))
     p.add_argument("-l", "--length",
                    type=int, default=MIN_SIZE, metavar="",
                    help=f"minimum length to report a prophage "
@@ -342,33 +345,6 @@ def main():
 
 # HELPER FUNCTIONS
 # -----------------------------------------------------------------------------
-def cleanup_flatfile_records(records):
-    """
-    Function to clean up and format SeqRecord sequence contigs created
-    from imported flat file annotations.
-
-    :param records: imported records
-    :type records: list
-    """
-    for record in records:
-        features = list()
-        for feature in record.features:
-            if feature.type not in CODING_FEATURE_TYPES:
-                continue
-
-            if feature.type == "CDS":
-                if not feature.qualifiers.get("translation"):
-                    dna = feature.extract(record.seq)
-                    translation = dna.translate(to_stop=True, table=11)
-                    feature.qualifiers["translation"] = [str(translation)]
-
-                feature.qualifiers["product"] = [DEFAULT_PRODUCT]
-
-            features.append(feature)
-
-        record.features = features
-
-
 def load_contigs(contig_records):
     """Function to create Contig objects from bacterial sequence contig
     SeqRecords

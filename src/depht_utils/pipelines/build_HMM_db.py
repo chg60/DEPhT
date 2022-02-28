@@ -29,8 +29,8 @@ def parse_build_functions_db(unparsed_args):
     return args
 
 
-def build_functions_db(input_dir, output_dir, name=DEFAULTS["name"],
-                       cores=1, use_mpi=False, verbose=False):
+def build_HMM_db(input_dir, output_dir, name=DEFAULTS["name"],
+                 cores=1, use_mpi=False, verbose=False):
     output_dir.mkdir(exist_ok=True, parents=True)
 
     hhsuitedb.create_hhsuitedb(input_dir, output_dir, name, cores=cores,
@@ -39,7 +39,7 @@ def build_functions_db(input_dir, output_dir, name=DEFAULTS["name"],
 
 def main(unparsed_args):
     args = parse_build_functions_db(unparsed_args)
-    build_functions_db(args.input_dir, args.output_dir, name=args.name,
+    build_HMM_db(args.input_dir, args.output_dir, name=args.name,
                        cores=args.cpus, use_mpi=args.use_mpi,
                        verbose=args.verbose)
 

@@ -3,7 +3,6 @@ This file contains functions for predicting protein coding and
 tRNA/tmRNA genes on bacterial contigs.
 """
 
-import pathlib
 import shlex
 import time
 from subprocess import Popen, DEVNULL
@@ -11,12 +10,12 @@ from subprocess import Popen, DEVNULL
 from Bio import SeqIO
 from Bio.SeqFeature import SeqFeature, FeatureLocation
 
+from depht.classes.contig import CODING_FEATURE_TYPES
+from depht.classes.prophage import DEFAULT_PRODUCT
 from depht.functions.fasta import parse_fasta
 
 MIN_LENGTH = 20000      # Don't annotate short contigs
 META_LENGTH = 100000    # Medium-length contigs -> use metagenomic mode
-
-DEFAULT_PRODUCT = "hypothetical protein"
 
 
 def prodigal(infile, outfile, meta=False):
@@ -200,3 +199,30 @@ def annotate_record(record, tmp_dir, trna=True):
 
     # Sort contig features on start position
     record.features.sort(key=lambda x: x.location.start)
+
+
+def cleanup_flatfile_records(records):
+    """
+    Function to clean up and format SeqRecord sequence contigs created
+    from imported flat file annotations.
+
+    :param records: imported records
+    :type records: list
+    """
+    for record in records:
+        features = list()
+        for feature in record.features:
+            if feature.type not in CODING_FEATURE_TYPES:
+                continue
+
+            if feature.type == "CDS":
+                if not feature.qualifiers.get("translation"):
+                    dna = feature.extract(record.seq)
+                    translation = dna.translate(to_stop=True, table=11)
+                    feature.qualifiers["translation"] = [str(translation)]
+
+                feature.qualifiers["product"] = [DEFAULT_PRODUCT]
+
+            features.append(feature)
+
+        record.features = features
