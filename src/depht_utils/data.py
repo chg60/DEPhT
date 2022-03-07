@@ -6,7 +6,9 @@ PARAMETERS = {"bacterial_sequences": {
                                     "-s": 8,
                                     "--min-seq-id": 0.50,
                                     "-c": 0.80,
-                                    "-e": 0.001}}},
+                                    "-e": 0.001}},
+                            "pham_clust": {
+                                 "gcs_threshold": 70}},
               "phage_sequences": {
                             "phameration": {
                                 "first_iteration": {
@@ -19,7 +21,9 @@ PARAMETERS = {"bacterial_sequences": {
                                 "second_iteration": {
                                     "--min-seq-id": 0.3,
                                     "-c": 0.5,
-                                    "-e": 0.001}}},
+                                    "-e": 0.001}},
+                            "pham_clust": {
+                                "gcs_threshold": 35}},
               "phage_homologs": {
                             "annotation_consensus_threshold": 0.33,
                             "min_hmm_count": 5,

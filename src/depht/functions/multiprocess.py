@@ -55,7 +55,7 @@ def worker(input_queue, output_queue):
     """
     for func, args in iter(input_queue.get, 'STOP'):
         result = func(*args)
-        if result:
+        if result is not None:
             output_queue.put(result)
 
 

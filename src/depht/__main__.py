@@ -22,7 +22,7 @@ from depht.functions.annotation import (annotate_record,
 from depht.functions.att import find_attachment_site
 from depht.functions.find_homologs import find_homologs
 from depht.functions.mmseqs import assemble_bacterial_mask
-from depht.functions.multiprocess import PHYSICAL_CORES
+from depht.functions.multiprocess import CPUS
 from depht.functions.prophage_prediction import predict_prophage_coords
 from depht.functions.sniff_format import sniff_format
 from depht.functions.visualization import draw_complete_diagram
@@ -89,9 +89,9 @@ def parse_args():
                    help=f"which local model should be used [default: "
                         f"{LOCAL_MODELS[0]}]")
     p.add_argument("-c", "--cpus",
-                   metavar="", default=PHYSICAL_CORES, type=int,
+                   metavar="", default=CPUS, type=int,
                    help=f"number of CPU cores to use [default: "
-                        f"{PHYSICAL_CORES}]")
+                        f"{CPUS}]")
     p.add_argument("-n", "--no-draw", action="store_false", dest="draw",
                    help="don't draw genome diagram for identified prophage(s)")
     p.add_argument("-m", "--mode",

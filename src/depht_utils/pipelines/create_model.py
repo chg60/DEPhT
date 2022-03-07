@@ -7,11 +7,13 @@ import pathlib
 import shutil
 
 from Bio import SeqIO
+from phamclust.__main__ import get_clusters
 
 from depht.__main__ import MODEL_DIR
 from depht.data import GLOBAL_VARIABLES
 from depht.functions.annotation import (annotate_record,
                                         cleanup_flatfile_records)
+from depht.functions.fasta import parse_fasta
 from depht.functions.multiprocess import CPUS, parallelize
 from depht.functions.sniff_format import sniff_format
 from depht_utils.data import PARAMETERS
@@ -108,13 +110,13 @@ def create_model(model_name, phage_sequences, bacterial_sequences,
     # Annotate bacterial sequences and write fasta and genbank files
     if verbose:
         print("Collecting/annotating bacterial sequences...")
-    bacterial_fasta_files, bacterial_gb_files, num_bacteria = clean_sequences(
-                                          bacterial_sequences,
-                                          dir_map["bacterial_tmp"],
-                                          annotate=True, verbose=verbose,
-                                          cpus=cpus)
+    bacterial_data_tuple = collect_sequences(
+                            bacterial_sequences, dir_map["bacterial_tmp"],
+                            GLOBAL_VARIABLES["bacterial_sequences"]["name"],
+                            config["bacterial_sequences"],
+                            annotate=False, verbose=verbose, cpus=cpus)
 
-    if num_bacteria == 0:
+    if bacterial_data_tuple[2] == 0:
         print("Could not recognize any bacterial sequence files "
               "in the specified directory.\n"
               "Please check the formatting and contents of your files.")
@@ -124,13 +126,14 @@ def create_model(model_name, phage_sequences, bacterial_sequences,
     # Collect phage sequences and write fasta and genbank files
     if verbose:
         print("Collecting/annotating phage sequences...")
-    phage_fasta_files, phage_gb_files, num_phages = clean_sequences(
-                                                phage_sequences,
-                                                dir_map["phage_tmp"],
-                                                verbose=verbose,
-                                                cpus=cpus)
+    phage_data_tuple = collect_sequences(
+                            phage_sequences, dir_map["phage_tmp"],
+                            GLOBAL_VARIABLES["phage_sequences"]["name"],
+                            config["phage_sequences"],
+                            verbose=verbose, cpus=cpus, cluster=False,
+                            singletons=True)
 
-    if num_phages == 0:
+    if phage_data_tuple[2] == 0:
         print("Could not recognize any phage sequence files "
               "in the specified directory.\n"
               "Please check the formatting and contents of your files.")
@@ -139,22 +142,26 @@ def create_model(model_name, phage_sequences, bacterial_sequences,
 
     if verbose:
         print("Training phage/bacterial classifier...")
-    train_model(model_name, phage_gb_files, bacterial_gb_files,
+    train_model(model_name, phage_data_tuple[1], bacterial_data_tuple[1],
                 cpus=cpus)
 
     if verbose:
         print("\nBuilding bacterial reference database...")
-    build_reference_db(bacterial_fasta_files, dir_map["reference_db_dir"])
+    build_reference_db(bacterial_data_tuple[0], dir_map["reference_db_dir"])
 
     if verbose:
         print("\nBuilding shell genome content database...")
-    create_shell_db(bacterial_gb_files, dir_map["shell_db_dir"], config,
-                    dir_map["shell_db_tmp"],
-                    verbose=verbose)
+    rep_threshold = config["shell_db"]["rep_threshold"]
+    screen_conserved_phams(bacterial_data_tuple[5], dir_map["shell_db_dir"],
+                           bacterial_data_tuple[4], bacterial_data_tuple[6],
+                           rep_threshold=rep_threshold)
+
+    bacterial_data_tuple[3].replace(dir_map["shell_db_dir"].joinpath(
+                                                bacterial_data_tuple[3].name))
 
     if verbose:
         print("\nBuilding phage homolog profile database...")
-    create_phage_homologs_db(phage_sequences, dir_map["phage_homologs_dir"],
+    create_phage_homologs_db(phage_data_tuple, dir_map["phage_homologs_dir"],
                              config, dir_map["phage_homologs_tmp"],
                              verbose=verbose, cpus=cpus)
 
@@ -218,8 +225,41 @@ def create_model_structure(model_name, force=False):
     return dir_map
 
 
+def collect_sequences(sequences, output_dir, name, config,
+                      annotate=False, verbose=False, cpus=CPUS,
+                      singletons=False, cluster=True):
+    fasta_sequences, gb_sequences, seq_count = clean_sequences(
+                                    sequences, output_dir, annotate=annotate,
+                                    verbose=verbose, cpus=cpus)
+
+    fasta_file, index_file, cluster_file = index_sequences(
+                                    sequences, output_dir,
+                                    name=name)
+
+    gene_clusters_dir = output_dir.joinpath("phams")
+
+    if verbose:
+        print("...clustering gene product sequences...")
+    phamerate_config = config["phameration"]
+    first_iter_params, second_iter_params = parse_param_dict(phamerate_config)
+    execute_phamerate_pipeline(fasta_file, gene_clusters_dir,
+                               first_iter_params, second_iter_params)
+
+    clusters = None
+    if cluster_file is None and cluster:
+        if verbose:
+            print("...clustering genomes based on shared gene content...")
+        cluster_file, clusters = create_cluster_schema(
+                                            index_file, gene_clusters_dir,
+                                            output_dir, name, config,
+                                            singletons=singletons)
+
+    return (fasta_sequences, gb_sequences, seq_count, fasta_file,
+            index_file, gene_clusters_dir, cluster_file, clusters)
+
+
 def clean_sequences(input_dir, output_dir, annotate=False, verbose=False,
-                    cpus=1, trna=False):
+                    cpus=CPUS, trna=False):
     fasta_dir = output_dir.joinpath("fasta")
     fasta_dir.mkdir()
 
@@ -261,60 +301,8 @@ def clean_sequence(input_file, output_dir, fasta_dir, gb_dir, annotate=False,
     return 1
 
 
-def create_shell_db(bacterial_sequences, output_dir, config, tmp_dir,
-                    verbose=False):
-    if verbose:
-        print("...indexing bacterial protein sequences...")
-    # Create a simple fasta-based database from the given bacterial sequences
-    fasta_file, index_file, cluster_file = index_sequences(
-                                bacterial_sequences, tmp_dir,
-                                name=GLOBAL_VARIABLES["bacterial_sequences"][
-                                                      "name"])
-
-    gene_clusters_dir = tmp_dir.joinpath("phams")
-    gene_clusters_dir.mkdir()
-    # Phamerate bacterial sequences
-
-    if verbose:
-        print("...clustering bacterial protein sequences...")
-    phamerate_config = config["bacterial_sequences"]["phameration"]
-    first_iter_params, second_iter_params = parse_param_dict(phamerate_config)
-    execute_phamerate_pipeline(fasta_file, gene_clusters_dir,
-                               first_iter_params, second_iter_params)
-
-    if cluster_file is None:
-        cluster_file = create_cluster_schema(
-                            index_file, gene_clusters_dir, tmp_dir,
-                            GLOBAL_VARIABLES["bacterial_sequences"]["name"])
-
-    if verbose:
-        print("...screening for shell genome content...")
-    rep_threshold = config["shell_db"]["rep_threshold"]
-    screen_conserved_phams(gene_clusters_dir, output_dir, index_file,
-                           cluster_file, rep_threshold=rep_threshold)
-
-    fasta_file.replace(output_dir.joinpath(fasta_file.name))
-
-
-def create_phage_homologs_db(phage_sequences, output_dir, config, tmp_dir,
-                             cpus=1, verbose=False):
-    if verbose:
-        print("...indexing phage protein sequences...")
-    # Create a simple fasta-based database from the given phage sequences
-    fasta_file, index_file, cluster_file = index_sequences(
-                                                phage_sequences, tmp_dir)
-
-    gene_clusters_dir = tmp_dir.joinpath("phams")
-    gene_clusters_dir.mkdir()
-
-    if verbose:
-        print("...clustering phage protein sequences...")
-    # Phamerate bacterial sequences
-    phamerate_config = config["phage_sequences"]["phameration"]
-    first_iter_params, second_iter_params = parse_param_dict(phamerate_config)
-    execute_phamerate_pipeline(fasta_file, gene_clusters_dir,
-                               first_iter_params, second_iter_params)
-
+def create_phage_homologs_db(phage_data_tuple, output_dir, config, tmp_dir,
+                             cpus=CPUS, verbose=False):
     min_hmm_count = config["phage_homologs"]["min_hmm_count"]
 
     if verbose:
@@ -325,7 +313,8 @@ def create_phage_homologs_db(phage_sequences, output_dir, config, tmp_dir,
                                 "essential_annotations"]["LIKE"]
     ignored_functions = config["phage_homologs"][
                                 "essential_annotations"]["NOT LIKE"]
-    curate_gene_clusters(gene_clusters_dir, index_file, curated_clusters_dir,
+    curate_gene_clusters(phage_data_tuple[5], phage_data_tuple[4],
+                         curated_clusters_dir,
                          accepted_functions, ignored_functions,
                          verbose=verbose, cores=cpus,
                          min_hmm_count=min_hmm_count)
@@ -342,7 +331,8 @@ def create_phage_homologs_db(phage_sequences, output_dir, config, tmp_dir,
                                 "extended_annotations"]["LIKE"]
     ignored_functions = config["phage_homologs"][
                                "extended_annotations"]["NOT LIKE"]
-    curate_gene_clusters(gene_clusters_dir, index_file, curated_clusters_dir,
+    curate_gene_clusters(phage_data_tuple[5], phage_data_tuple[4],
+                         curated_clusters_dir,
                          accepted_functions, ignored_functions,
                          verbose=verbose,
                          accept_all=True, cores=cpus,
@@ -353,17 +343,39 @@ def create_phage_homologs_db(phage_sequences, output_dir, config, tmp_dir,
     build_HMM_db(curated_clusters_dir, output_dir, name="extended")
 
 
-def create_cluster_schema(index_file, gene_clusters_dir, tmp_dir, name):
+def create_cluster_schema(index_file, gene_clusters_dir, tmp_dir, name,
+                          config, singletons=False):
     gene_index = fileio.read_gene_index_file(index_file)
 
-    clustered_ids = list()
-    ids = list()
-    for data_dict in list(gene_index.values()):
-        ids.append(data_dict["parent"])
+    genome_pham_tuples = list()
+    for pham_file in gene_clusters_dir.iterdir():
+        if pham_file.suffix != ".fasta":
+            continue
 
-    clustered_ids.append(ids)
+        pham = pham_file.stem
+        pham_headers, pham_sequences = parse_fasta(pham_file)
+
+        for header in pham_headers:
+            parent_id = gene_index[header]["parent"]
+            genome_pham_tuples.append([parent_id, pham])
+
+    genome_pham_tsv_file = tmp_dir.joinpath(".".join([name, "tsv"]))
+    with open(genome_pham_tsv_file, "w") as filehandle:
+        for genome_pham_tuple in genome_pham_tuples:
+            line = "\t".join(genome_pham_tuple)
+            filehandle.write(f"{line}\n")
+
+    clusters = get_clusters(genome_pham_tsv_file,
+                            config["pham_clust"]["gcs_threshold"])
+
+    clustered_ids = list()
+    for cluster_matrix in clusters:
+        if len(cluster_matrix.node_names) <= 1 and not singletons:
+            continue
+
+        clustered_ids.append(cluster_matrix.node_names)
 
     cluster_file = tmp_dir.joinpath(".".join([name, "ci"]))
     fileio.write_cluster_file(clustered_ids, cluster_file)
 
-    return cluster_file
+    return cluster_file, clusters
