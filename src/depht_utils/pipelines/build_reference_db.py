@@ -1,12 +1,12 @@
 import argparse
 import pathlib
-import sys
 
 from Bio import SeqIO
 
+from depht.data import GLOBAL_VARIABLES
 from depht_utils.functions import blastdb
-from depht_utils.data.defaults import REF_DB_DEFAULTS as DEFAULTS 
 
+NAME = GLOBAL_VARIABLES["reference_db"]["name"]
 
 
 # MAIN FUNCTIONS
@@ -18,19 +18,17 @@ def parse_build_reference_db(unparsed_args):
     parser.add_argument("output_dir", type=pathlib.Path)
 
     parser.add_argument("-v", "--verbose", action="store_true")
-    parser.add_argument("-n", "--name", type=str)
-   
-    parser.set_defaults(**DEFAULTS)
+    parser.add_argument("-n", "--name", type=str, default=NAME)
 
     args = parser.parse_args(unparsed_args)
     return args
 
 
-def build_reference_db(input_dir, output_dir, name=DEFAULTS["name"],
+def build_reference_db(input_dir, output_dir, name=NAME,
                        verbose=False):
     output_dir.mkdir(exist_ok=True, parents=True)
 
-    cc_fasta_path = output_dir.joinpath(f"{name}.fasta") 
+    cc_fasta_path = output_dir.joinpath(f"{name}.fasta")
     write_concatenated_fasta(input_dir, cc_fasta_path)
 
     blastdb.create_blastdb(cc_fasta_path, output_dir, name, verbose=verbose)
@@ -45,14 +43,10 @@ def write_concatenated_fasta(input_dir, cc_fasta_path):
             genome_records = SeqIO.parse(genome_file, "fasta")
             for genome_record in genome_records:
                 filehandle.write(f">{genome_record.id}\n")
-                filehandle.write(f"{str(genome_record.seq)}\n") 
+                filehandle.write(f"{str(genome_record.seq)}\n")
 
 
 def main(unparsed_args):
     args = parse_build_reference_db(unparsed_args)
     build_reference_db(args.input_dir, args.output_dir, name=args.name,
                        verbose=args.verbose)
-
-
-if  __name__ == "__main__":
-    main(sys.argv[1:])

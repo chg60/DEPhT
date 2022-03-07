@@ -2,26 +2,28 @@ import shutil
 
 from bitarray import bitarray, util as bit_util
 
+from depht.data import GLOBAL_VARIABLES, PARAMETERS
 from depht.functions.fasta import parse_fasta, write_fasta
 from depht.functions.subprocess import run_command
 
 # GLOBAL VARIABLES
 # -----------------------------------------------------------------------------
+WORKING_DIR_NAME = GLOBAL_VARIABLES["shell_db"]["dir_name"]
+
 ENDIANESS = "big"
-WORKING_DIR_NAME = "mmseqs"
 FASTA_PATH_NAME = "genes"
 
 
 # PHAMERATION DEFAULTS
 # -----------------------------------------------------------------------------
-CMODE = 0
-CSTEP = 1
-SENS = 8
-IDENT = 0.5
-COVER = 0.80
-EVALUE = 0.001
+CMODE = PARAMETERS["phameration"]["cmode"]
+CSTEP = PARAMETERS["phameration"]["cstep"]
+SENS = PARAMETERS["phameration"]["sens"]
+IDENT = PARAMETERS["phameration"]["ident"]
+COVER = PARAMETERS["phameration"]["cover"]
+EVALUE = PARAMETERS["phameration"]["evalue"]
 
-MIN_GCS = 0.7
+MIN_GCS = PARAMETERS["phameration"]["min_gcs"]
 
 
 # MAIN FUNCTIONS

@@ -2,10 +2,13 @@ import pickle
 
 import pandas as pd
 
+from depht.data import PARAMETERS
 from depht.functions.sliding_window import *
 from depht.functions.statistics import average
 
-WINDOW = 55         # Number of CDS features to consider in a window
+# Number of CDS features to consider in a window
+WINDOW = PARAMETERS["prophage_prediction"]["window"]
+
 BACTERIA = 0        # Gene prediction state - bacterial
 PROPHAGE = 1        # Gene prediction state - prophage
 

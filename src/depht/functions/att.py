@@ -2,31 +2,32 @@ import math
 
 from scipy.stats import zscore
 
-from depht.classes.prophage import DEFAULT_PRODUCT
+from depht.data import GLOBAL_VARIABLES, PARAMETERS
 from depht.functions.blastn import blastn, REF_BLASTN_OUTFMT
 from depht.functions.fasta import write_fasta
 from depht.functions.statistics import transform
 
 # GLOBAL VARIABLES
 # -----------------------------------------------------------------------------
-KMER_SIZE = 5
-MIN_ATT_SCORE = 2.2
-EVALUE_FILTER = 10000
+DEFAULT_PRODUCT = GLOBAL_VARIABLES["sequences"]["default_product"]
+
+KMER_SIZE = PARAMETERS["att_detection"]["kmer_size"]
+MIN_ATT_SCORE = PARAMETERS["att_detection"]["min_att_score"]
+EVALUE_FILTER = PARAMETERS["att_detection"]["evalue_threshold"]
+BLAST_SORT_KEY = PARAMETERS["att_detection"]["blast_sort_key"]
+
+AQ_WEIGHT = PARAMETERS["att_detection"]["att_quality_weight"]
+IP_WEIGHT = PARAMETERS["att_detection"]["integrase_proximity_weight"]
+MC_WEIGHT = PARAMETERS["att_detection"]["model_coverage_weight"]
+TR_WEIGHT = PARAMETERS["att_detection"]["trna_weight"]
+RC_WEIGHT = PARAMETERS["att_detection"]["reference_concurrence_weight"]
 
 L_SEQ_NAME = "putative_attL_region"
 R_SEQ_NAME = "putative_attR_region"
 
-AQ_WEIGHT = 1
-IP_WEIGHT = 0.6
-MC_WEIGHT = 0.9
-TR_WEIGHT = 0
-RC_WEIGHT = 1.5
-
-DEFAULTS = {"k": 5, "fpp": 0.0001, "outfmt": 10}
-
 
 def find_attachment_site(prophage, l_seq, r_seq,
-                         reference_db_path, tmp_dir, sort_key,
+                         reference_db_path, tmp_dir, sort_key=BLAST_SORT_KEY,
                          k=KMER_SIZE, min_score=MIN_ATT_SCORE,
                          l_name=L_SEQ_NAME, r_name=R_SEQ_NAME):
     """Given the sequences of a putative attL region and putative attR region,
@@ -58,7 +59,7 @@ def find_attachment_site(prophage, l_seq, r_seq,
     r_seq_path = tmp_dir.joinpath(f"{r_name}.fasta")
     write_fasta([r_name], [r_seq], r_seq_path)
     # Calculate and store right region's coordinate start for easy access
-    r_seq_start = prophage.end - len(r_seq) 
+    r_seq_start = prophage.end - len(r_seq)
 
     # Use BLASTn to retrieve putative attachment site sequences
     kmer_contigs = blast_attachment_site(l_seq_path, r_seq_path, tmp_dir, k=k,
@@ -147,33 +148,6 @@ def blast_attachment_site(l_seq_path, r_seq_path, tmp_dir, k=KMER_SIZE,
                        int(result["qstart"]) - 1, int(result["send"]),
                        float(result["bitscore"])]
         kmer_contigs.append(kmer_contig)
-
-    return kmer_contigs
-
-
-def graph_attachment_site(l_seq, r_seq, k=KMER_SIZE):
-    """Given the sequences of a putative attL region and putative attR region,
-    kmer count the sequences of both regions using a DeBruijn graph that has
-    been optimized by reducing the inputted words with a Bloom Filter to
-    find sequence contigs and their positions.
-
-    :param l_seq: The sequence of a putative attL region.
-    :type l_seq: str
-    :param r_seq: The sequence of a putative attR region.
-    :type r_seq: str
-    :param k: Length of the word size stored in the DeBruijn graph.
-    :type k: int
-    :return: A list of contigs and their positions in the sequence and graph.
-    :rtype: list(tuple(str, int, int))
-    """
-    # Load a Bloom Filter from the sequence of the putative attL region
-    bfilter = load_bfilter(l_seq, k=k)
-    # Initialize a DeBruijn graph from the sequence of the putative attR region
-    # limited by the kmers represented in the loaded Bloom Filter
-    deb_graph = create_debruijn_graph(bfilter, r_seq)
-    # Retrieve kmer contigs by tracing the DeBruijn graph and
-    # the sequence of the putative attL region
-    kmer_contigs = traverse_debruijn_graph(deb_graph, l_seq)
 
     return kmer_contigs
 
@@ -365,7 +339,7 @@ def score_integrase_proximity(prophage, attL_pos, attR_pos, base_dist=1500,
 
         product = feature.qualifiers.get("product", [DEFAULT_PRODUCT])[0]
 
-        if "integrase" in product:
+        if "integrase" in product or "transposase" in product:
             left_int_dist = int(feature.location.start - attL_pos)
             right_int_dist = int(attR_pos - feature.location.end)
 

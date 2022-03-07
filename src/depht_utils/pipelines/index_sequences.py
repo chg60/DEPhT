@@ -4,18 +4,15 @@ import sys
 
 from Bio import SeqIO
 
-from depht_utils.data.defaults import HHSUITEDB_DEFAULTS
+from depht.data import GLOBAL_VARIABLES
 from depht_utils.functions.fileio import (
     read_cluster_table_file, write_cluster_file)
 
 # GLOBAL VARIABLES
 # -----------------------------------------------------------------------------
-NAME = HHSUITEDB_DEFAULTS["name"]
 TABLE = 11
-DEFAULT_PRODUCT = HHSUITEDB_DEFAULTS["default_product"]
-
-
-DEFAULTS = {"name": NAME, "table": TABLE, "default_product": DEFAULT_PRODUCT}
+NAME = GLOBAL_VARIABLES["sequences"]["name"]
+DEFAULT_PRODUCT = GLOBAL_VARIABLES["sequences"]["default_product"]
 
 
 # MAIN FUNCTIONS
@@ -30,22 +27,22 @@ def parse_index_sequences(unparsed_args):
 
     parser.add_argument("input_dir", type=pathlib.Path)
     parser.add_argument("output_dir", type=pathlib.Path)
-        
-    parser.add_argument("-v", "--verbose", action="store_true")
-    parser.add_argument("-n", "--name", type=str)
 
-    parser.add_argument("-tt", "--translation_table", type=int)
+    parser.add_argument("-v", "--verbose", action="store_true")
+    parser.add_argument("-n", "--name", type=str, default=NAME)
+
+    parser.add_argument("-tt", "--translation_table", type=int,
+                        default=TABLE)
     parser.add_argument("-cf", "--cluster_table", type=pathlib.Path,
                         default=None,)
 
-    parser.set_defaults(**DEFAULTS)
     args = parser.parse_args(unparsed_args)
     return args
 
 
 def index_sequences(input_dir, output_dir,
-                    name=DEFAULTS["name"], table=DEFAULTS["table"],
-                    default_product=DEFAULTS["default_product"],
+                    name=NAME, table=TABLE,
+                    default_product=DEFAULT_PRODUCT,
                     cluster_table=None):
     """Function to index protein coding features and related metadata.
 
@@ -103,7 +100,7 @@ def index_sequences(input_dir, output_dir,
     output_dir.mkdir(exist_ok=True, parents=True)
 
     fasta_file = output_dir.joinpath(".".join([name, "fasta"]))
-    index_file = output_dir.joinpath(".".join([name, "pgi"])) 
+    index_file = output_dir.joinpath(".".join([name, "pgi"]))
     write_index_files(cds_features, index_file, fasta_file)
 
     cluster_file = None
@@ -126,12 +123,12 @@ def get_clustered_records(cluster_table_path):
 
         names = cluster_records_map.get(cluster, list())
         names.append(name)
-        cluster_records_map[cluster] = names 
+        cluster_records_map[cluster] = names
 
     clustered_records = [names for c, names in cluster_records_map.items()
                          if c is not None]
 
-    return clustered_records 
+    return clustered_records
 
 
 def write_index_files(cds_features, index_file, fasta_file):

@@ -9,15 +9,19 @@ import sys
 import pandas as pd
 from Bio import SeqIO
 
+from depht.data import GLOBAL_VARIABLES
 from depht.functions.annotation import (annotate_record,
                                         cleanup_flatfile_records)
 from depht.functions.multiprocess import parallelize, CPUS
 from depht.functions.prophage_prediction import build_contig_dataframe
 from depht.functions.sniff_format import sniff_format
+from depht_utils.data import PARAMETERS
 from depht_utils.functions.train_classifier import train_classifier
 
-MODEL_DIR = pathlib.Path().home().joinpath(".depht/models")
-WINDOW = 55
+DEPHT_DIR = pathlib.Path().home().joinpath(
+                            GLOBAL_VARIABLES["model_storage"]["home_dir"])
+MODEL_DIR = DEPHT_DIR.joinpath(GLOBAL_VARIABLES["model_storage"]["model_dir"])
+WINDOW = PARAMETERS["classifier"]["window"]
 
 
 def parse_args(unparsed_args):
@@ -36,8 +40,7 @@ def parse_args(unparsed_args):
                    help=f"number of genes to average features over "
                         f"[default: {WINDOW}]")
     p.add_argument("-c", "--cpu-cores", type=int, default=CPUS,
-                   help=f"number of cpu cores to use "
-                        f"[default: {CPUS}]")
+                   help=f"number of cpu cores to use [default: {CPUS}]")
     return p.parse_args(unparsed_args)
 
 

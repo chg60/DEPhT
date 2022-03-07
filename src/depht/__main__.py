@@ -15,25 +15,26 @@ from tempfile import mkdtemp
 from Bio import SeqIO
 
 from depht.classes.contig import Contig
-from depht.classes.prophage import ANNOTATIONS, Prophage
+from depht.classes.prophage import Prophage
+from depht.data import GLOBAL_VARIABLES, PARAMETERS
 from depht.functions.annotation import (annotate_record,
-                                        cleanup_flatfile_records,
-                                        MIN_LENGTH)
+                                        cleanup_flatfile_records)
 from depht.functions.att import find_attachment_site
 from depht.functions.find_homologs import find_homologs
 from depht.functions.mmseqs import assemble_bacterial_mask
-from depht.functions.multiprocess import CPUS
-from depht.functions.prophage_prediction import predict_prophage_coords, WINDOW
+from depht.functions.multiprocess import PHYSICAL_CORES
+from depht.functions.prophage_prediction import predict_prophage_coords
 from depht.functions.sniff_format import sniff_format
 from depht.functions.visualization import draw_complete_diagram
 
 # GLOBAL VARIABLES
 # -----------------------------------------------------------------------------
-DEPHT_DIR = pathlib.Path().home().joinpath(".depht")
+DEPHT_DIR = pathlib.Path().home().joinpath(
+                                GLOBAL_VARIABLES["model_storage"]["home_dir"])
 if not DEPHT_DIR.is_dir():
     DEPHT_DIR.mkdir()
 
-MODEL_DIR = DEPHT_DIR.joinpath("models")
+MODEL_DIR = DEPHT_DIR.joinpath(GLOBAL_VARIABLES["model_storage"]["model_dir"])
 if not MODEL_DIR.is_dir():
     MODEL_DIR.mkdir()
 
@@ -45,25 +46,26 @@ if len(LOCAL_MODELS) == 0:
     sys.exit(0)
 
 # Where temporary file I/O should happen
-TMP_DIR = DEPHT_DIR.joinpath("tmp")
+TMP_DIR = DEPHT_DIR.joinpath(GLOBAL_VARIABLES["model_storage"]["model_dir"])
 
 # Model can't scan contigs with fewer CDS than window size
-MIN_CDS_FEATURES = WINDOW
+MIN_CDS_FEATURES = PARAMETERS["prophage_prediction"]["window"]
 
 # For naming any identified prophages
-PROPHAGE_PREFIX = "prophi"
-PROPHAGE_DELIMITER = "-"
+PROPHAGE_PREFIX = GLOBAL_VARIABLES["phage_sequences"]["prophage_prefix"]
+PROPHAGE_DELIMITER = GLOBAL_VARIABLES["phage_sequences"]["prophage_delimiter"]
 
 # For attachment site detection
-EXTEND_BY = 5000
-ATT_SENSITIVITY = 7
-REF_BLAST_SORT_KEY = "bitscore"
+EXTEND_BY = PARAMETERS["att_detection"]["extention_length"]
+ATT_SENSITIVITY = PARAMETERS["att_detection"]["att_sensitivity"]
 
 # For deciding whether to cull predicted "prophages"
-MIN_SIZE = 20000
-MIN_PRODUCTS_NORMAL = 5
-MIN_PRODUCTS_STRICT = 10
+MIN_LENGTH = PARAMETERS["annotation"]["min_length"]
+MIN_PRODUCTS_NORMAL = PARAMETERS["phage_homology_search"]["min_products"]
+MIN_PRODUCTS_STRICT = PARAMETERS["phage_homology_search"][
+                                 "min_products_strict"]
 
+ANNOTATIONS = GLOBAL_VARIABLES["sequences"]["annotations"]
 CONTIG_DATA_HEADER = ["Gene ID", "Start", "End", "Prediction",
                       "Bacterial Homology", "Phage Homology"]
 
@@ -87,9 +89,9 @@ def parse_args():
                    help=f"which local model should be used [default: "
                         f"{LOCAL_MODELS[0]}]")
     p.add_argument("-c", "--cpus",
-                   metavar="", default=CPUS, type=int,
+                   metavar="", default=PHYSICAL_CORES, type=int,
                    help=f"number of CPU cores to use [default: "
-                        f"{CPUS}]")
+                        f"{PHYSICAL_CORES}]")
     p.add_argument("-n", "--no-draw", action="store_false", dest="draw",
                    help="don't draw genome diagram for identified prophage(s)")
     p.add_argument("-m", "--mode",
@@ -112,9 +114,9 @@ def parse_args():
                    help=("minimum number of phage homologs "
                          "to report a prophage"))
     p.add_argument("-l", "--length",
-                   type=int, default=MIN_SIZE, metavar="",
+                   type=int, default=MIN_LENGTH, metavar="",
                    help=f"minimum length to report a prophage "
-                        f"[default: {MIN_SIZE}]")
+                        f"[default: {MIN_LENGTH}]")
 
     return p.parse_args()
 
@@ -153,12 +155,26 @@ def main():
 
     # Set up model directories
     model_dir = MODEL_DIR.joinpath(model)
-    bact_ref_fasta = model_dir.joinpath("mmseqs/bacterial_genes.fasta")
-    bact_ref_values = model_dir.joinpath("mmseqs/bacterial_genes.pbv")
-    essential_db = model_dir.joinpath("hhsearch/essential")
-    extended_db = model_dir.joinpath("hhsearch/extended")
-    blast_db = model_dir.joinpath("blastn/references")
-    classifier = model_dir.joinpath("classifier.pkl")
+
+    shell_db_dir = model_dir.joinpath(
+                                GLOBAL_VARIABLES["shell_db"]["dir_name"])
+    reference_db_dir = model_dir.joinpath(
+                                GLOBAL_VARIABLES["reference_db"]["dir_name"])
+    phage_homologs_dir = model_dir.joinpath(
+                                GLOBAL_VARIABLES["phage_homologs"]["dir_name"])
+
+    bact_ref_fasta = shell_db_dir.joinpath(
+                        GLOBAL_VARIABLES["shell_db"]["fasta_name"])
+    bact_ref_values = shell_db_dir.joinpath(
+                        GLOBAL_VARIABLES["shell_db"]["hex_value_name"])
+    essential_db = phage_homologs_dir.joinpath(
+                        GLOBAL_VARIABLES["phage_homologs"]["essential_name"])
+    extended_db = phage_homologs_dir.joinpath(
+                        GLOBAL_VARIABLES["phage_homologs"]["extended_name"])
+    blast_db = reference_db_dir.joinpath(
+                        GLOBAL_VARIABLES["reference_db"]["name"])
+    classifier = model_dir.joinpath(
+                        GLOBAL_VARIABLES["classifier"]["name"])
 
     # Mark program start time
     mark = datetime.now()
@@ -415,7 +431,7 @@ def load_initial_prophages(contigs, prophage_predictions,
 
 
 def detect_att_sites(prophages, reference_db_path, search_space,
-                     tmp_dir, min_kmer_score=5, sort_key=REF_BLAST_SORT_KEY):
+                     tmp_dir, min_kmer_score=5):
     """Detect attachment sites demarcating predicted prophage regions from
     the bacterial contig.
 
@@ -429,8 +445,6 @@ def detect_att_sites(prophages, reference_db_path, search_space,
     :type tmp_dir: pathlib.Path
     :param min_kmer_score: Minimum length threshold of attachment sites.
     :type min_kmer_score: int
-    :param sort_key: the blast column to sort possible att pairs on
-    :type sort_key: str
     """
     for prophage in prophages:
         # Create prophage working directory within temp directory
@@ -452,7 +466,7 @@ def detect_att_sites(prophages, reference_db_path, search_space,
 
         att_data = find_attachment_site(
                                 prophage, l_seq, r_seq,
-                                reference_db_path, working_dir, sort_key,
+                                reference_db_path, working_dir,
                                 k=min_kmer_score, l_name=l_name, r_name=r_name)
 
         if att_data is not None:

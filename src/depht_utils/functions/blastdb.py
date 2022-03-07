@@ -1,3 +1,4 @@
+import pathlib
 import shlex
 from subprocess import DEVNULL, PIPE, Popen
 
@@ -49,7 +50,7 @@ def blastdbcmd(blast_db_path, entries, outfile_path, verbose=0):
         command = " ".join([command, "-entry", ",".join([entries])])
     if isinstance(entries, str):
         command = " ".join([command, "-entry", entries])
-    elif isinstance(entries, Path):
+    elif isinstance(entries, pathlib.Path):
         command = " ".join([command, "-entry_batch", str(entries)])
 
     command = shlex.split(command)

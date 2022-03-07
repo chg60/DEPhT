@@ -1,7 +1,8 @@
+from depht.data import GLOBAL_VARIABLES
 
 # GLOBAL VARIABLES
 # -----------------------------------------------------------------------------
-CODING_FEATURE_TYPES = ["CDS", "tRNA", "tmRNA"]
+CODING_FEATURE_TYPES = GLOBAL_VARIABLES["sequences"]["feature_types"]
 
 
 class Contig:
