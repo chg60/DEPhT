@@ -1,21 +1,20 @@
 """Standalone script for training just the phage/bacterial classifier
 portion of the model."""
 
-import sys
 import argparse
 import pathlib
 import pickle
+import sys
 
 import pandas as pd
 from Bio import SeqIO
 
 from depht.functions.annotation import (annotate_record,
                                         cleanup_flatfile_records)
-from depht.functions.multiprocess import parallelize, LOGICAL_CORES
+from depht.functions.multiprocess import parallelize, CPUS
 from depht.functions.prophage_prediction import build_contig_dataframe
 from depht.functions.sniff_format import sniff_format
 from depht_utils.functions.train_classifier import train_classifier
-
 
 MODEL_DIR = pathlib.Path().home().joinpath(".depht/models")
 WINDOW = 55
@@ -36,9 +35,9 @@ def parse_args(unparsed_args):
     p.add_argument("-w", "--window-size", type=int, default=WINDOW,
                    help=f"number of genes to average features over "
                         f"[default: {WINDOW}]")
-    p.add_argument("-c", "--cpu-cores", type=int, default=LOGICAL_CORES,
+    p.add_argument("-c", "--cpu-cores", type=int, default=CPUS,
                    help=f"number of cpu cores to use "
-                        f"[default: {LOGICAL_CORES}]")
+                        f"[default: {CPUS}]")
     return p.parse_args(unparsed_args)
 
 
@@ -123,7 +122,7 @@ def main(unparsed_args):
 
 
 def train_model(name, phg_dir, bct_dir,
-                window=WINDOW, prophages=None, cpus=LOGICAL_CORES):
+                window=WINDOW, prophages=None, cpus=1):
     if not phg_dir.is_dir():
         print(f"specified phage directory '{str(phg_dir)}' is not a valid "
               f"directory")

@@ -11,24 +11,23 @@ from Bio import SeqIO
 from depht.__main__ import DEPHT_DIR
 from depht.functions.annotation import (annotate_record,
                                         cleanup_flatfile_records)
-from depht.functions.multiprocess import LOGICAL_CORES, parallelize
+from depht.functions.multiprocess import CPUS, parallelize
 from depht.functions.sniff_format import sniff_format
 from depht_utils import PACKAGE_DIR
 from depht_utils.data.defaults import (HHSUITEDB_DEFAULTS,
                                        MODEL_SCHEMA_DEFAULTS,
                                        SHELL_DB_DEFAULTS)
 from depht_utils.functions import fileio
-from depht_utils.pipelines.curate_gene_clusters import (
-                                    curate_gene_clusters,
-                                    DEFAULTS as CURATION_DEFAULTS)
 from depht_utils.pipelines.build_HMM_db import build_HMM_db
 from depht_utils.pipelines.build_reference_db import build_reference_db
+from depht_utils.pipelines.curate_gene_clusters import (
+    curate_gene_clusters,
+    DEFAULTS as CURATION_DEFAULTS)
 from depht_utils.pipelines.index_sequences import index_sequences
 from depht_utils.pipelines.phamerate import execute_phamerate_pipeline
 from depht_utils.pipelines.screen_conserved_phams import (
-                                    screen_conserved_phams, REP_THRESHOLD)
+    screen_conserved_phams, REP_THRESHOLD)
 from depht_utils.pipelines.train_model import train_model, WINDOW
-
 
 MODELS_DIR = DEPHT_DIR.joinpath("models")
 DEFAULT_CONFIG = PACKAGE_DIR.joinpath("data/defaults.json")
@@ -50,7 +49,7 @@ def parse_args(unparsed_args):
                         required=True)
 
     parser.add_argument("-v", "--verbose", action="store_true")
-    parser.add_argument("--cpus", type=int, default=LOGICAL_CORES)
+    parser.add_argument("--cpus", type=int, default=CPUS)
     parser.add_argument("-c", "--config", type=pathlib.Path,
                         default=DEFAULT_CONFIG)
     parser.add_argument("-f", "--force", action="store_true")
@@ -170,7 +169,7 @@ def load_config(config_file):
 
 def create_model(model_name, phage_sequences, bacterial_sequences,
                  verbose=False, config_file=DEFAULT_CONFIG, force=False,
-                 cpus=LOGICAL_CORES, annotate=False):
+                 cpus=1, annotate=False):
     # Load master configuration file, which contains paths for
     # configuration of sub-pipelines
     config = load_config(config_file)
@@ -303,7 +302,7 @@ def create_model_structure(model_name, force=False):
 
 
 def clean_sequences(input_dir, output_dir, annotate=False, verbose=False,
-                    cpus=LOGICAL_CORES, trna=False):
+                    cpus=1, trna=False):
     fasta_dir = output_dir.joinpath("fasta")
     fasta_dir.mkdir()
 
@@ -377,7 +376,7 @@ def create_shell_db(bacterial_sequences, output_dir, config, tmp_dir,
 
 
 def create_phage_homologs_db(phage_sequences, output_dir, config, tmp_dir,
-                             cpus=LOGICAL_CORES, verbose=False):
+                             cpus=1, verbose=False):
     if verbose:
         print("...indexing phage protein sequences...")
     # Create a simple fasta-based database from the given phage sequences

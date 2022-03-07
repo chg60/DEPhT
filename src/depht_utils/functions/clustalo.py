@@ -1,4 +1,4 @@
-from depht.functions.run_command import run_command
+from depht.functions.subprocess import run_command
 
 
 def clustalo(fasta_file, aln_out_path, mat_out_path=None, tree_out_path=None,

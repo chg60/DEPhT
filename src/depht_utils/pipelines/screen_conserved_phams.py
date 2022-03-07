@@ -1,6 +1,5 @@
 import argparse
 import binascii
-import math
 import pathlib
 import sys
 
