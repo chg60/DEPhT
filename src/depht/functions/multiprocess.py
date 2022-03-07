@@ -54,9 +54,7 @@ def worker(input_queue, output_queue):
     :type output_queue: mp.Queue
     """
     for func, args in iter(input_queue.get, 'STOP'):
-        result = func(*args)
-        if result is not None:
-            output_queue.put(result)
+        output_queue.put(func(*args))
 
 
 def start_processes(inputs, cpus, verbose=False):
@@ -90,7 +88,9 @@ def start_processes(inputs, cpus, verbose=False):
     # Grab results from result_q
     results = []
     for _ in range(len(inputs)):
-        results.append(result_q.get())
+        result = result_q.get()
+        if result is not None:
+            results.append(result)
 
     [worker_n.join() for worker_n in worker_pool]
 
