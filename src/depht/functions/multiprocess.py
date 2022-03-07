@@ -1,43 +1,24 @@
-"""
-Functions to parallelize of processing of a list of inputs.
-Adapted from https://docs.python.org/3/library/multiprocessing.html
-"""
-import multiprocessing as mp
+"""Wrapper around a subset of the multiprocessing built-in library
+to make running multiple processes easy. Load balancing is left to
+the caller."""
 
-from depht.classes.progress import Progress
+import multiprocessing
 
-# Make sure new processes are forked, not spawned
-mp.set_start_method("fork")
+from depht.classes.progress import show_progress
 
-# Assume everyone has hyper-threading; only use physical cores
-LOGICAL_CORES = mp.cpu_count()
-PHYSICAL_CORES = LOGICAL_CORES // 2
+CPUS = multiprocessing.cpu_count()
 
 
-def show_progress(current, end, width=50):
-    """Updating progress bar that prints to the command line in-line.
+def parallelize(inputs, cpus, task, verbose=False):
+    """Parallelize some task on an input list across the specified
+    number of CPU cores.
 
-    :param current: current value (0-n)
-    :param end: end value (n)
-    :param width:
-        character width for the progress bar (default 50);
-        ideally 100 divided by width should naturally be an integer
-    :return:
-        progress - the integer percent completion calculated
-        as the ratio of current to end multiplied by 100
-    """
-    progress = Progress(current, end, width)
-    print(f"\r{progress}", end="")
-    return progress
-
-
-def parallelize(inputs, num_processors, task, verbose=False):
-    """
-    Parallelize some task on an input list across the specified number
-    of processors
-    :param inputs: list of inputs
-    :param num_processors: number of processor cores to use
+    :param inputs: arguments to call `task` with
+    :type inputs: list
+    :param cpus: number of processor cores to use
+    :type cpus: int
     :param task: name of the function to run
+    :type task: function
     :param verbose: updating progress bar output?
     :return: results
     """
@@ -47,7 +28,9 @@ def parallelize(inputs, num_processors, task, verbose=False):
     if len(inputs) == 0:
         return results
 
-    num_processors = count_processors(inputs, num_processors)
+    # User requested some number of cpus - make sure it's sane
+    if cpus < 1 or cpus > CPUS:
+        cpus = min([CPUS, len(inputs)])
 
     tasks = []
     for item in inputs:
@@ -56,91 +39,59 @@ def parallelize(inputs, num_processors, task, verbose=False):
         tasks.append((task, item))
 
     # Start working on the jobs
-    results = start_processes(tasks, num_processors, verbose)
+    results = start_processes(tasks, cpus, verbose)
 
     return results
 
 
-def count_processors(inputs, num_processors):
-    """
-    Programmatically determines whether the specified num_processors is
-    appropriate. There's no need to use more processors than there are
-    inputs, and it's impossible to use fewer than 1 processor or more
-    than exist on the machine running the code.
-    :param inputs: list of inputs
-    :param num_processors: specified number of processors
-    :return: num_processors (optimized)
-    """
-    if num_processors < 1 or num_processors > LOGICAL_CORES:
-        print(f"Invalid number of CPUs specified ({num_processors})")
-        num_processors = min([mp.cpu_count(), len(inputs)])
-        print(f"Using {num_processors} CPUs...")
-
-    return num_processors
-
-
 def worker(input_queue, output_queue):
+    """Worker function to run jobs from the input queue until a stop
+    signal is reached.
+
+    :param input_queue: threadsafe queue to pull jobs from
+    :type input_queue: mp.Queue
+    :param output_queue: threadsafe queue to add results to
+    :type output_queue: mp.Queue
+    """
     for func, args in iter(input_queue.get, 'STOP'):
         result = func(*args)
-        output_queue.put(result)
-    return
+        if result:
+            output_queue.put(result)
 
 
-def start_processes(inputs, num_processors, verbose):
-    """
-    Creates input and output queues, and runs the jobs
+def start_processes(inputs, cpus, verbose=False):
+    """Spool processes and use them to run jobs.
+
     :param inputs: jobs to run
-    :param num_processors: optimized number of processors
+    :param cpus: optimized number of processors
     :param verbose: updating progress bar output?
     :return: results
     """
-    job_queue = mp.Queue()
-    done_queue = mp.Queue()
+    job_q = multiprocessing.Queue()
+    result_q = multiprocessing.Queue()
 
-    # Counter so we know how many tasks we have in all (input + show_progress tasks)
-    tasks = 0
+    # Calculate how often to place a show_progress() job
+    frequency = max([1, len(inputs)//100])
+    for i, job in enumerate(inputs):
+        job_q.put(job)
+        if verbose and (i % frequency == 0 or i == len(inputs) - 1):
+            job_q.put((show_progress, (i+1, len(inputs))))
 
-    if verbose is True:
-        interval = max([1, len(inputs)//100])
+    # Set up workers and put a 'STOP' signal at the end of job_q for each
+    worker_pool = list()
+    for i in range(cpus):
+        worker_pool.append(
+            multiprocessing.Process(target=worker, args=(job_q, result_q)))
+        job_q.put('STOP')
 
-        # Put inputs into job queue
-        for i in range(len(inputs)):
-            tasks += 1
-            if i % interval == 0:
-                job_queue.put((show_progress, (i, len(inputs))))
-                tasks += 1
-            job_queue.put(inputs[i])
-        tasks += 1
-        job_queue.put((show_progress, (len(inputs), len(inputs))))
-    else:
-        for i in range(len(inputs)):
-            tasks += 1
-            job_queue.put(inputs[i])
+    # Ready... set... go!
+    [w.start() for w in worker_pool]
 
-    # Put a bunch of 'STOP' signals at the end of the queue
-    for i in range(num_processors):
-        job_queue.put('STOP')
-
-    # Start up workers
-    worker_pool = []
-    for i in range(num_processors):
-        worker_n = mp.Process(target=worker, args=(job_queue, done_queue))
-        worker_n.start()
-        worker_pool.append(worker_n)
-
-    # Grab results from done queue
+    # Grab results from result_q
     results = []
-
-    # Remove non-Progress results
-    for i in range(tasks):
-        result = done_queue.get()
-        if not isinstance(result, Progress):
-            results.append(result)
+    for _ in range(len(inputs)):
+        results.append(result_q.get())
 
     [worker_n.join() for worker_n in worker_pool]
-
-    # Leave the progress bar line
-    if verbose is True:
-        print("\n")
 
     return results

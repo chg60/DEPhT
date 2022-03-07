@@ -3,7 +3,7 @@ import shutil
 from bitarray import bitarray, util as bit_util
 
 from depht.functions.fasta import parse_fasta, write_fasta
-from depht.functions.run_command import run_command
+from depht.functions.subprocess import run_command
 
 # GLOBAL VARIABLES
 # -----------------------------------------------------------------------------

@@ -1,7 +1,7 @@
 from depht.classes.hhresult import HHResult
 from depht.functions.fasta import write_fasta
 from depht.functions.multiprocess import parallelize
-from depht.functions.run_command import run_command
+from depht.functions.subprocess import run_command
 
 HHSEARCH_EVALUE = 1E-04
 HHSEARCH_PROB = 90
@@ -28,7 +28,7 @@ def hhsearch(query, outfile, db, evalue=HHSEARCH_EVALUE, prob=HHSEARCH_PROB,
     :type cov: float
     """
     command = f"hhsearch -i {query} -d {db} -o {outfile} -e {evalue} -E " \
-              f"{evalue} -p {prob} -cov {cov}"
+              f"{evalue} -p {prob} -cov {cov} -cpu 1"
     run_command(command)
 
 

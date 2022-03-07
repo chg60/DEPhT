@@ -1,6 +1,6 @@
 import csv
 
-from depht.functions.run_command import run_command
+from depht.functions.subprocess import run_command
 
 # GLOBAL VARIABLES
 # -----------------------------------------------------------------------------

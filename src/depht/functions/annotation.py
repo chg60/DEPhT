@@ -1,11 +1,6 @@
+"""Functions for predicting protein coding and tRNA/tmRNA genes on
+bacterial contigs.
 """
-This file contains functions for predicting protein coding and
-tRNA/tmRNA genes on bacterial contigs.
-"""
-
-import shlex
-import time
-from subprocess import Popen, DEVNULL
 
 from Bio import SeqIO
 from Bio.SeqFeature import SeqFeature, FeatureLocation
@@ -13,16 +8,16 @@ from Bio.SeqFeature import SeqFeature, FeatureLocation
 from depht.classes.contig import CODING_FEATURE_TYPES
 from depht.classes.prophage import DEFAULT_PRODUCT
 from depht.functions.fasta import parse_fasta
+from depht.functions.subprocess import run_command
 
 MIN_LENGTH = 20000      # Don't annotate short contigs
 META_LENGTH = 100000    # Medium-length contigs -> use metagenomic mode
 
 
-def prodigal(infile, outfile, meta=False):
-    """
-    Runs Prodigal (v2.6.3) asynchronously on the indicated input file,
-    in metagenomic mode if `meta` == True, with predicted CDS features
-    written to the indicated output file.
+def run_prodigal(infile, outfile, meta=False):
+    """Run Prodigal on the indicated input file, in metagenomic mode
+    if `meta` == True, with predicted CDS features written to the
+    indicated output file.
 
     :param infile: the input file with nucleotide sequence to annotate
     :type infile: pathlib.Path
@@ -30,18 +25,19 @@ def prodigal(infile, outfile, meta=False):
     :type outfile: pathlib.Path
     :param meta: run in metagenomic mode?
     :type meta: bool
-    :return: process_handle
+    :return: outfile
     """
+    command = f"prodigal -i {infile} -a {outfile} -n -c"
+    if meta:
+        command += " -p meta"
+
     try:
-        command = f"prodigal -a {outfile} -i {infile} -n -c"
-        if meta:
-            command += " -p meta"
-        command = shlex.split(command)
-        process_handle = Popen(args=command, stdout=DEVNULL, stderr=DEVNULL,
-                               close_fds=True)
-    except OSError:
+        stdout, stderr = run_command(command)
+    except FileNotFoundError:
+        # Prodigal not found
         raise RuntimeError("Unable to locate Prodigal")
-    return process_handle
+
+    return outfile
 
 
 def parse_prodigal(outfile):
@@ -76,26 +72,25 @@ def parse_prodigal(outfile):
     return features
 
 
-def aragorn(infile, outfile):
-    """
-    Runs Aragorn (v1.2.38) asynchronously on the indicated input file,
-    with predicted tRNA and tmRNA features written to the indicated
-    output file.
+def run_aragorn(infile, outfile):
+    """Run Aragorn on the indicated input file, with predicted tRNA
+    and tmRNA features written to the indicated output file.
 
     :param infile: the input file to be used by Aragorn
     :type infile: pathlib.Path
     :param outfile: the output file to be written by Aragorn
     :type outfile: pathlib.Path
-    :return: process_handle
+    :return: outfile
     """
+    command = f"aragorn -gcbact -l -d -wa -o {outfile} {infile}"
+
     try:
-        command = f"aragorn -gcbact -l -d -wa -o {outfile} {infile}"
-        command = shlex.split(command)
-        process_handle = Popen(args=command, stdout=DEVNULL, stderr=DEVNULL,
-                               close_fds=True)
-    except OSError:
+        stdout, stderr = run_command(command)
+    except FileNotFoundError:
+        # Aragorn not found
         raise RuntimeError("Unable to locate Aragorn")
-    return process_handle
+
+    return outfile
 
 
 def parse_aragorn(outfile):
@@ -175,30 +170,23 @@ def annotate_record(record, tmp_dir, trna=True):
     SeqIO.write(record, infile_writer, "fasta")
     infile_writer.close()
 
-    # Name the output files
-    aragorn_out = infile.with_suffix(".txt")
+    # Always run Prodigal
     prodigal_out = infile.with_suffix(".faa")
+    run_prodigal(infile, prodigal_out, len(record) < META_LENGTH)
+    for feature in parse_prodigal(prodigal_out):
+        record.features.append(feature)
 
-    # Set up to run Prodigal first, since it takes the longest to run
-    prodigal_process = prodigal(infile, prodigal_out,
-                                len(record) < META_LENGTH)
-
-    # Now kick off Aragorn - wait until it finishes, then begin parsing output
+    # Run Aragorn if trna flag was set
     if trna:
-        aragorn_process = aragorn(infile, aragorn_out)
-        while aragorn_process.poll() is None:
-            time.sleep(0.5)
-        for ftr in parse_aragorn(aragorn_out):
-            record.features.append(ftr)
-
-    # Now wait until Prodigal finishes to parse its output
-    while prodigal_process.poll() is None:
-        time.sleep(0.5)
-    for ftr in parse_prodigal(prodigal_out):
-        record.features.append(ftr)
+        aragorn_out = infile.with_suffix(".txt")
+        run_aragorn(infile, aragorn_out)
+        for feature in parse_aragorn(aragorn_out):
+            record.features.append(feature)
 
     # Sort contig features on start position
     record.features.sort(key=lambda x: x.location.start)
+
+    return record
 
 
 def cleanup_flatfile_records(records):
