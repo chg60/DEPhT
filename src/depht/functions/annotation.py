@@ -10,12 +10,16 @@ from subprocess import Popen, DEVNULL
 from Bio import SeqIO
 from Bio.SeqFeature import SeqFeature, FeatureLocation
 
-from depht.classes.contig import CODING_FEATURE_TYPES
-from depht.classes.prophage import DEFAULT_PRODUCT
+from depht.data import GLOBAL_VARIABLES, PARAMETERS
 from depht.functions.fasta import parse_fasta
 
-MIN_LENGTH = 20000      # Don't annotate short contigs
-META_LENGTH = 100000    # Medium-length contigs -> use metagenomic mode
+CODING_FEATURE_TYPES = GLOBAL_VARIABLES["sequences"]["feature_types"]
+DEFAULT_PRODUCT = GLOBAL_VARIABLES["sequences"]["default_product"]
+
+# Don't annotate short contigs
+MIN_LENGTH = PARAMETERS["annotation"]["min_length"]
+# Medium-length contigs -> use metagenomic mode
+META_LENGTH = PARAMETERS["annotation"]["meta_length"]
 
 
 def prodigal(infile, outfile, meta=False):

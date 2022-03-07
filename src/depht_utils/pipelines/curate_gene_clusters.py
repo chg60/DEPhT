@@ -4,12 +4,13 @@ import sys
 
 from Bio import SeqIO, AlignIO
 
+from depht.data import GLOBAL_VARIABLES
 from depht.functions import multiprocess
 from depht_utils.functions import clustalo, fileio
-from depht_utils.data.defaults import HHSUITEDB_DEFAULTS
+from depht_utils.data import PARAMETERS
 
-# GLOBAL VARAIABLES
-DEFAULTS = {"cpus": 1, "min_size": 10, "cutoff": 0.3}
+MIN_HMM_COUNT = PARAMETERS["phage_homologs"]["min_hmm_count"]
+AC_THRESHOLD = PARAMETERS["phage_homologs"]["annotation_consensus_threshold"]
 
 
 # MAIN FUNCTIONS
@@ -20,24 +21,29 @@ def parse_curate_functions(unparsed_args):
     parser.add_argument("input_dir", type=pathlib.Path)
     parser.add_argument("output_dir", type=pathlib.Path)
     parser.add_argument("index_file", type=pathlib.Path)
-    parser.add_argument("functions_config", type=pathlib.Path)
 
     parser.add_argument("-v", "--verbose", action="store_true")
-    parser.add_argument("-n", "--name", type=str)
-    parser.add_argument("-np", "--cpus", type=int)
+    parser.add_argument("-n", "--name", type=str,
+                        default=GLOBAL_VARIABLES["phage_sequences"]["name"])
+    parser.add_argument("-np", "--cpus", type=int,
+                        default=multiprocess.LOGICAL_CORES)
+    parser.add_argument("-c", "--config", type=pathlib.Path,
+                        default=None)
 
-    parser.add_argument("-c", "--cutoff", type=float)
+    parser.add_argument("-ct", "--consensus_threshold", type=float,
+                        default=AC_THRESHOLD)
     parser.add_argument("-all", "--accept_all", action="store_true")
-    parser.add_argument("-ms", "--min_size", type=int)
+    parser.add_argument("-mc", "--min_hmm_count", type=int)
 
-    parser.set_defaults(**DEFAULTS)
     args = parser.parse_args(unparsed_args)
     return args
 
 
-def curate_gene_clusters(fasta_dir, index_file, functions_file, output_dir,
+def curate_gene_clusters(fasta_dir, index_file, output_dir,
+                         accepted_functions, ignored_functions,
                          accept_all=False, verbose=False, cores=1,
-                         min_size=10, cutoff=DEFAULTS["cutoff"]):
+                         min_hmm_count=MIN_HMM_COUNT,
+                         consensus_threshold=AC_THRESHOLD):
     """Annotate and curate gene clusters, discarding those gene clusters
     with undesired or unclear consensus functions
 
@@ -45,26 +51,25 @@ def curate_gene_clusters(fasta_dir, index_file, functions_file, output_dir,
     :type fasta_dir: pathlib.Path
     :param index_file: Path to gene index and relevant metadata file
     :type index_file: pathlib.Path
-    :param functions_file: JSON parameters file for desired/undesired products
-    :type functions_file:pathlib.Path
+    :param accepted_functions: List of function annotations to accept
+    :type accepted_functions: list[str]
+    :param ignored_functions: List of function annotations to ignore
+    :type ignored_functions: list[str]
     :param output_dir: Path to directory to dump named/aligned sequence files
     :type output_dir: pathlib.Path
     :param cores: Number of processes to utilize
     :type cores: int
     :param verbose: Toggle pipeline print statements
     :type verbose: bool
-    :param min_size: Minimum size threshold for protein clusters
-    :type min_size: int
-    :param cutoff: Frequency fraction rerquired for the consensus product.
-    :type cutoff: float
+    :param min_hmm_count: Minimum size threshold for protein clusters
+    :type min_hmm_coount: int
+    :param consensus_threshold: Fraction required for the consensus product.
+    :type consensus_threshold: float
     """
     # Annotate gene clusters based on consensus product annotation
-    cluster_functions = annotate_gene_clusters(fasta_dir, index_file,
-                                               cutoff=cutoff)
-
-    # Read desired product annotation configuration file
-    accept_list, ignore_list = fileio.read_functions_config_file(
-                                                                functions_file)
+    cluster_functions = annotate_gene_clusters(
+                                    fasta_dir, index_file,
+                                    consensus_threshold=consensus_threshold)
 
     # Create a lookup map of clusters by function
     function_to_cluster_map = map_function_to_cluster(cluster_functions)
@@ -74,7 +79,7 @@ def curate_gene_clusters(fasta_dir, index_file, functions_file, output_dir,
     curated_clusters = []
     for cluster_function, clusters in function_to_cluster_map.items():
         ignore = False
-        for ignored_function in ignore_list:
+        for ignored_function in ignored_functions:
             if ignored_function.lower() in cluster_function.lower():
                 ignore = True
                 break
@@ -83,7 +88,7 @@ def curate_gene_clusters(fasta_dir, index_file, functions_file, output_dir,
             continue
 
         if not accept_all:
-            for accepted_function in accept_list:
+            for accepted_function in accepted_functions:
                 if accepted_function.lower() in cluster_function.lower():
                     curated_clusters += clusters
                     break
@@ -101,7 +106,7 @@ def curate_gene_clusters(fasta_dir, index_file, functions_file, output_dir,
 
         records = [record for record in SeqIO.parse(cluster_path, "fasta")]
 
-        if len(records) < min_size:
+        if len(records) < min_hmm_count:
             continue
 
         work_items.append((records, outpath, cluster_functions[cluster]))
@@ -146,7 +151,7 @@ def map_function_to_cluster(cluster_functions):
 
 
 def annotate_gene_clusters(fasta_dir, index_file,
-                           cutoff=DEFAULTS["cutoff"]):
+                           consensus_threshold=AC_THRESHOLD):
     """Function to annotate a protein sequence cluster based on
     the product annotations of its members
 
@@ -154,8 +159,8 @@ def annotate_gene_clusters(fasta_dir, index_file,
     :type fasta_dir: pathlib.Path
     :param index_file: Path to gene index and relevant metadata file
     :type index_file: pathlib.Path
-    :param cutoff: Frequency fraction required for the consensus product
-    :type cutoff: float
+    :param consensus_threshold:  Fraction required for the consensus product
+    :type consensus_threshold: float
     """
     gene_index = fileio.read_gene_index_file(index_file)
 
@@ -176,12 +181,12 @@ def annotate_gene_clusters(fasta_dir, index_file,
             product_counts[gene_data["product"]] = product_count
 
         products = [product for product, count in product_counts.items()
-                    if (count / len(records)) >= cutoff]
+                    if (count / len(records)) >= consensus_threshold]
         products.sort(key=lambda x: product_counts[x], reverse=True)
 
-        cluster_product = HHSUITEDB_DEFAULTS["default_product"]
+        cluster_product = GLOBAL_VARIABLES["sequences"]["default_product"]
         for product in products:
-            if product == HHSUITEDB_DEFAULTS["default_product"]:
+            if product == GLOBAL_VARIABLES["sequences"]["default_product"]:
                 continue
 
             cluster_product = product
@@ -194,11 +199,30 @@ def annotate_gene_clusters(fasta_dir, index_file,
 
 def main(unparsed_args):
     args = parse_curate_functions(unparsed_args)
+
+    accept_list = None
+    ignore_list = None
+    if args.config is not None:
+        if args.config.is_file():
+            # Read desired product annotation configuration file
+            accept_list, ignore_list = fileio.read_functions_config_file(
+                                                        args.config)
+
+    if accept_list is None or ignore_list is None:
+        if accept_list is None:
+            accept_list = PARAMETERS["phage_homologs"][
+                                     "essential_annotations"]["LIKE"]
+        if ignore_list is None:
+            ignore_list = PARAMETERS["phage_homologs"][
+                                     "essential_annotations"]["NOT LIKE"]
+
     curate_gene_clusters(
-                     args.input_dir, args.index_file, args.functions_config,
-                     args.output_dir, cores=args.cpus, verbose=args.verbose,
-                     accept_all=args.accept_all, min_size=args.min_size,
-                     cutoff=args.cutoff)
+                     args.input_dir, args.index_file, args.output_dir,
+                     accept_list, ignore_list,
+                     cores=args.cpus, verbose=args.verbose,
+                     accept_all=args.accept_all,
+                     min_hmm_count=args.min_hmm_count,
+                     coonsensus_threshold=args.consensus_threshold)
 
 
 if __name__ == "__main__":

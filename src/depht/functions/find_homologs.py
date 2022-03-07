@@ -1,11 +1,12 @@
 from depht.classes.hhresult import HHResult
+from depht.data import PARAMETERS
 from depht.functions.fasta import write_fasta
 from depht.functions.multiprocess import parallelize
 from depht.functions.run_command import run_command
 
-HHSEARCH_EVALUE = 1E-04
-HHSEARCH_PROB = 90
-HHSEARCH_COV = 50
+HHSEARCH_EVALUE = PARAMETERS["phage_homology_search"]["evalue"]
+HHSEARCH_PROB = PARAMETERS["phage_homology_search"]["probability"]
+HHSEARCH_COV = PARAMETERS["phage_homology_search"]["coverage"]
 
 
 def hhsearch(query, outfile, db, evalue=HHSEARCH_EVALUE, prob=HHSEARCH_PROB,

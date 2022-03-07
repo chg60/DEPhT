@@ -1,13 +1,13 @@
 import argparse
 import binascii
-import math
 import pathlib
 import sys
 
 import bitarray
 from Bio import SeqIO
 
-from depht_utils.data.defaults import SHELL_DB_DEFAULTS as DEFAULTS
+from depht.data import GLOBAL_VARIABLES
+from depht_utils.data import PARAMETERS
 from depht_utils.functions.fileio import (
     read_gene_index_file,
     read_cluster_index_file,
@@ -15,11 +15,11 @@ from depht_utils.functions.fileio import (
 
 # GLOBAL VARIABLES
 # -----------------------------------------------------------------------------
-NAME = DEFAULTS["name"]
+NAME = GLOBAL_VARIABLES["bacterial_sequences"]["name"]
+
+REP_THRESHOLD = PARAMETERS["shell_db"]["rep_threshold"]
 
 BINARY_TO_HEX_PLACES = 4
-
-REP_THRESHOLD = 0.60
 
 
 # MAIN FUNCTIONS
@@ -55,7 +55,7 @@ def screen_conserved_phams(input_dir, output_dir, gene_index, cluster_index,
     :type cluster_index: pathlib.Path
     """
     # Read in index and cluster data
-    gene_data = read_gene_index_file(gene_index) 
+    gene_data = read_gene_index_file(gene_index)
     cluster_data = read_cluster_index_file(cluster_index)
     record_cluster_map = get_record_cluster_map(cluster_data)
 
@@ -64,7 +64,7 @@ def screen_conserved_phams(input_dir, output_dir, gene_index, cluster_index,
     for input_file in input_dir.iterdir():
         if input_file.suffix != ".fasta":
             continue
-        
+
         gene_records = [record for record in SeqIO.parse(input_file, "fasta")]
 
         # Ascertain the conservation bitarray value from the members of
@@ -73,7 +73,7 @@ def screen_conserved_phams(input_dir, output_dir, gene_index, cluster_index,
                                             gene_records, gene_data,
                                             cluster_data, record_cluster_map,
                                             rep_threshold)
-        
+
         for gene_record in gene_records:
             gene_rep_bitarrays[int(gene_record.id)] = cluster_rep_bitarray
 

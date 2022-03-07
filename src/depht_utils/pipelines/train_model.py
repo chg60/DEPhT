@@ -9,16 +9,20 @@ import pickle
 import pandas as pd
 from Bio import SeqIO
 
+from depht.data import GLOBAL_VARIABLES
 from depht.functions.annotation import (annotate_record,
                                         cleanup_flatfile_records)
 from depht.functions.multiprocess import parallelize, LOGICAL_CORES
 from depht.functions.prophage_prediction import build_contig_dataframe
 from depht.functions.sniff_format import sniff_format
+from depht_utils.data import PARAMETERS
 from depht_utils.functions.train_classifier import train_classifier
 
 
-MODEL_DIR = pathlib.Path().home().joinpath(".depht/models")
-WINDOW = 55
+DEPHT_DIR = pathlib.Path().home().joinpath(
+                            GLOBAL_VARIABLES["model_storage"]["home_dir"])
+MODEL_DIR = DEPHT_DIR.joinpath(GLOBAL_VARIABLES["model_storage"]["model_dir"])
+WINDOW = PARAMETERS["classifier"]["window"]
 
 
 def parse_args(unparsed_args):
