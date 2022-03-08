@@ -4,19 +4,18 @@ import time
 from depht_utils.pipelines import (
     benchmark_output, build_reference_db, build_HMM_db, create_model,
     curate_gene_clusters, index_sequences, phamerate,
-    pull_sequences, screen_conserved_phams)
+    pull_sequences, screen_conserved_phams, train_model)
 
 # GLOBAL VARIABLES
 # -----------------------------------------------------------------------------
 PIPELINES = [
-        "benchmark_output", "build_reference_db", "build_HMM_db",
-        "create_model", "curate_gene_clusters", "index_sequences",
-        "phamerate", "pull_sequences", "screen_conserved_phams",
-        "train_prophage_model", "train_model"]
+    "benchmark_output", "build_reference_db", "build_HMM_db", "create_model",
+    "curate_gene_clusters", "index_sequences", "phamerate", "pull_sequences",
+    "screen_conserved_phams", "train_model"]
 
 
 def main(unparsed_args):
-    args = parse_prophicient_utilities(unparsed_args)
+    args = parse_depht_utilities(unparsed_args)
 
     start = time.time()
 
@@ -38,13 +37,11 @@ def main(unparsed_args):
         pull_sequences.main(unparsed_args[1:])
     elif args.pipeline == "screen_conserved_phams":
         screen_conserved_phams.main(unparsed_args[1:])
-    elif args.pipeline == "train_prophage_model":
-        train_prophage_model.main(unparsed_args[1:])
     elif args.pipeline == "train_model":
         train_model.main(unparsed_args[1:])
     else:
         raise NotImplementedError(
-                   f"Prophicient Utility pipeline '{args.build_reference_db}' "
+                   f"depht_utils pipeline '{args.build_reference_db}' "
                    "is not supported.")
 
     stop = time.time()
@@ -52,7 +49,7 @@ def main(unparsed_args):
     print("\n\nPipeline completed.\nTime elapsed {:.2f}s".format(stop - start))
 
 
-def parse_prophicient_utilities(unparsed_args):
+def parse_depht_utilities(unparsed_args):
     parser = argparse.ArgumentParser()
 
     parser.add_argument("pipeline", type=str, choices=PIPELINES)

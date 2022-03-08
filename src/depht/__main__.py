@@ -527,7 +527,7 @@ def write_contig_data(contig, outpath):
     sequence contig.
 
     :param contig: Bacterial sequence contig class
-    :type contig: prophicient.classes.contig.Contig
+    :type contig: depht.classes.contig.Contig
     :param outpath: Path to the outputted data table file
     :type outpath: pathlib.Path or str
     """

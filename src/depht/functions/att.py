@@ -35,7 +35,7 @@ def find_attachment_site(prophage, l_seq, r_seq,
     and it's distance from the predicted origin position.
 
     :param prophage: Prophage object to find an attachment site for
-    :type prophage: prophicient.classes.prophage.Prophage
+    :type prophage: depht.classes.prophage.Prophage
     :param l_seq: The sequence of a putative attL region.
     :type l_seq: str
     :param r_seq: The sequence of a putative attR region.

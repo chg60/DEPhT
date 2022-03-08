@@ -1,4 +1,4 @@
-"""Testing module for Prophicient with metrics and statistics."""
+"""Testing module for DEPhT with metrics and statistics."""
 
 from Bio import SeqIO
 from pathlib import Path
