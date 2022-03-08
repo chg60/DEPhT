@@ -39,18 +39,40 @@ def parse_args(unparsed_args):
     """
     parser = argparse.ArgumentParser()
 
-    parser.add_argument("-n", "--model_name", type=str, required=True)
+    parser.add_argument("-n", "--model_name", type=str, required=True,
+                        help="Name given to the model created.")
     parser.add_argument("-p", "--phage_sequences", type=pathlib.Path,
-                        required=True)
+                        required=True,
+                        help=("Directory of phage sequences to construct ",
+                              "the model with."))
     parser.add_argument("-b", "--bacterial_sequences", type=pathlib.Path,
-                        required=True)
+                        required=True,
+                        help=("Directory of bacterial sequences to construct "
+                              "the with."))
 
-    parser.add_argument("-v", "--verbose", action="store_true")
-    parser.add_argument("--cpus", type=int, default=CPUS)
+    parser.add_argument("-v", "--verbose", action="store_true",
+                        help="Toggles pipeline verbosity.")
+    parser.add_argument("--cpus", type=int, default=CPUS,
+                        help=f"Number of CPU cores to use [default: {CPUS}]")
     parser.add_argument("-c", "--config", type=pathlib.Path,
-                        default=None)
-    parser.add_argument("-f", "--force", action="store_true")
-    parser.add_argument("-a", "--auto_annotate", action="store_true")
+                        default=None,
+                        help=("Specify a configuration file to customize "
+                              "pipeline parameters."))
+    parser.add_argument("-f", "--force", action="store_true",
+                        help="Allow pipeline to overwrite existing models")
+
+    parser.add_argument("-bct", "--bacterial_cluster_table", type=pathlib.Path,
+                        default=None,
+                        help=("Specify a csv table containing a "
+                              "manual clustering schema "
+                              "for the inputted bacterial sequences "))
+    parser.add_argument("-pt", "--prophage_table", type=pathlib.Path,
+                        default=None,
+                        help=("Specify a csv table containing the "
+                              "coordinates of known prophages in the"
+                              "inputted bacterial genomes"))
+
+    parser.add_argument
 
     args = parser.parse_args(unparsed_args)
     return args
@@ -65,7 +87,9 @@ def main(unparsed_args):
     create_model(args.model_name,
                  args.phage_sequences, args.bacterial_sequences,
                  verbose=args.verbose, config_file=args.config,
-                 force=args.force, annotate=args.auto_annotate, cpus=args.cpus)
+                 force=args.force, cpus=args.cpus,
+                 bacterial_clusters_table=args.bacterial_cluster_table,
+                 prophage_table=args.prophage_table)
 
 
 def load_config(config_file):
@@ -87,7 +111,31 @@ def load_config(config_file):
 
 def create_model(model_name, phage_sequences, bacterial_sequences,
                  verbose=False, config_file=None, force=False,
-                 cpus=1, annotate=False):
+                 cpus=1, annotate=False, bacterial_clusters_table=None,
+                 prophage_table=None):
+    """Function to create a DEPhT model from bacterial and phage sequences.
+
+    :param model_name: Name given to the created model.
+    :type model_name: str
+    :param phage_sequences: Directory of phage sequence files.
+    :type phage_sequences: pathlib.Path
+    :param bacterial_sequences: Directory of bacterial sequence files.
+    :type bacterial_sequences: pathlib.Path
+    :param verbose: Boolean to toggle pipeline verbosity.
+    :type verbose: bool
+    :param config_file: Config file to overwrite pipeline parameters.
+    :type config_file: pathlib.Path
+    :param force: Allows pipeline to overwrite already existing models:
+    :type force: bool
+    :param cpus: Number of CPUs to use during the pipeline.
+    :type cpus: int
+    :param annotate: Controls whether all sequence files are auto-annotated.
+    :type annotate: bool
+    :param bacterial_clusters_table: File describing bacteria clade membership
+    :type bacterial_clusters_table: pathlib.Path
+    :param prophage_table: File describing known prophage content in bacteria
+    :type prophage_table: pathlib.Path
+    """
     # Load master configuration file, which contains paths for
     # configuration of sub-pipelines
     config = load_config(config_file)
@@ -107,14 +155,15 @@ def create_model(model_name, phage_sequences, bacterial_sequences,
               "overwrite the already existing model.")
         return
 
-    # Annotate bacterial sequences and write fasta and genbank files
+    # Collect bacterial sequences and write fasta and genbank files
     if verbose:
         print("Collecting/annotating bacterial sequences...")
     bacterial_data_tuple = collect_sequences(
                             bacterial_sequences, dir_map["bacterial_tmp"],
                             GLOBAL_VARIABLES["bacterial_sequences"]["name"],
                             config["bacterial_sequences"],
-                            annotate=False, verbose=verbose, cpus=cpus)
+                            annotate=False, verbose=verbose, cpus=cpus,
+                            cluster_table=bacterial_clusters_table)
 
     if bacterial_data_tuple[2] == 0:
         print("Could not recognize any bacterial sequence files "
@@ -143,7 +192,7 @@ def create_model(model_name, phage_sequences, bacterial_sequences,
     if verbose:
         print("Training phage/bacterial classifier...")
     train_model(model_name, phage_data_tuple[1], bacterial_data_tuple[1],
-                cpus=cpus)
+                cpus=cpus, prophages=prophage_table)
 
     if verbose:
         print("\nBuilding bacterial reference database...")
@@ -156,6 +205,7 @@ def create_model(model_name, phage_sequences, bacterial_sequences,
                            bacterial_data_tuple[4], bacterial_data_tuple[6],
                            rep_threshold=rep_threshold)
 
+    # Moves bacterial gene product fasta file into the shell genome database
     bacterial_data_tuple[3].replace(dir_map["shell_db_dir"].joinpath(
                                                 bacterial_data_tuple[3].name))
 
@@ -165,10 +215,18 @@ def create_model(model_name, phage_sequences, bacterial_sequences,
                              config, dir_map["phage_homologs_tmp"],
                              verbose=verbose, cpus=cpus)
 
+    # Cleans up after the pipeline
     shutil.rmtree(dir_map["tmp_dir"])
 
 
 def create_model_structure(model_name, force=False):
+    """Function to create a DEPhT model's directory structure.
+
+    :param model_name: Name given to the created model.
+    :type model_name: str
+    :param force: Allows pipeline to overwrite already existing models.
+    :type force: bool
+    """
     dir_map = dict()
 
     # Create local model directory
@@ -227,14 +285,36 @@ def create_model_structure(model_name, force=False):
 
 def collect_sequences(sequences, output_dir, name, config,
                       annotate=False, verbose=False, cpus=CPUS,
-                      singletons=False, cluster=True):
+                      singletons=False, cluster=True, cluster_table=None):
+    """Function to annotate, phamerate gene products, and cluster input
+    sequences.
+
+    :param sequences: Directory of sequence files.
+    :type sequences: pathlib.Path
+    :param output_dir: Directory to write sequence files to.
+    :type output_dir: pathlib.Path
+    :param name: Name to give to the stem of the created sequence files.
+    :type name: str
+    :param config: Config dictionary that contains pipeline parameters
+    :type config: dict
+    :param annotate: Controls whether all sequence files are auto-annotated
+    :type annotate: bool
+    :param verbose: Boolean to toggle pipeline verbosity.
+    :type verbose: bool
+    :param singletons: Controls whether singleton clusters are retained.
+    :type singletons: bool
+    :param cluster: Controls whether sequences are clustered.
+    :type cluster: bool
+    :param cluster_table: File describing sequence clade membership
+    :type cluster_table: pathlib.Path
+    """
     fasta_sequences, gb_sequences, seq_count = clean_sequences(
                                     sequences, output_dir, annotate=annotate,
                                     verbose=verbose, cpus=cpus)
 
     fasta_file, index_file, cluster_file = index_sequences(
                                     sequences, output_dir,
-                                    name=name)
+                                    name=name, cluster_table=cluster_table)
 
     gene_clusters_dir = output_dir.joinpath("phams")
 
@@ -260,6 +340,21 @@ def collect_sequences(sequences, output_dir, name, config,
 
 def clean_sequences(input_dir, output_dir, annotate=False, verbose=False,
                     cpus=CPUS, trna=False):
+    """Formats sequence files, and annotates them as applicable.
+
+    :param input_dir: Directory of sequence files
+    :type input_dir: pathlib.Path
+    :param output_dir: Directory to write sequence files to.
+    :type output_dir: pathlib.Path
+    :param annotate: Controls whether sequence files are auto-annotated.
+    :type annotate: bool
+    :param verbose: Boolean to toggle pipeline verbosity.
+    :type verbose: bool
+    :param cpus: Number of CPUs to use during the pipeline.
+    :type cpus: int
+    :param trna: Controls whether sequence files are annotated with tRNAs.
+    :type trna: bool
+    """
     fasta_dir = output_dir.joinpath("fasta")
     fasta_dir.mkdir()
 
@@ -279,6 +374,20 @@ def clean_sequences(input_dir, output_dir, annotate=False, verbose=False,
 
 def clean_sequence(input_file, output_dir, fasta_dir, gb_dir, annotate=False,
                    trna=False):
+    """Process function to format a sequence file and annotates it as
+    applicable.
+
+    :param input_dir: Directory of sequence files
+    :type input_dir: pathlib.Path
+    :param fasta_dir: Directory to write the fasta-formatted sequence file to.
+    :type fasta_dir: pathlib.Path
+    :param gb_dir: Directory to write the gb-formatted sequence file to.
+    :type gb_dir: pathlib.Path
+    :param annotate: Controls whether sequence files are auto-annotated.
+    :type annotate: bool
+    :param trna: Controls whether sequence files are annotated with tRNAs.
+    :type trna: bool
+    """
     file_fmt = sniff_format(input_file)
     if file_fmt not in ("fasta", "genbank"):
         return 0
@@ -345,6 +454,21 @@ def create_phage_homologs_db(phage_data_tuple, output_dir, config, tmp_dir,
 
 def create_cluster_schema(index_file, gene_clusters_dir, tmp_dir, name,
                           config, singletons=False):
+    """Function to create the cluster schema for a group of sequences.
+
+    :param index_file: Tsv table index of sequence gene products
+    :type index_file: pathlib.Path
+    :param gene_clusters_dir: Directory of pham (clustered gene product) fastas
+    :type gene_clusters_dir: pathlib.Path
+    :param tmp_dir: Directory to put pipeline temporary data.
+    :type  tmp_dir: pathlib.Path
+    :param name: Name to give to the stem of the created sequence files.
+    :type name: str
+    :param config: Config  dictionary that contains pipeline parameters
+    :type config: dict
+    :param singletons: Controls whether singleton clusters are retained.
+    :type singletons: bool
+    """
     gene_index = fileio.read_gene_index_file(index_file)
 
     genome_pham_tuples = list()

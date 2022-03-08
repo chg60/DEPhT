@@ -34,7 +34,7 @@ def parse_index_sequences(unparsed_args):
     parser.add_argument("-tt", "--translation_table", type=int,
                         default=TABLE)
     parser.add_argument("-cf", "--cluster_table", type=pathlib.Path,
-                        default=None,)
+                        default=None)
 
     args = parser.parse_args(unparsed_args)
     return args
