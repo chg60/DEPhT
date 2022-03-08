@@ -1,14 +1,12 @@
 """Utility script for training a PhageClassifier."""
 
-import sys
 import argparse
 import pathlib
-import pickle
 
 import pandas as pd
 
-from depht_utils.classes.kfold import KFold
 from depht.classes.prophage_classifier import ProphageClassifier
+from depht_train.classes.kfold import KFold
 
 
 def parse_args():
@@ -168,7 +166,9 @@ def train_classifier(df, k=5, verbose=False):
                 evaluations[key].append(mcc_score)
             else:
                 evaluations[key] = [mcc_score]
-            print(f"{key}: {mcc_score}")
+
+            if verbose:
+                print(f"{key}: {mcc_score}")
 
     ranked_params = list()
     for key, values in evaluations.items():
@@ -192,37 +192,3 @@ def train_classifier(df, k=5, verbose=False):
     figs = clf.fit(all_feats, all_labels, plot=True)
 
     return clf, figs
-
-
-def main():
-    """Commandline entry point."""
-    namespace = parse_args()
-    phg_csv = namespace.phage_csv
-    bct_csv = namespace.bacteria_csv
-    clf_path = namespace.classifier_path
-    k = namespace.k_fold
-    w = namespace.optimize_weights
-
-    phg_df = pd.read_csv(phg_csv)
-    bct_df = pd.read_csv(bct_csv)
-
-    clf, weights, thresh = train_classifier(phg_df, bct_df, k, w)
-    print(f"Classifier makes best predictions using threshold {100 * thresh}%")
-    for fig in zip(weights, clf.get_figures()):
-        feature_weight = fig[0]
-        feature_name, figure = fig[1]
-
-        print(f"{feature_name} has optimal weight: {100 * feature_weight}%")
-
-        figure.show()
-
-    clf.feature_weights = weights
-    clf.threshold = thresh
-    with open(clf_path, "wb") as classifier_writer:
-        pickle.dump(clf, classifier_writer)
-
-
-if __name__ == "__main__":
-    if len(sys.argv) == 1:
-        sys.argv.append("-h")
-    main()

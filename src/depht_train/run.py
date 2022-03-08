@@ -1,10 +1,10 @@
 """Program to run DEPhT training pipelines."""
 
-import sys
 import argparse
+import sys
 import time
 
-from depht_utils.pipelines import (
+from depht_train.pipelines import (
     benchmark_output, build_reference_db, build_HMM_db, create_model,
     curate_gene_clusters, index_sequences, phamerate,
     pull_sequences, screen_conserved_phams, train_model)
