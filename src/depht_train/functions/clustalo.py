@@ -9,16 +9,13 @@ def clustalo(fasta_file, aln_out_path, mat_out_path=None, tree_out_path=None,
     expected to be in FASTA multiple sequence format. MSA will be in
     Clustal format.
     :param fasta_file: FASTA file containing sequences to be aligned
-    :type fasta_file: str
+    :type fasta_file: str or pathlib.Path
     :param aln_out_path: the multiple sequence alignment (MSA) output file
-    :type aln_out_path: str
-    :type aln_out_path: Path
+    :type aln_out_path: str or pathlib.Path
     :param mat_out_path: The percent identity matrix (PIM) output file
-    :type mat_out_path: str
-    :type mat_out_path: Path
+    :type mat_out_path: str or pathlib.Path
     :param tree_out_path: The alignment guide tree output file
-    :type tree_out_path: str
-    :type tree_out_path: Path
+    :type tree_out_path: str or pathlib.Path
     :param outfmt: The file format of the alignment to be exported.
     :type outfmt: str
     :param infmt:  The file format of the sequence file to be read in
