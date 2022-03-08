@@ -1,3 +1,5 @@
+"""Utility script to plot gene density along a genome.
+"""
 import argparse
 import pathlib
 import sys
@@ -10,10 +12,18 @@ BIN_WIDTH = 1000
 WINDOW_SIZE = 50000
 
 
-def parse_args(arguments):
+def parse_args(unparsed_args):
+    """Parse commandline arguments.
+
+    :param unparsed_args:
+    :type unparsed_args: list[str]
+    """
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument("flatfile_dir", type=pathlib.Path, help="path to a directory of Genbank flatfiles to inspect")
-    return p.parse_args(arguments)
+
+    p.add_argument("flatfile_dir", type=pathlib.Path,
+                   help="path to a directory of Genbank flatfiles to inspect")
+
+    return p.parse_args(unparsed_args)
 
 
 def count_genes_per_interval(record, interval=BIN_WIDTH):
@@ -90,8 +100,15 @@ def get_records(flatfile):
     return records
 
 
-def main(arguments):
-    args = parse_args(arguments)
+def main(unparsed_args=None):
+    """Commandline entrypoint to this module."""
+    if not unparsed_args:
+        unparsed_args = sys.argv
+
+    if len(unparsed_args) == 1:
+        unparsed_args.append("-h")
+
+    args = parse_args(unparsed_args[1:])
     ff_dir = args.flatfile_dir
 
     # Make sure Genbank directory exists...
@@ -129,6 +146,4 @@ def main(arguments):
 
 
 if __name__ == "__main__":
-    if len(sys.argv) == 1:
-        sys.argv.append("-h")
-    main(sys.argv[1:])
+    main()

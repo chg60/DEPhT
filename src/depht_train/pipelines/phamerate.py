@@ -1,7 +1,5 @@
+"""Utility script to perform pham assembly with MMseqs2.
 """
-Utility script to perform pham assembly with MMseqs2.
-"""
-
 import argparse
 import json
 import pathlib
@@ -10,14 +8,14 @@ import sys
 
 from depht.functions import mmseqs
 from depht.functions.fasta import parse_fasta
-from depht_utils.classes.database import Database, Pham
+from depht_train.classes.database import Database, Pham
 
 
-def parse_phamerate_args(unparsed_args):
-    """
+def parse_args(unparsed_args):
+    """Parse commandline arguments.
 
-    :param arguments:
-    :return:
+    :param unparsed_args:
+    :type unparsed_args: list[str]
     """
     p = argparse.ArgumentParser(description=__doc__)
 
@@ -207,8 +205,15 @@ def execute_phamerate_pipeline(fasta, outdir, first_iter, second_iter=None):
         nr_fasta.unlink()
 
 
-def main(unparsed_args):
-    args = parse_phamerate_args(unparsed_args)
+def main(unparsed_args=None):
+    """Commandline entrypoint to this module."""
+    if not unparsed_args:
+        unparsed_args = sys.argv
+
+    if len(unparsed_args) == 1:
+        unparsed_args.append("-h")
+
+    args = parse_args(unparsed_args[1:])
 
     first_iter_params, second_iter_params = parse_param_file(args.param_file)
 
@@ -217,8 +222,4 @@ def main(unparsed_args):
 
 
 if __name__ == "__main__":
-    # If no args given, add help flag
-    if len(sys.argv) == 1:
-        sys.argv.append("-h")
-
-    main(sys.argv[1:])
+    main()

@@ -15,8 +15,8 @@ from depht.functions.annotation import (annotate_record,
 from depht.functions.multiprocess import parallelize, CPUS
 from depht.functions.prophage_prediction import build_contig_dataframe
 from depht.functions.sniff_format import sniff_format
-from depht_utils.data import PARAMETERS
-from depht_utils.functions.train_classifier import train_classifier
+from depht_train.data import PARAMETERS
+from depht_train.functions.train_classifier import train_classifier
 
 DEPHT_DIR = pathlib.Path().home().joinpath(
                             GLOBAL_VARIABLES["model_storage"]["home_dir"])
@@ -109,23 +109,7 @@ def get_dataframe(filepath, tmp_dir, window, cpus=1):
     return pd.concat(dataframes, axis=0)
 
 
-def main(unparsed_args):
-    """Commandline entry point for the script."""
-    namespace = parse_args(unparsed_args)
-
-    name = namespace.name
-    phg_dir = namespace.phages
-    bct_dir = namespace.bacteria
-    window = namespace.window_size
-    prophages = namespace.prophage_csv
-    cpus = namespace.cpu_cores
-
-    train_model(name, phg_dir, bct_dir, window=window, prophages=prophages,
-                cpus=cpus)
-
-
-def train_model(name, phg_dir, bct_dir,
-                window=WINDOW, prophages=None, cpus=1):
+def train_model(name, phg_dir, bct_dir, window=WINDOW, prophages=None, cpus=1):
     if not phg_dir.is_dir():
         print(f"specified phage directory '{str(phg_dir)}' is not a valid "
               f"directory")
@@ -196,7 +180,26 @@ def train_model(name, phg_dir, bct_dir,
         pickle.dump(clf, classifier_writer)
 
 
+def main(unparsed_args=None):
+    """Commandline entry point to this module."""
+    if not unparsed_args:
+        unparsed_args = sys.argv
+
+    if len(unparsed_args) == 1:
+        unparsed_args.append("-h")
+
+    args = parse_args(unparsed_args[1:])
+
+    name = args.name
+    phg_dir = args.phages
+    bct_dir = args.bacteria
+    window = args.window_size
+    prophages = args.prophage_csv
+    cpus = args.cpu_cores
+
+    train_model(name, phg_dir, bct_dir, window=window, prophages=prophages,
+                cpus=cpus)
+
+
 if __name__ == "__main__":
-    if len(sys.argv) == 1:
-        sys.argv.append("-h")
     main()

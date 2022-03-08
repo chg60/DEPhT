@@ -5,6 +5,7 @@ import argparse
 import json
 import pathlib
 import shutil
+import sys
 
 from Bio import SeqIO
 from phamclust.__main__ import get_clusters
@@ -16,18 +17,18 @@ from depht.functions.annotation import (annotate_record,
 from depht.functions.fasta import parse_fasta
 from depht.functions.multiprocess import CPUS, parallelize
 from depht.functions.sniff_format import sniff_format
-from depht_utils.data import PARAMETERS
-from depht_utils.functions import fileio
-from depht_utils.pipelines.build_HMM_db import build_HMM_db
-from depht_utils.pipelines.build_reference_db import build_reference_db
-from depht_utils.pipelines.curate_gene_clusters import (
+from depht_train.data import PARAMETERS
+from depht_train.functions import fileio
+from depht_train.pipelines.build_HMM_db import build_HMM_db
+from depht_train.pipelines.build_reference_db import build_reference_db
+from depht_train.pipelines.curate_gene_clusters import (
     curate_gene_clusters)
-from depht_utils.pipelines.index_sequences import index_sequences
-from depht_utils.pipelines.phamerate import (execute_phamerate_pipeline,
+from depht_train.pipelines.index_sequences import index_sequences
+from depht_train.pipelines.phamerate import (execute_phamerate_pipeline,
                                              parse_param_dict)
-from depht_utils.pipelines.screen_conserved_phams import (
+from depht_train.pipelines.screen_conserved_phams import (
     screen_conserved_phams)
-from depht_utils.pipelines.train_model import train_model
+from depht_train.pipelines.train_model import train_model
 
 
 def parse_args(unparsed_args):
@@ -39,57 +40,33 @@ def parse_args(unparsed_args):
     """
     parser = argparse.ArgumentParser()
 
-    parser.add_argument("-n", "--model_name", type=str, required=True,
-                        help="Name given to the model created.")
-    parser.add_argument("-p", "--phage_sequences", type=pathlib.Path,
-                        required=True,
-                        help=("Directory of phage sequences to construct ",
-                              "the model with."))
-    parser.add_argument("-b", "--bacterial_sequences", type=pathlib.Path,
-                        required=True,
-                        help=("Directory of bacterial sequences to construct "
-                              "the with."))
+    parser.add_argument("name", type=str,
+                        help="a name for the newly created model")
+    parser.add_argument("phages", type=pathlib.Path,
+                        help="directory containing phage sequences to train "
+                             "with")
+    parser.add_argument("bacteria", type=pathlib.Path,
+                        help="directory containing bacterial sequences to "
+                             "train with")
 
     parser.add_argument("-v", "--verbose", action="store_true",
-                        help="Toggles pipeline verbosity.")
-    parser.add_argument("--cpus", type=int, default=CPUS,
-                        help=f"Number of CPU cores to use [default: {CPUS}]")
-    parser.add_argument("-c", "--config", type=pathlib.Path,
-                        default=None,
-                        help=("Specify a configuration file to customize "
-                              "pipeline parameters."))
+                        help="print progress messages to console")
+    parser.add_argument("-c", "--cpus", type=int, default=CPUS, metavar="",
+                        help=f"number of CPU cores to use [default: {CPUS}]")
     parser.add_argument("-f", "--force", action="store_true",
-                        help="Allow pipeline to overwrite existing models")
+                        help="overwrite existing model with the same name")
 
-    parser.add_argument("-bct", "--bacterial_cluster_table", type=pathlib.Path,
-                        default=None,
-                        help=("Specify a csv table containing a "
-                              "manual clustering schema "
-                              "for the inputted bacterial sequences "))
-    parser.add_argument("-pt", "--prophage_table", type=pathlib.Path,
-                        default=None,
-                        help=("Specify a csv table containing the "
-                              "coordinates of known prophages in the"
-                              "inputted bacterial genomes"))
+    parser.add_argument("--config", type=pathlib.Path, metavar="",
+                        help=f"configuration file to customize pipeline "
+                             f"parameters")
+    parser.add_argument("--bacteria-clusters", type=pathlib.Path, metavar="",
+                        help="a CSV file with manually determined clusters "
+                             "for the input bacterial sequences")
+    parser.add_argument("--prophage-coords", type=pathlib.Path, metavar="",
+                        help="a CSV file with the coordinates of any known "
+                             "prophages in the input bacterial sequences")
 
-    parser.add_argument
-
-    args = parser.parse_args(unparsed_args)
-    return args
-
-
-def main(unparsed_args):
-    """Main function for the command-line interface of the create_model
-    pipeline.
-    """
-    args = parse_args(unparsed_args)
-
-    create_model(args.model_name,
-                 args.phage_sequences, args.bacterial_sequences,
-                 verbose=args.verbose, config_file=args.config,
-                 force=args.force, cpus=args.cpus,
-                 bacterial_clusters_table=args.bacterial_cluster_table,
-                 prophage_table=args.prophage_table)
+    return parser.parse_args(unparsed_args)
 
 
 def load_config(config_file):
@@ -109,48 +86,45 @@ def load_config(config_file):
     return config
 
 
-def create_model(model_name, phage_sequences, bacterial_sequences,
-                 verbose=False, config_file=None, force=False,
-                 cpus=1, annotate=False, bacterial_clusters_table=None,
-                 prophage_table=None):
+def create_model(name, phages, bacteria, bact_clusters=None,
+                 prophage_coords=None, config=None, force=False,
+                 verbose=False, cpus=1):
     """Function to create a DEPhT model from bacterial and phage sequences.
 
-    :param model_name: Name given to the created model.
-    :type model_name: str
-    :param phage_sequences: Directory of phage sequence files.
-    :type phage_sequences: pathlib.Path
-    :param bacterial_sequences: Directory of bacterial sequence files.
-    :type bacterial_sequences: pathlib.Path
+    :param name: Name given to the created model.
+    :type name: str
+    :param phages: Directory of phage sequence files.
+    :type phages: pathlib.Path
+    :param bacteria: Directory of bacterial sequence files.
+    :type bacteria: pathlib.Path
     :param verbose: Boolean to toggle pipeline verbosity.
     :type verbose: bool
-    :param config_file: Config file to overwrite pipeline parameters.
-    :type config_file: pathlib.Path
+    :param config: Config file to overwrite pipeline parameters.
+    :type config: pathlib.Path
     :param force: Allows pipeline to overwrite already existing models:
     :type force: bool
     :param cpus: Number of CPUs to use during the pipeline.
     :type cpus: int
-    :param annotate: Controls whether all sequence files are auto-annotated.
-    :type annotate: bool
-    :param bacterial_clusters_table: File describing bacteria clade membership
-    :type bacterial_clusters_table: pathlib.Path
-    :param prophage_table: File describing known prophage content in bacteria
-    :type prophage_table: pathlib.Path
+    :param bact_clusters: File describing bacteria clade membership
+    :type bact_clusters: pathlib.Path
+    :param prophage_coords: File describing known prophage content in bacteria
+    :type prophage_coords: pathlib.Path
     """
     # Load master configuration file, which contains paths for
     # configuration of sub-pipelines
-    config = load_config(config_file)
+    config = load_config(config)
     if config is None:
-        print(f"Specified configuration file at {config_file} "
+        print(f"Specified configuration file at {config} "
               "is incorrectly formatted or contains invalid information.\n"
               "Please check the formatting/contents of this file before "
               "continuing.")
         return
 
     # Proactively create local model directory structure
-    dir_map = create_model_structure(model_name, force=force)
+    dir_map = create_model_structure(name, force=force)
     if dir_map is None:
         print("There already exists a DEPHT model with the name "
-              f"'{model_name}'.\n"
+              f"'{name}'.\n"
               "Please rename your model or use the -f flag to forcibly "
               "overwrite the already existing model.")
         return
@@ -159,11 +133,11 @@ def create_model(model_name, phage_sequences, bacterial_sequences,
     if verbose:
         print("Collecting/annotating bacterial sequences...")
     bacterial_data_tuple = collect_sequences(
-                            bacterial_sequences, dir_map["bacterial_tmp"],
-                            GLOBAL_VARIABLES["bacterial_sequences"]["name"],
-                            config["bacterial_sequences"],
-                            annotate=False, verbose=verbose, cpus=cpus,
-                            cluster_table=bacterial_clusters_table)
+        bacteria, dir_map["bacterial_tmp"],
+        GLOBAL_VARIABLES["bacterial_sequences"]["name"],
+        config["bacterial_sequences"],
+        annotate=False, verbose=verbose, cpus=cpus,
+        cluster_table=bact_clusters)
 
     if bacterial_data_tuple[2] == 0:
         print("Could not recognize any bacterial sequence files "
@@ -176,11 +150,11 @@ def create_model(model_name, phage_sequences, bacterial_sequences,
     if verbose:
         print("Collecting/annotating phage sequences...")
     phage_data_tuple = collect_sequences(
-                            phage_sequences, dir_map["phage_tmp"],
-                            GLOBAL_VARIABLES["phage_sequences"]["name"],
-                            config["phage_sequences"],
-                            verbose=verbose, cpus=cpus, cluster=False,
-                            singletons=True)
+        phages, dir_map["phage_tmp"],
+        GLOBAL_VARIABLES["phage_sequences"]["name"],
+        config["phage_sequences"],
+        verbose=verbose, cpus=cpus, cluster=False,
+        singletons=True)
 
     if phage_data_tuple[2] == 0:
         print("Could not recognize any phage sequence files "
@@ -191,8 +165,8 @@ def create_model(model_name, phage_sequences, bacterial_sequences,
 
     if verbose:
         print("Training phage/bacterial classifier...")
-    train_model(model_name, phage_data_tuple[1], bacterial_data_tuple[1],
-                cpus=cpus, prophages=prophage_table)
+    train_model(name, phage_data_tuple[1], bacterial_data_tuple[1],
+                cpus=cpus, prophages=prophage_coords)
 
     if verbose:
         print("\nBuilding bacterial reference database...")
@@ -284,7 +258,7 @@ def create_model_structure(model_name, force=False):
 
 
 def collect_sequences(sequences, output_dir, name, config,
-                      annotate=False, verbose=False, cpus=CPUS,
+                      annotate=False, verbose=False, cpus=1,
                       singletons=False, cluster=True, cluster_table=None):
     """Function to annotate, phamerate gene products, and cluster input
     sequences.
@@ -301,6 +275,8 @@ def collect_sequences(sequences, output_dir, name, config,
     :type annotate: bool
     :param verbose: Boolean to toggle pipeline verbosity.
     :type verbose: bool
+    :param cpus:
+    :type cpus: int
     :param singletons: Controls whether singleton clusters are retained.
     :type singletons: bool
     :param cluster: Controls whether sequences are clustered.
@@ -369,7 +345,7 @@ def clean_sequences(input_dir, output_dir, annotate=False, verbose=False,
     seq_count = sum(parallelize(work_items, cpus, clean_sequence,
                                 verbose=verbose))
 
-    return (fasta_dir, gb_dir, seq_count)
+    return fasta_dir, gb_dir, seq_count
 
 
 def clean_sequence(input_file, output_dir, fasta_dir, gb_dir, annotate=False,
@@ -377,8 +353,10 @@ def clean_sequence(input_file, output_dir, fasta_dir, gb_dir, annotate=False,
     """Process function to format a sequence file and annotates it as
     applicable.
 
-    :param input_dir: Directory of sequence files
-    :type input_dir: pathlib.Path
+    :param input_file: Directory of sequence files
+    :type input_file: pathlib.Path
+    :param output_dir:
+    :type output_dir:
     :param fasta_dir: Directory to write the fasta-formatted sequence file to.
     :type fasta_dir: pathlib.Path
     :param gb_dir: Directory to write the gb-formatted sequence file to.
@@ -412,6 +390,16 @@ def clean_sequence(input_file, output_dir, fasta_dir, gb_dir, annotate=False,
 
 def create_phage_homologs_db(phage_data_tuple, output_dir, config, tmp_dir,
                              cpus=CPUS, verbose=False):
+    """
+
+    :param phage_data_tuple:
+    :param output_dir:
+    :param config:
+    :param tmp_dir:
+    :param cpus:
+    :param verbose:
+    :return:
+    """
     min_hmm_count = config["phage_homologs"]["min_hmm_count"]
 
     if verbose:
@@ -454,7 +442,7 @@ def create_phage_homologs_db(phage_data_tuple, output_dir, config, tmp_dir,
 
 def create_cluster_schema(index_file, gene_clusters_dir, tmp_dir, name,
                           config, singletons=False):
-    """Function to create the cluster schema for a group of sequences.
+    """Create the cluster schema for a group of sequences.
 
     :param index_file: Tsv table index of sequence gene products
     :type index_file: pathlib.Path
@@ -503,3 +491,26 @@ def create_cluster_schema(index_file, gene_clusters_dir, tmp_dir, name,
     fileio.write_cluster_file(clustered_ids, cluster_file)
 
     return cluster_file, clusters
+
+
+def main(unparsed_args=None):
+    """Main function for the command-line interface of the create_model
+    pipeline.
+    """
+    if not unparsed_args:
+        unparsed_args = sys.argv
+
+    if len(unparsed_args) == 1:
+        unparsed_args.append("-h")
+
+    args = parse_args(unparsed_args[1:])
+
+    create_model(args.name, args.phages, args.bacteria,
+                 bact_clusters=args.bacteria_clusters,
+                 prophage_coords=args.prophage_coords,
+                 config=args.config, verbose=args.verbose,
+                 force=args.force, cpus=args.cpus)
+
+
+if __name__ == "__main__":
+    main()

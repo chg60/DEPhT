@@ -1,3 +1,5 @@
+"""Utility script to index protein-coding gene sequences.
+"""
 import argparse
 import pathlib
 import sys
@@ -5,7 +7,7 @@ import sys
 from Bio import SeqIO
 
 from depht.data import GLOBAL_VARIABLES
-from depht_utils.functions.fileio import (
+from depht_train.functions.fileio import (
     read_cluster_table_file, write_cluster_file)
 
 # GLOBAL VARIABLES
@@ -17,11 +19,11 @@ DEFAULT_PRODUCT = GLOBAL_VARIABLES["sequences"]["default_product"]
 
 # MAIN FUNCTIONS
 # -----------------------------------------------------------------------------
-def parse_index_sequences(unparsed_args):
-    """ Function to use argparse to parse command line arguments.
+def parse_args(unparsed_args):
+    """Parse commandline arguments
 
     :param unparsed_args: command line args
-    :type unparsed_args: list
+    :type unparsed_args: list[str]
     """
     parser = argparse.ArgumentParser()
 
@@ -157,12 +159,19 @@ def write_index_files(cds_features, index_file, fasta_file):
                                         parent, "\n"]))
 
 
-def main(unparsed_args):
-    args = parse_index_sequences(unparsed_args)
+def main(unparsed_args=None):
+    """Commandline entrypoint to this module."""
+    if not unparsed_args:
+        unparsed_args = sys.argv
+
+    if len(unparsed_args) == 1:
+        unparsed_args.append("-h")
+
+    args = parse_args(unparsed_args[1:])
     index_sequences(args.input_dir, args.output_dir, name=args.name,
                     table=args.translation_table,
                     cluster_table=args.cluster_table)
 
 
 if __name__ == "__main__":
-    main(sys.argv[1:])
+    main()

@@ -1,3 +1,6 @@
+"""Curate phage gene phamilies, looking for conserved functional
+annotations.
+"""
 import argparse
 import pathlib
 import sys
@@ -5,9 +8,9 @@ import sys
 from Bio import SeqIO, AlignIO
 
 from depht.data import GLOBAL_VARIABLES
-from depht.functions import multiprocess
-from depht_utils.data import PARAMETERS
-from depht_utils.functions import clustalo, fileio
+from depht.functions.multiprocess import CPUS, parallelize
+from depht_train.data import PARAMETERS
+from depht_train.functions import clustalo, fileio
 
 MIN_HMM_COUNT = PARAMETERS["phage_homologs"]["min_hmm_count"]
 AC_THRESHOLD = PARAMETERS["phage_homologs"]["annotation_consensus_threshold"]
@@ -15,8 +18,9 @@ AC_THRESHOLD = PARAMETERS["phage_homologs"]["annotation_consensus_threshold"]
 
 # MAIN FUNCTIONS
 # -----------------------------------------------------------------------------
-def parse_curate_functions(unparsed_args):
-    parser = argparse.ArgumentParser()
+def parse_args(unparsed_args):
+    """Parse commandline arguments."""
+    parser = argparse.ArgumentParser(description=__doc__)
 
     parser.add_argument("input_dir", type=pathlib.Path)
     parser.add_argument("output_dir", type=pathlib.Path)
@@ -25,10 +29,8 @@ def parse_curate_functions(unparsed_args):
     parser.add_argument("-v", "--verbose", action="store_true")
     parser.add_argument("-n", "--name", type=str,
                         default=GLOBAL_VARIABLES["phage_sequences"]["name"])
-    parser.add_argument("-np", "--cpus", type=int,
-                        default=multiprocess.LOGICAL_CORES)
-    parser.add_argument("-c", "--config", type=pathlib.Path,
-                        default=None)
+    parser.add_argument("-np", "--cpus", type=int, default=CPUS)
+    parser.add_argument("-c", "--config", type=pathlib.Path, default=None)
 
     parser.add_argument("-ct", "--consensus_threshold", type=float,
                         default=AC_THRESHOLD)
@@ -47,6 +49,7 @@ def curate_gene_clusters(fasta_dir, index_file, output_dir,
     """Annotate and curate gene clusters, discarding those gene clusters
     with undesired or unclear consensus functions
 
+    :param accept_all:
     :param fasta_dir: Path to dir containing protein cluster fasta-alignments
     :type fasta_dir: pathlib.Path
     :param index_file: Path to gene index and relevant metadata file
@@ -62,7 +65,7 @@ def curate_gene_clusters(fasta_dir, index_file, output_dir,
     :param verbose: Toggle pipeline print statements
     :type verbose: bool
     :param min_hmm_count: Minimum size threshold for protein clusters
-    :type min_hmm_coount: int
+    :type min_hmm_count: int
     :param consensus_threshold: Fraction required for the consensus product.
     :type consensus_threshold: float
     """
@@ -112,8 +115,7 @@ def curate_gene_clusters(fasta_dir, index_file, output_dir,
         work_items.append((records, outpath, cluster_functions[cluster]))
 
     # Run jobs
-    multiprocess.parallelize(work_items, cores, dump_named_alignment,
-                             verbose=verbose)
+    parallelize(work_items, cores, dump_named_alignment, verbose=verbose)
 
 
 def dump_named_alignment(records, fasta_path, name):
@@ -141,6 +143,11 @@ def dump_named_alignment(records, fasta_path, name):
 
 
 def map_function_to_cluster(cluster_functions):
+    """
+
+    :param cluster_functions:
+    :return:
+    """
     function_to_cluster_map = {}
     for cluster_name, cluster_function in cluster_functions.items():
         mapped_clusters = function_to_cluster_map.get(cluster_function, list())
@@ -197,8 +204,15 @@ def annotate_gene_clusters(fasta_dir, index_file,
     return cluster_functions
 
 
-def main(unparsed_args):
-    args = parse_curate_functions(unparsed_args)
+def main(unparsed_args=None):
+    """Commandline entrypoint to this module."""
+    if not unparsed_args:
+        unparsed_args = sys.argv
+
+    if len(unparsed_args) == 1:
+        unparsed_args.append("-h")
+
+    args = parse_args(unparsed_args[1:])
 
     accept_list = None
     ignore_list = None
@@ -217,13 +231,11 @@ def main(unparsed_args):
                                      "essential_annotations"]["NOT LIKE"]
 
     curate_gene_clusters(
-                     args.input_dir, args.index_file, args.output_dir,
-                     accept_list, ignore_list,
-                     cores=args.cpus, verbose=args.verbose,
-                     accept_all=args.accept_all,
-                     min_hmm_count=args.min_hmm_count,
-                     coonsensus_threshold=args.consensus_threshold)
+        args.input_dir, args.index_file, args.output_dir,
+        accept_list, ignore_list, cores=args.cpus, verbose=args.verbose,
+        accept_all=args.accept_all, min_hmm_count=args.min_hmm_count,
+        consensus_threshold=args.consensus_threshold)
 
 
 if __name__ == "__main__":
-    main(sys.argv[1:])
+    main()
