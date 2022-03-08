@@ -1,3 +1,6 @@
+"""Program to run DEPhT training pipelines."""
+
+import sys
 import argparse
 import time
 
@@ -13,9 +16,36 @@ PIPELINES = [
     "curate_gene_clusters", "index_sequences", "phamerate", "pull_sequences",
     "screen_conserved_phams", "train_model"]
 
+EPILOG = "The 'create_model' pipeline performs all model-building steps. " \
+         "The other pipelines can be used in combination for better control " \
+         "over the resultant model."
 
-def main(unparsed_args):
-    args = parse_depht_utilities(unparsed_args)
+
+def parse_args(unparsed_args):
+    """Use argparse to verify pipeline argument only.
+
+    :param unparsed_args:
+    :type unparsed_args:
+    """
+    parser = argparse.ArgumentParser(description=__doc__, prog="depht_train",
+                                     epilog=EPILOG)
+
+    parser.add_argument("pipeline", type=str, choices=PIPELINES,
+                        metavar="pipeline",
+                        help=f"name of the depht_train pipeline to run "
+                             f"[choices: {PIPELINES}]")
+
+    return parser.parse_args(unparsed_args[1:2])
+
+
+def main():
+    """Commandline entrypoint to this module."""
+    if len(sys.argv) == 1:
+        sys.argv.append("-h")
+
+    unparsed_args = sys.argv
+
+    args = parse_args(unparsed_args)
 
     start = time.time()
 
@@ -40,20 +70,9 @@ def main(unparsed_args):
     elif args.pipeline == "train_model":
         train_model.main(unparsed_args[1:])
     else:
-        raise NotImplementedError(
-                   f"depht_utils pipeline '{args.build_reference_db}' "
-                   "is not supported.")
+        raise NotImplementedError(f"unknown depht_train pipeline "
+                                  f"{args.pipeline}")
 
     stop = time.time()
 
     print("\n\nPipeline completed.\nTime elapsed {:.2f}s".format(stop - start))
-
-
-def parse_depht_utilities(unparsed_args):
-    parser = argparse.ArgumentParser()
-
-    parser.add_argument("pipeline", type=str, choices=PIPELINES)
-
-    args = parser.parse_args(unparsed_args[:1])
-
-    return args
