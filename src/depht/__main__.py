@@ -46,7 +46,7 @@ if len(LOCAL_MODELS) == 0:
     sys.exit(0)
 
 # Where temporary file I/O should happen
-TMP_DIR = DEPHT_DIR.joinpath(GLOBAL_VARIABLES["model_storage"]["model_dir"])
+TMP_DIR = DEPHT_DIR.joinpath(GLOBAL_VARIABLES["model_storage"]["tmp_dir"])
 
 # Model can't scan contigs with fewer CDS than window size
 MIN_CDS_FEATURES = PARAMETERS["prophage_prediction"]["window"]
