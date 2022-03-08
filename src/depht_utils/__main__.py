@@ -1,5 +1,4 @@
-import sys
+from depht_utils.run import main
 
-from depht_utils import run
-
-run.main(sys.argv[1:])
+if __name__ == "__main__":
+    main()
