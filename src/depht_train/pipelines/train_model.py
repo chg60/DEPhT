@@ -1,44 +1,47 @@
 """Standalone script for training just the phage/bacterial classifier
 portion of the model."""
 
-import sys
 import argparse
 import pathlib
 import pickle
+import sys
 
 import pandas as pd
 from Bio import SeqIO
 
-from depht.classes.prophage_classifier import ProphageClassifier
-from depht.functions.annotation import annotate_record
-from depht.functions.multiprocess import parallelize, LOGICAL_CORES
+from depht.data import GLOBAL_VARIABLES
+from depht.functions.annotation import (annotate_record,
+                                        cleanup_flatfile_records)
+from depht.functions.multiprocess import parallelize, CPUS
 from depht.functions.prophage_prediction import build_contig_dataframe
-from depht_utils.functions.train_classifier import train_classifier
+from depht.functions.sniff_format import sniff_format
+from depht_train.data import PARAMETERS
+from depht_train.functions.train_classifier import train_classifier
+
+DEPHT_DIR = pathlib.Path().home().joinpath(
+                            GLOBAL_VARIABLES["model_storage"]["home_dir"])
+MODEL_DIR = DEPHT_DIR.joinpath(GLOBAL_VARIABLES["model_storage"]["model_dir"])
+WINDOW = PARAMETERS["classifier"]["window"]
 
 
-MODEL_DIR = pathlib.Path().home().joinpath(".depht/models")
-WINDOW = 55
-
-
-def parse_args():
+def parse_args(unparsed_args):
     """Parse commandline arguments."""
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("name", type=str,
                    help="one-word name for the resultant model")
     p.add_argument("phages", type=pathlib.Path,
-                   help="path to a directory containing phage FASTAs")
+                   help="path to a directory containing phage sequences")
     p.add_argument("bacteria", type=pathlib.Path,
-                   help="path to a directory containing bacterial FASTAs")
+                   help="path to a directory containing bacterial sequences")
     p.add_argument("-p", "--prophage-csv", type=pathlib.Path, default=None,
                    help="path to a 3-column CSV mapping the coordinates of "
                         "any known prophages in the bacterial contigs")
     p.add_argument("-w", "--window-size", type=int, default=WINDOW,
                    help=f"number of genes to average features over "
                         f"[default: {WINDOW}]")
-    p.add_argument("-c", "--cpu-cores", type=int, default=LOGICAL_CORES,
-                   help=f"number of cpu cores to use "
-                        f"[default: {LOGICAL_CORES}]")
-    return p.parse_args()
+    p.add_argument("-c", "--cpu-cores", type=int, default=CPUS,
+                   help=f"number of cpu cores to use [default: {CPUS}]")
+    return p.parse_args(unparsed_args)
 
 
 def get_genome_df(filepath, tmp_dir, window):
@@ -56,11 +59,17 @@ def get_genome_df(filepath, tmp_dir, window):
     """
     df_list = list()
 
-    records = sorted([x for x in SeqIO.parse(filepath, "fasta")],
+    file_fmt = sniff_format(filepath)
+    records = sorted([x for x in SeqIO.parse(filepath, file_fmt)],
                      reverse=True, key=lambda x: len(x))
 
+    if file_fmt == "fasta":
+        for record in records:
+            annotate_record(record, tmp_dir, trna=False)
+    else:
+        cleanup_flatfile_records(records)
+
     for record in records:
-        annotate_record(record, tmp_dir, trna=False)
         if len(record.features) > window:
             df_list.append(build_contig_dataframe(record, window))
 
@@ -88,7 +97,9 @@ def get_dataframe(filepath, tmp_dir, window, cpus=1):
 
     jobs = list()
     for f in filepath.iterdir():
-        if f.suffix not in (".fasta", ".fna"):
+        file_fmt = sniff_format(f)
+
+        if file_fmt not in ("fasta", "genbank"):
             continue
 
         jobs.append((f, tmp_dir, window))
@@ -98,36 +109,27 @@ def get_dataframe(filepath, tmp_dir, window, cpus=1):
     return pd.concat(dataframes, axis=0)
 
 
-def main():
-    """Commandline entry point for the script."""
-    namespace = parse_args()
-
-    name = namespace.name
-    phg_dir = namespace.phages
-    bct_dir = namespace.bacteria
-    window = namespace.window_size
-    prophages = namespace.prophage_csv
-    cpus = namespace.cpu_cores
-
-    print(name)
-
+def train_model(name, phg_dir, bct_dir, window=WINDOW, prophages=None, cpus=1):
     if not phg_dir.is_dir():
         print(f"specified phage directory '{str(phg_dir)}' is not a valid "
               f"directory")
-        sys.exit(1)
+        return
 
     if not bct_dir.is_dir():
         print(f"specified bacteria directory '{str(bct_dir)}' is not a valid "
               f"directory")
-        sys.exit(1)
+        return
 
     model_dir = MODEL_DIR.joinpath(name)
+
+    tmp_dir = model_dir.joinpath("tmp")
+    tmp_dir.mkdir(exist_ok=True, parents=True)
 
     phg_csv = model_dir.joinpath(f"_{window}_phage_df.csv")
     if phg_csv.is_file():
         phg_df = pd.read_csv(phg_csv)
     else:
-        phg_df = get_dataframe(phg_dir, model_dir, window, cpus)
+        phg_df = get_dataframe(phg_dir, tmp_dir, window, cpus)
         phg_df["class"] = [1] * len(phg_df)
         phg_df.to_csv(phg_csv, index=False)
 
@@ -135,7 +137,7 @@ def main():
     if bct_csv.is_file():
         bct_df = pd.read_csv(bct_csv)
     else:
-        bct_df = get_dataframe(bct_dir, model_dir, window, cpus)
+        bct_df = get_dataframe(bct_dir, tmp_dir, window, cpus)
         bct_df["class"] = [0] * len(bct_df)
 
         if prophages:
@@ -178,7 +180,26 @@ def main():
         pickle.dump(clf, classifier_writer)
 
 
+def main(unparsed_args=None):
+    """Commandline entry point to this module."""
+    if not unparsed_args:
+        unparsed_args = sys.argv
+
+    if len(unparsed_args) == 1:
+        unparsed_args.append("-h")
+
+    args = parse_args(unparsed_args[1:])
+
+    name = args.name
+    phg_dir = args.phages
+    bct_dir = args.bacteria
+    window = args.window_size
+    prophages = args.prophage_csv
+    cpus = args.cpu_cores
+
+    train_model(name, phg_dir, bct_dir, window=window, prophages=prophages,
+                cpus=cpus)
+
+
 if __name__ == "__main__":
-    if len(sys.argv) == 1:
-        sys.argv.append("-h")
     main()

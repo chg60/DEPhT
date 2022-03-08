@@ -1,19 +1,13 @@
-import datetime
-
 from Bio.SeqFeature import FeatureLocation, SeqFeature
 from Bio.SeqRecord import SeqRecord
 
+from depht.data import GLOBAL_VARIABLES
+
 # GLOBAL VARIABLES
 # -----------------------------------------------------------------------------
-DATE = datetime.date.today().strftime("%d-%b-%Y").upper()
-ANNOTATIONS = {"molecule_type": "DNA", "topology": "linear",
-               "data_file_division": "PHG", "date": DATE,
-               "accessions": [], "sequence_version": "1",
-               "keywords": [], "source": "",
-               "organism": "", "taxonomy": [],
-               "comment": [""]}
-FEATURE_TYPES = ("CDS", "tRNA", "tmRNA")
-DEFAULT_PRODUCT = "hypothetical protein"
+ANNOTATIONS = GLOBAL_VARIABLES["sequences"]["annotations"]
+FEATURE_TYPES = GLOBAL_VARIABLES["sequences"]["feature_types"]
+DEFAULT_PRODUCT = GLOBAL_VARIABLES["sequences"]["default_product"]
 
 FEATURE_LENGTH_WEIGHT_EXP = 1.5
 

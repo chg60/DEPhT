@@ -1,10 +1,12 @@
+"""Utility script to retrieve sequences from Genbank using Entrez.
+"""
 import argparse
 import pathlib
 import sys
 
 from Bio import SeqIO
 
-from depht_utils.functions import entrez
+from depht_train.functions import entrez
 
 # GLOBAL VARIABLES
 # -----------------------------------------------------------------------------
@@ -13,7 +15,13 @@ DEFAULTS = {"input_type": "acc", "output_type": "fasta"}
 INPUT_TYPES = ["acc", "tax"]
 OUTPUT_TYPES = ["fasta", "gb"]
 
-def parse_pull_sequences(unparsed_args):
+
+def parse_args(unparsed_args):
+    """Parse commandline arguments.
+
+    :param unparsed_args:
+    :type unparsed_args: list[str]
+    """
     parser = argparse.ArgumentParser()
 
     parser.add_argument("identifiers_file", type=pathlib.Path)
@@ -26,12 +34,20 @@ def parse_pull_sequences(unparsed_args):
 
     parser.set_defaults(**DEFAULTS)
 
-    args = parser.parse_args(unparsed_args)
-    return args
+    return parser.parse_args(unparsed_args)
     
 
 def execute_pull_sequences(identifiers_file, output_dir, input_type="acc",
                            output_type="gb", verbose=False):
+    """
+
+    :param identifiers_file:
+    :param output_dir:
+    :param input_type:
+    :param output_type:
+    :param verbose:
+    :return:
+    """
     if not identifiers_file.is_file():
         print(f"File {identifiers_file} could not be found.")
         sys.exit(1)
@@ -70,8 +86,15 @@ def execute_pull_sequences(identifiers_file, output_dir, input_type="acc",
             SeqIO.write([record], filehandle, output_type)
 
 
-def main(unparsed_args):
-    args = parse_pull_sequences(unparsed_args)
+def main(unparsed_args=None):
+    """Commandline entrypoint to this module"""
+    if not unparsed_args:
+        unparsed_args = sys.argv
+
+    if len(unparsed_args) == 1:
+        unparsed_args.append("-h")
+
+    args = parse_args(unparsed_args[1:])
 
     execute_pull_sequences(args.identifiers_file, args.outdir,
                            input_type=args.input_type,
@@ -80,4 +103,4 @@ def main(unparsed_args):
 
 
 if __name__ == "__main__":
-    main(sys.argv[1:])
+    main()

@@ -2,10 +2,13 @@ import pickle
 
 import pandas as pd
 
+from depht.data import PARAMETERS
 from depht.functions.sliding_window import *
 from depht.functions.statistics import average
 
-WINDOW = 55         # Number of CDS features to consider in a window
+# Number of CDS features to consider in a window
+WINDOW = PARAMETERS["prophage_prediction"]["window"]
+
 BACTERIA = 0        # Gene prediction state - bacterial
 PROPHAGE = 1        # Gene prediction state - prophage
 
@@ -162,9 +165,9 @@ def predict_prophage_genes(contig, classifier, alpha=0.25, min_prob=0.75,
     `model_path` to make those predictions.
 
     :param contig: the contig to make prophage predictions in
-    :type contig: prophicient.classes.contig.Contig
+    :type contig: depht.classes.contig.Contig
     :param classifier: path to a binary file with prophage classifier inside
-    :type classifier: prophicient.classes.prophage_classifier.ProphageClassifier
+    :type classifier: depht.classes.prophage_classifier.ProphageClassifier
     :param alpha: probability above which to keep prophage prediction
     :type alpha: float
     :param min_prob: probability above which prophage signal is considered
@@ -264,7 +267,7 @@ def predict_prophage_coords(contig, classifier, extend_by=0, mask=None):
     the coordinates associated with phage <-> bacterial transitions.
 
     :param contig: the contig to scan for possible prophages
-    :type contig: prophicient.classes.contig.Contig
+    :type contig: depht.classes.contig.Contig
     :param extend_by: number of bases to overextend prophages by
     :type extend_by: int
     :param mask: bitwise and will mask known/theorized bacterial genes

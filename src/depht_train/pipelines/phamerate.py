@@ -1,7 +1,5 @@
+"""Utility script to perform pham assembly with MMseqs2.
 """
-Utility script to perform pham assembly with MMseqs2.
-"""
-
 import argparse
 import json
 import pathlib
@@ -10,14 +8,14 @@ import sys
 
 from depht.functions import mmseqs
 from depht.functions.fasta import parse_fasta
-from depht_utils.classes.database import Database, Pham
+from depht_train.classes.database import Database, Pham
 
 
-def parse_phamerate_args(unparsed_args):
-    """
+def parse_args(unparsed_args):
+    """Parse commandline arguments.
 
-    :param arguments:
-    :return:
+    :param unparsed_args:
+    :type unparsed_args: list[str]
     """
     p = argparse.ArgumentParser(description=__doc__)
 
@@ -31,19 +29,30 @@ def parse_phamerate_args(unparsed_args):
     return p.parse_args(unparsed_args)
 
 
-def parse_param_file(param):
-    """
-    Attempts to parse a given parameter file in JSON format to two
+def parse_param_file(param_file):
+    """Attempts to parse a given parameter JSON file to two
     tuples of first-iter and second-iter parameter sets for MMseqs2.
 
-    :param param: the path to a JSON-formatted parameter file
-    :type param: pathlib.Path
+    :param param_file: the JSON-formatted parameter file
+    :type param_file: pathlib.Path
     :return: first_iter, second_iter
     """
-    with param.open("r") as param_handle:
-        param = json.load(param_handle)
+    with param_file.open("r") as param_handle:
+        param_dict = json.load(param_handle)
 
-    first_iter_dict = param.get("first_iteration")
+    return parse_param_dict(param_dict)
+
+
+def parse_param_dict(param_dict):
+    """
+    Attempts to parse a given parameter dictionary to two
+    tuples of first-iter and second-iter parameter sets for MMseqs2.
+
+    :param param_dict: the formatted parameter dictionary
+    :type param_dict: dict
+    :return: first_iter, second_iter
+    """
+    first_iter_dict = param_dict.get("first_iteration")
     a = first_iter_dict.get("--cluster-mode")       # Define clustermode
     b = first_iter_dict.get("--cluster-steps")      # Define clustersteps
     c = first_iter_dict.get("-s")                   # Define sensitivity
@@ -52,7 +61,7 @@ def parse_param_file(param):
     f = first_iter_dict.get("-e")                   # Define e-value
     first_iter = (a, b, c, d, e, f)
 
-    second_iter_dict = param.get("second_iteration")
+    second_iter_dict = param_dict.get("second_iteration")
     if second_iter_dict is None:
         second_iter = None
     else:
@@ -149,7 +158,7 @@ def phamerate(sequence_db, db, tmpdir, first_iter, second_iter=None):
     return temp_phams
 
 
-def execute_phamerate_pipeline(fasta, outdir, param_file):
+def execute_phamerate_pipeline(fasta, outdir, first_iter, second_iter=None):
     tempdir = outdir.joinpath("temp")
 
     # Make sure outdir and tmpdir exist
@@ -169,12 +178,9 @@ def execute_phamerate_pipeline(fasta, outdir, param_file):
     mmseqsdb = tempdir.joinpath("sequenceDB")
     mmseqs.mmseqs_createdb(nr_fasta, mmseqsdb)
 
-    # Read parameters
-    first_iter_params, second_iter_params = parse_param_file(param_file)
-
     # Phamerate!
-    phams = phamerate(mmseqsdb, input_db, tempdir, first_iter_params,
-                      second_iter_params)
+    phams = phamerate(mmseqsdb, input_db, tempdir, first_iter,
+                      second_iter)
 
     # Write fasta file for each pham
     for i, pham in enumerate(phams):
@@ -194,16 +200,26 @@ def execute_phamerate_pipeline(fasta, outdir, param_file):
     # Clean up temporary directory
     shutil.rmtree(tempdir)
 
+    # Clean up temporary mulitple sequence fasta file
+    if nr_fasta.is_file():
+        nr_fasta.unlink()
 
-def main(unparsed_args):
-    args = parse_phamerate_args(unparsed_args)
 
-    execute_phamerate_pipeline(args.fasta, args.outdir, args.param_file)
+def main(unparsed_args=None):
+    """Commandline entrypoint to this module."""
+    if not unparsed_args:
+        unparsed_args = sys.argv
+
+    if len(unparsed_args) == 1:
+        unparsed_args.append("-h")
+
+    args = parse_args(unparsed_args[1:])
+
+    first_iter_params, second_iter_params = parse_param_file(args.param_file)
+
+    execute_phamerate_pipeline(args.fasta, args.outdir,
+                               first_iter_params, second_iter_params)
 
 
 if __name__ == "__main__":
-    # If no args given, add help flag
-    if len(sys.argv) == 1:
-        sys.argv.append("-h")
-
-    main(sys.argv[1:])
+    main()

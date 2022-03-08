@@ -1,9 +1,10 @@
 from dna_features_viewer import BiopythonTranslator
 
-from depht.classes.prophage import DEFAULT_PRODUCT
+from depht.data import GLOBAL_VARIABLES
 
 # GLOBAL VARIABLES
 # -----------------------------------------------------------------------------
+DEFAULT_PRODUCT = GLOBAL_VARIABLES["sequences"]["default_product"]
 DEFAULT_FONT_FAMILY = "monospace"
 
 

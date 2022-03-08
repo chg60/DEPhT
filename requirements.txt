@@ -1,12 +1,9 @@
-biopython~=1.78
 bitarray~=2.0.0
 bokeh==2.2.2
-dna-features-viewer==3.0.3
-matplotlib~=3.4.1
 numpy~=1.20.2
 pandas~=1.2.4
-pretty-html-table==0.9.10
 plotly~=5.1.0
-kaleido~=0.2.1
 scipy~=1.7.0
-setuptools~=58.2.0
+dna_features_viewer~=3.0.3
+pretty_html_table~=0.9.14
+phamclust~=0.1.0
