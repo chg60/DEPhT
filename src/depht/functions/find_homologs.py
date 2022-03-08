@@ -43,6 +43,7 @@ def find_single_homologs(header, sequence, db, tmp_dir, prob=HHSEARCH_PROB,
     best-scoring match with probability greater than `prob`, if such a
     match exists.
 
+    :param cov:
     :param header: a label for the sequence to search
     :type header: str
     :param sequence: the sequence to find homologs for
@@ -68,10 +69,15 @@ def find_single_homologs(header, sequence, db, tmp_dir, prob=HHSEARCH_PROB,
     hhresult.parse_result()
 
     # Cull low-probability and low-coverage matches
-    hhresult.matches = [match for match in hhresult.matches if
-                        (float(match.probability) >= prob)
-                        and ((float(match.match_cols) / float(match.hit_length)) * 100 >= cov
-                        and ((float(match.match_cols) / float(len(sequence)) * 100 >= cov)]
+    keep = list()
+    for match in hhresult.matches:
+        probability = float(match.probability) >= prob
+        query_cov = 100 * float(match.match_cols) / len(sequence) >= cov
+        sbjct_cov = 100 * float(match.match_cols) / match.hit_length >= cov
+
+        if probability and query_cov and sbjct_cov:
+            keep.append(match)
+    hhresult.matches = keep
                              
     if hhresult.matches:
         # Best match is the one with the highest bit-score
