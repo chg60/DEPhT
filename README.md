@@ -39,7 +39,7 @@ For users that would prefer to manage their own dependencies, you'll need to ins
 - [Prodigal](https://github.com/hyattpd/Prodigal)
 - [Aragorn](http://www.ansikte.se/ARAGORN/Downloads/)
 - [Python](https://www.python.org/downloads/) 3.6 or higher
-- [DEPhT](https://pypi.org/project/depht/)~=1.0.2
+- [DEPhT](https://pypi.org/project/depht/)~=1.1.0
 - Python dependencies:
   - [biopython](https://pypi.org/project/biopython/)~=1.78
   - [bitarray](https://pypi.org/project/bitarray/)~=2.0.0
@@ -52,7 +52,8 @@ For users that would prefer to manage their own dependencies, you'll need to ins
   - [pretty-html-table](https://pypi.org/project/pretty-html-table/)~=0.9.10
   - [plotly](https://pypi.org/project/plotly/)~=5.1.0
   - [scipy](https://pypi.org/project/scipy/)~=1.7.0
-
+  - [phamclust](https://pypi.org/project/phamclust)~=0.1.0      (for model-training)
+- [ClustalO](http://www.clustal.org/omega/#Download)            (for model-training)
    
 # Setup
 
@@ -71,7 +72,7 @@ into a directory for DEPhT. For example, if you downloaded the Mycobacterium mod
 
     unzip ~/Downloads/Mycobacterium.zip -d ~/.depht/models/
 
-Models trained using `depht_utils` will be put in this directory by default. We are generally amenable to aiding in 
+Models trained using `depht_train` will be put in this directory by default. We are generally amenable to aiding in 
 the construction of new models - the easiest way to accomplish this is by emailing either chg60@pitt.edu or 
 laa89@pitt.edu. Note that some genera are better suited than others for DEPhT model creation.
 
