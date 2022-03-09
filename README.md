@@ -328,7 +328,13 @@ will also be clusters of at least somewhat-related phages in this dataset.
 
 ## Running the Training Pipeline
 
-The training workflow is available as a single pipeline. The only required arguments are:
+DEPhT models are comprised of four main components, which can be built from curated phage and bacterial sequences.
+In the `depht_train` package, several pipelines exist to convert and process sequence data as well as store these data
+in formatted files and databases recognized by DEPhT.  The overall workflow is illustrated below.
+
+![depht train workflow](/resources/images/github_training_schema.png)
+
+This training workflow is available in the `depht_train` package as a single pipeline. The only required arguments are:
 1. a name for the new model
 2. path to a directory containing functionally annotated phage genomes for the genus of interest
 3. path to a directory containing bacterial genomes for the genus of interest
@@ -347,7 +353,19 @@ If one or more of your bacterial genomes has one or more known (or probable) pro
 formatted [as above](#check-bacteria-for-prophages), using the `--prophage-coords` argument:
 
     depht_train create_model model_name /path/to/annotated/phage/genomes /path/to/bacterial/genomes --prophage-coords /path/to/prophage_coords.csv
-    
+
+When much is known about the taxonomy of a set of bacteria provided for the creation of a DEPhT model, formal clades or
+taxa assigned to the bacteria may be much more informative and biologically relevant than an auto-generated cluster
+schema. To assert a certain clade/cluster schema on the inputted bacterial sequences for the purposes of defining shell genome
+content, you can create a CSV table mapping the given bacteria to a clade name or identifier. The table should be formatted
+with a 'Name' and 'Cluster' header like the following:
+
+![bacterial clusters table example](/resources/images/bacterial_clusters_table.png)
+
+The CSV can be provided to the `create_model` pipeline using the `--bacteria-clusters` argument:
+
+    depht_train create_model model_name /path/to/annotated/phage/genomes /path/to/bacterial/genomes --bacteria-clusters /path/to/prophage_coords.csv
+ 
 Training a model consists of several computationally expensive steps, and as such the amount of time it takes to train
 a model is highly variable, but generally influenced in these ways:
 1. more genomes --> longer training time (and likely `depht` runtime)
@@ -357,8 +375,8 @@ Most new models will likely take somewhere between 15 minutes and an hour to tra
 
 # General Information
 
-- Current version is 1.1.0
-- Most recent stable version is 1.1.0
+- Current version is 1.1.1
+- Most recent stable version is 1.1.1
 - We currently have models available for these bacterial genera:
     - [Mycobacterium](https://osf.io/aw4up/download)
     - [Gordonia](https://osf.io/djwsb/download)
