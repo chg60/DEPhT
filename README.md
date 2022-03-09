@@ -1,4 +1,4 @@
-# *D*etection and *E*xtraction of *Ph*ages *T*ool (DEPhT)
+# Detection and Extraction of Phages Tool (DEPhT)
 
 DEPhT is a new tool for identifying prophages in bacteria, and was developed with a particular interest in being 
 able to rapidly scan hundreds to thousands of genomes and accurately extract complete (likely active) prophages 
@@ -17,7 +17,7 @@ boundary detection than any tool we are aware of.
 
 # Installation
 
-DEPhT runs natively on MacOS and Linux operating systems, and in theory should work on Windows using 
+DEPhT runs natively on macOS and Linux operating systems, and in theory should work on Windows using 
 [WSL](https://docs.microsoft.com/en-us/windows/wsl/install).
 
 ## Conda install
@@ -74,7 +74,7 @@ into a directory for DEPhT. For example, if you downloaded the Mycobacterium mod
 
 Models trained using `depht_train` will be put in this directory by default. We are generally amenable to aiding in 
 the construction of new models - the easiest way to accomplish this is by emailing either chg60@pitt.edu or 
-laa89@pitt.edu. Note that some genera are better suited than others for DEPhT model creation.
+laa89@pitt.edu. Note that some genera are likely better suited than others for DEPhT model creation.
 
 
 # Running DEPhT
@@ -131,7 +131,7 @@ A large set of mixed FASTA (here using .fasta extension) and Genbank (here using
 
 In theory, you're limited only by the number of files your Terminal will let you expand by using `*`.
 
-For Mac users who are uncomfortable with entering paths at the commandline, modern versions of MacOS let you drag files 
+For Mac users who are uncomfortable with entering paths at the commandline, modern versions of macOS let you drag files 
 from a Finder window into the Terminal and will automatically populate the path in the Terminal for you. Some Linux 
 distributions may also support this kind of action.
 
@@ -224,9 +224,9 @@ the length of the shortest known Mycobacterium prophage. Reduce this threshold t
 
 ### Temporary Directory
 
-DEPhT utilizes various software that require outputs and data intermediates that are written to files. These files 
-are stored in a temporary directory, and removed once DEPhT finishes running. By default, DEPhT will use `~/.depht/tmp`,
-but can use any other directory that your user account has read/write permissions in, by using the `-t` argument.
+DEPhT (and its dependencies) use many temporary data files. These files are stored in a temporary directory, 
+and removed once DEPhT finishes running. By default, DEPhT will use `~/.depht/tmp`, but can use any other 
+directory that your user account has read/write permissions in, by using the `-t` argument:
 
     depht /path/to/my/sequence.fasta /path/to/my/output/directory -t /path/to/temporary/directory
 
@@ -238,11 +238,12 @@ DEPhT's output consists of three main files:
 2. A `.csv` spreadsheet with the primary data used to discern prophage regions - one file per contig
 3. A `.gbk` Genbank flatfile with DEPhT's annotation of the inputted sequence - one file per contig
 
-DEPhT's graphical `.html` output displays a cirular input genome map and linear phage region genome map with 
+DEPhT's graphical `.html` output displays a circular input genome map and linear phage region genome map with 
 [DnaFeaturesViewer](https://github.com/Edinburgh-Genome-Foundry/DnaFeaturesViewer) as well as the coordinates of the 
 regions discovered in a colored table with [pretty-html-table](https://github.com/sbi-rviot/ph_table).
 
-![DEPhT's graphical output for prophages identified in M. *abscessus* strain GD43A](/resources/images/result_visualization_example.png)
+![DEPhT's graphical output for prophages identified in *M. abscessus* strain GD43A]
+(/resources/images/result_visualization_example.png)
 
 In each of these genome maps and coordinate tables, prophage and/or protein-coding sequence features are colored 
 green for forward-oriented features and colored red for reverse-oriented features. Above those prophage features in 
@@ -251,15 +252,16 @@ in the linear genome map(s) is annotated phage products as identified by DEPhT.
 
 DEPhT's data `.csv` output contains data for each protein-coding feature in the inputted sequence file.
 
-![DEPhT's data output for prophages identified in M. *abscessus* strain GD43A](/resources/images/data_spreadsheet_example.png)
+![DEPhT's data output for prophages identified in *M. abscessus* strain GD43A]
+(/resources/images/data_spreadsheet_example.png)
 
 The columns in this output are the following:
 - Gene ID: A protein-coding feature ID assigned by DEPhT
 - Start: The start coordinate of a feature in the input sequence
-- End: The end coodinate of a feature in the input sequence
-- Prediction: The probability of a feature belonging to a prophage as analyzed by DEPhT 
-- Bacterial Homology: The identity of a feature as shell genome content as analyzed by DEPhT
-- Phage Homology: The probability given by an alignment of a feature to a HMM profile of phage amino acid sequences
+- End: The end coordinate of a feature in the input sequence
+- Prediction: Probability that this gene is part of a prophage, from the Gene Size/TDC Classifier
+- Bacterial Homology: 1 if DEPhT identifies this gene as part of the bacterial accessory genome, else 0
+- Phage Homology: HHSearch probability for genes with high-confidence hits to phage HMMs, else 0
 
 
 # Training New Models
@@ -305,17 +307,16 @@ before pressing "Download".
 
 ![patric dialog box](/resources/images/patric_download_options.png)
 
-Of course you are free to add any additional genomes you'd like to better 
+Of course, you are free to add any additional genomes you'd like to better 
 populate the spectrum of diversity in the genus. In our case, we added several _Mycobacterium abscessus_ strains to 
-fill in the so-called _Mycobacterium abscessus complex_ (MAC).
+fill in the so-called _Mycobacterium abscessus_ complex (MAC).
 
 ### Check Bacteria for Prophages
 
 Ideally, you'll run these genomes through PHASTER or some other prophage prediction tool to get the approximate
 coordinates of any complete prophages in these strains, and recording them in a CSV file that you'll pass to the 
 training module. The coordinates don't have to be perfect, though the better they are the better the resultant model 
-will perform. This step will reduce the probability that DEPhT treats a prophage found in multiple strains as 
-"conserved bacterial genes", and also give the model an idea what integrated prophages are supposed to look, as 
+will perform. This step will give the model an idea what integrated prophages are supposed to look architecturally, as 
 opposed to only knowing what extracted phages/prophages look like.
 
 ![example csv](/resources/images/prophage_csv.png)
@@ -362,14 +363,15 @@ with a 'Name' and 'Cluster' header like the following:
 
 ![bacterial clusters table example](/resources/images/bacterial_clusters_table.png)
 
-The CSV can be provided to the `create_model` pipeline using the `--bacteria-clusters` argument:
+This CSV file can be provided to the `create_model` pipeline using the `--bacteria-clusters` argument:
 
-    depht_train create_model model_name /path/to/annotated/phage/genomes /path/to/bacterial/genomes --bacteria-clusters /path/to/prophage_coords.csv
+    depht_train create_model model_name /path/to/annotated/phage/genomes /path/to/bacterial/genomes 
+    --bacteria-clusters /path/to/bacteria_clusters.csv
  
 Training a model consists of several computationally expensive steps, and as such the amount of time it takes to train
 a model is highly variable, but generally influenced in these ways:
 1. more genomes --> longer training time (and likely `depht` runtime)
-2. more CPU cores --> shorter training time
+2. more CPU cores --> shorter training time (and likely `depht` runtime)
 
 Most new models will likely take somewhere between 15 minutes and an hour to train.
 
