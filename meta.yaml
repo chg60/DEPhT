@@ -8,7 +8,7 @@ package:
 
 source:
   url: https://pypi.io/packages/source/{{ name[0] }}/{{ name }}/depht-{{ version }}.tar.gz
-  sha256: e9636aee4923786ce7c0e086a7a619b32592ba06361a62ead0c00d472c16a948 
+  sha256: f8a58e76e363ade42b03b82ede2609eef02c6f4921850faf5f5ac724838a9aaf 
 
 build:
   number: 0
