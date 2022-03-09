@@ -39,7 +39,7 @@ For users that would prefer to manage their own dependencies, you'll need to ins
 - [Prodigal](https://github.com/hyattpd/Prodigal)
 - [Aragorn](http://www.ansikte.se/ARAGORN/Downloads/)
 - [Python](https://www.python.org/downloads/) 3.6 or higher
-- [DEPhT](https://pypi.org/project/depht/)~=1.1.0
+- [DEPhT](https://pypi.org/project/depht/)~=1.1.2
 - Python dependencies:
   - [biopython](https://pypi.org/project/biopython/)~=1.78
   - [bitarray](https://pypi.org/project/bitarray/)~=2.0.0
@@ -59,9 +59,7 @@ For users that would prefer to manage their own dependencies, you'll need to ins
 
 DEPhT requires at least one genus-specific model to be installed before it will be able to run. At present, there 
 are a few models available in [our repository at the Open Science Framework](https://osf.io/zt4n3). New models can
-be trained ([instructions below](#training-new-models)), though this process is currently not very streamlined. We
-have a script nearly finished that should make the process much simpler, which should be available by late December
-2021 or early January 2022.
+also be trained locally ([instructions below](#training-new-models)).
 
 Once a model has been downloaded (the easiest way is through a web browser), it needs to be decompressed and moved 
 into a directory for DEPhT. For example, if you downloaded the Mycobacterium model:
@@ -145,11 +143,10 @@ Progress updates during DEPhT's runtime can be toggled with `-v`.
 
     depht /path/to/my/sequence.fasta /path/to/my/output/directory -v
 
-The amount of resources (CPU cores) that DEPhT is allowed to utilize can be specified with `-c`. Note that some of 
-DEPhT's dependencies utilize hyper-threading, so on most modern computers DEPhT will utilize 2 threads per specified 
-CPU core.
+DEPhT will use all locally available CPU cores by default. You can limit the number of allowed CPU cores with the 
+`-c`/`--cpus` argument:
 
-    depht /path/to/my/sequence.fasta /path/to/my/output/directory -c 6
+    depht /path/to/my/sequence.fasta /path/to/my/output/directory -c 4
 
 
 ## Other Options
@@ -375,10 +372,15 @@ a model is highly variable, but generally influenced in these ways:
 
 Most new models will likely take somewhere between 15 minutes and an hour to train.
 
+# Examples
+
+We have some example genomes and expected outputs to make it easy for end-users to verify that DEPhT (and the Mycobacterium model)
+are installed correctly. These genomes and their expected outputs can be found in the GitHub repository in resources > examples.
+
 # General Information
 
-- Current version is 1.1.1
-- Most recent stable version is 1.1.1
+- Current version is 1.1.2
+- Most recent stable version is 1.1.2
 - We currently have models available for these bacterial genera:
     - [Mycobacterium](https://osf.io/aw4up/download)
     - [Gordonia](https://osf.io/djwsb/download)
