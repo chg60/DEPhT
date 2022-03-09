@@ -136,7 +136,7 @@ def create_model(name, phages, bacteria, bact_clusters=None,
         bacteria, dir_map["bacterial_tmp"],
         GLOBAL_VARIABLES["bacterial_sequences"]["name"],
         config["bacterial_sequences"],
-        annotate=False, verbose=verbose, cpus=cpus,
+        annotate=True, verbose=verbose, cpus=cpus,
         cluster_table=bact_clusters)
 
     if bacterial_data_tuple[2] == 0:
