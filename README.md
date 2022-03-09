@@ -263,12 +263,7 @@ The columns in this output are the following:
 
 # Training New Models
 
-For now, models need to be trained by using a module only available in the GitHub repository. To obtain a local copy
-of the repository, click [here](https://github.com/chg60/DEPhT/archive/refs/heads/main.zip) and unzip it in whatever
-directory you'd like, or if you have git installed on your machine, you can clone the repository like this:
-
-    cd /path/where/you/want/DEPhT
-    git clone https://github.com/chg60/DEPhT.git
+Models can be trained using the `depht_train` package, installed as part of DEPhT.
     
 What follows will describe the workflow for training new models, as well as explain the thought process.
     
@@ -330,26 +325,39 @@ Lastly, you'll need to retrieve functionally annotated phages from Genbank or el
 important that these phages represent the spectrum of diversity of phages infecting hosts in the genus. Ideally there
 will also be clusters of at least somewhat-related phages in this dataset.
 
-## Training the Gene Size and TDC Classifier
+## Running the Training Pipeline
 
-More info soon
+The training workflow is available as a single pipeline. The only required arguments are:
+1. a name for the new model
+2. path to a directory containing functionally annotated phage genomes for the genus of interest
+3. path to a directory containing bacterial genomes for the genus of interest
 
-## Training the Bacterial Shell Genome
+Run the pipeline like this:
 
-More info soon
+    depht_train create_model model_name /path/to/annotated/phage/genomes /path/to/bacterial/genomes
+    
+If you're trying to create a new model with the same name as an existing one, `depht_train` will not overwrite the
+existing model by default, but it will then force you to pick a new name. If you'd like to overwrite the existing model,
+you can do so with the `-f`/`--force` argument:
 
-## Training the Phage HMMs
+    depht_train create_model model_name /path/to/annotated/phage/genomes /path/to/bacterial/genomes -f
+    
+If one or more of your bacterial genomes has one or more known (or probable) prophage(s) in it, you can provide a CSV file
+formatted [as above](#check-bacteria-for-prophages), using the `--prophage-coords` argument:
 
-More info soon
+    depht_train create_model model_name /path/to/annotated/phage/genomes /path/to/bacterial/genomes --prophage-coords /path/to/prophage_coords.csv
+    
+Training a model consists of several computationally expensive steps, and as such the amount of time it takes to train
+a model is highly variable, but generally influenced in these ways:
+1. more genomes --> longer training time (and likely `depht` runtime)
+2. more CPU cores --> shorter training time
 
-## Creating the Reference BLAST Database
-
-More info soon
+Most new models will likely take somewhere between 15 minutes and an hour to train.
 
 # General Information
 
-- Current version is 1.0.2
-- Most recent stable version is 1.0.2
+- Current version is 1.1.0
+- Most recent stable version is 1.1.0
 - We currently have models available for these bacterial genera:
     - [Mycobacterium](https://osf.io/aw4up/download)
     - [Gordonia](https://osf.io/djwsb/download)
