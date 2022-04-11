@@ -2,6 +2,7 @@ import pandas
 import pretty_html_table
 import bokeh
 from bokeh import plotting
+from bokeh.core.properties import value
 from bokeh.embed import file_html
 from bokeh.models import HoverTool, Range1d, Title
 from bokeh.resources import CDN
@@ -364,7 +365,7 @@ def plot_with_bokeh(graphic_record, figure_width=100, figure_height="auto",
                                                     bokeh_floating_labels))
         plot.text(x="x", y="y", text="text", text_align="center",
                   text_font_size=label_text_font_size,
-                  text_font=label_text_font,
+                  text_font=value(label_text_font),
                   text_font_style=label_text_font_style,
                   source=labels_source)
 
