@@ -1,5 +1,5 @@
 {% set name = "depht" %}
-{% set version = "1.1.2" %}
+{% set version = "1.1.4" %}
 
 
 package:
@@ -7,38 +7,40 @@ package:
   version: {{ version }}
 
 source:
-  url: https://pypi.io/packages/source/{{ name[0] }}/{{ name }}/depht-{{ version }}.tar.gz
-  sha256: f8a58e76e363ade42b03b82ede2609eef02c6f4921850faf5f5ac724838a9aaf 
+  path: .
+  # url: https://pypi.io/packages/source/{{ name[0] }}/{{ name }}/depht-{{ version }}.tar.gz
+  # sha256: f8a58e76e363ade42b03b82ede2609eef02c6f4921850faf5f5ac724838a9aaf
 
 build:
   number: 0
   noarch: python
-  script: {{ PYTHON }} -m pip install . -vv
+  script: python -m pip install .
 
 requirements:
   host:
+    - python ==3.9
     - pip
-    - python ==3.7
+
   run:
-    - biopython ~=1.79
-    - bitarray ~=2.0.0
-    - bokeh ~=2.2.2 
-    - matplotlib-base ~=3.4.1
-    - numpy ~=1.20.2
-    - pandas ~=1.2.4
-    - plotly ~=5.1.0
-    - pretty_html_table ~=0.9.10
-    - python >=3.6
-    - scipy ~=1.7.0
-    - dna_features_viewer ~=3.0.3
-    - phamclust ~= 0.1.0
-    - python-kaleido ~=0.2.1
-    - hhsuite ~=3.3.0
-    - prodigal ~=2.6.3
     - aragorn ~=1.2.38
-    - mmseqs2 ==13.45111
     - blast ==2.9.0
     - clustalo ~=1.2.4
+    - hhsuite ~=3.3.0
+    - mmseqs2 ==13.45111
+    - prodigal ~=2.6.3
+    - python ~=3.9.0
+    - biopython >=1.78
+    - bitarray ~=2.0.1
+    - bokeh ~=2.4.2 
+    - dna_features_viewer ~=3.1.0
+    - matplotlib-base ~=3.4.1
+    - numpy ~=1.22.3
+    - pandas ~=1.4.2
+    - phamclust ~=0.1.2
+    - plotly ~=5.1.0
+    - pretty_html_table ~=0.9.10
+    - python-kaleido ~=0.2.1
+    - scipy ~=1.7.0
 
 test:
   imports:
