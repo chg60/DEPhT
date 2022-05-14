@@ -4,16 +4,18 @@ DEPhT is a new tool for identifying prophages in bacteria, and was developed wit
 able to rapidly scan hundreds to thousands of genomes and accurately extract complete (likely active) prophages 
 from them.
 
-A detailed manuscript has been submitted to Nucleic Acids Research, but in brief DEPhT works by using genome 
-architecture (rather than homology) to identify genomic regions likely to contain a prophage. Any regions with 
-phage-like architecture (characterized as regions with high gene density and few transcription direction changes) 
-are then further scrutinized using two passes of homology detection. The first pass identifies genes on putative 
-prophages that are homologs of (species/clade/genus-level) conserved bacterial genes, and uses any such genes to 
-disrupt the prophage prediction. The second pass (disabled in the 'fast' runmode) identifies genes on putative 
-prophages that are homologs of conserved, functionally annotated phage genes. Finally, prophage regions that got 
-through the previous filters are subjected to a BLASTN-based attL/attR detection scheme that gives DEPhT better 
-boundary detection than any tool we are aware of.
+In brief DEPhT works by using genome architecture (rather than homology) to identify genomic regions likely to 
+contain a prophage. Any regions with phage-like architecture (characterized as regions with high gene density 
+and few transcription direction changes) are then further scrutinized using two passes of homology detection. 
+The first pass identifies genes on putative prophages that are homologs of (species/clade/genus-level) conserved 
+bacterial genes, and uses any such genes to disrupt the prophage prediction. The second pass (disabled in the 
+'fast' runmode) identifies genes on putative prophages that are homologs of conserved, functionally annotated 
+phage genes. Finally, prophage regions that got through the previous filters are subjected to a BLASTN-based 
+attL/attR detection scheme that gives DEPhT better boundary detection than any tool we are aware of.
 
+# Please cite
+
+Gauthier CH, Abad L, Venbakkam AK, Malnak J, Russell DA, Hatfull GF. DEPhT: a novel approach for efficient prophage discovery and precise extraction. Nucleic Acids Res. 2022 Apr 22:gkac273. doi: 10.1093/nar/gkac273. Epub ahead of print. PMID: 35451479.
 
 # Installation
 
