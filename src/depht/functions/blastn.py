@@ -71,7 +71,7 @@ def blastn(query, target, tmp_dir, mode="db", evalue=BLASTN_EVALUE,
     run_command(command)
 
     # Return parsed hits as list of dictionaries
-    fields = BLASTN_OUTFMT.split()[1:]
+    fields = outfmt.split()[1:]
     try:
         blastn_reader = open(outfile, "r")
         csv_reader = csv.DictReader(blastn_reader, fieldnames=fields)
