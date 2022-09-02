@@ -218,3 +218,5 @@ def cleanup_flatfile_records(records):
             features.append(feature)
 
         record.features = features
+
+        record.annotations = GLOBAL_VARIABLES["sequences"]["annotations"]
