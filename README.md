@@ -15,7 +15,8 @@ attL/attR detection scheme that gives DEPhT better boundary detection than any t
 
 # Please cite
 
-Gauthier CH, Abad L, Venbakkam AK, Malnak J, Russell DA, Hatfull GF. DEPhT: a novel approach for efficient prophage discovery and precise extraction. Nucleic Acids Res. 2022 Apr 22:gkac273. doi: 10.1093/nar/gkac273. Epub ahead of print. PMID: 35451479.
+Gauthier CH, Abad L, Venbakkam AK, Malnak J, Russell DA, Hatfull GF. DEPhT: a novel approach for efficient prophage discovery and precise extraction. 
+Nucleic Acids Research, Volume 50, Issue 13, 22 July 2022, Page e75, doi: [10.1093/nar/gkac273](https://doi.org/10.1093/nar/gkac273). PMID: 35451479.
 
 # Installation
 
