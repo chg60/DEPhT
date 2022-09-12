@@ -145,6 +145,11 @@ def create_model(name, phages, bacteria, bact_clusters=None,
               "Please check the formatting and contents of your files.")
         shutil.rmtree(dir_map["model_dir"])
         return
+    elif bacterial_data_tuple[8] is None:
+        print("Error occured while phamerating bacterial sequence data.\n"
+              "Please check your local MMseqs2 installation.")
+        shutil.rmtree(dir_map["model_dir"])
+        return
 
     # Collect phage sequences and write fasta and genbank files
     if verbose:
@@ -160,6 +165,11 @@ def create_model(name, phages, bacteria, bact_clusters=None,
         print("Could not recognize any phage sequence files "
               "in the specified directory.\n"
               "Please check the formatting and contents of your files.")
+        shutil.rmtree(dir_map["model_dir"])
+        return
+    if phage_data_tuple[8] is None:
+        print("Error occuerd while phamerating bacterial sequence data.\n"
+              "Please check your local MMseqs2 installation.")
         shutil.rmtree(dir_map["model_dir"])
         return
 
@@ -288,6 +298,9 @@ def collect_sequences(sequences, output_dir, name, config,
                                     sequences, output_dir, annotate=annotate,
                                     verbose=verbose, cpus=cpus)
 
+    if seq_count == 0:
+        return (fasta_sequences, gb_sequences, seq_count)
+
     fasta_file, index_file, cluster_file = index_sequences(
                                     sequences, output_dir,
                                     name=name, cluster_table=cluster_table)
@@ -298,8 +311,12 @@ def collect_sequences(sequences, output_dir, name, config,
         print("...clustering gene product sequences...")
     phamerate_config = config["phameration"]
     first_iter_params, second_iter_params = parse_param_dict(phamerate_config)
-    execute_phamerate_pipeline(fasta_file, gene_clusters_dir,
-                               first_iter_params, second_iter_params)
+    phams = execute_phamerate_pipeline(fasta_file, gene_clusters_dir,
+                                       first_iter_params, second_iter_params)
+
+    if not phams:
+        return (fasta_sequences, gb_sequences, seq_count, fasta_file,
+                index_file, gene_clusters_dir, cluster_file, None, phams)
 
     clusters = None
     if cluster_file is None and cluster:
@@ -311,7 +328,7 @@ def collect_sequences(sequences, output_dir, name, config,
                                             singletons=singletons)
 
     return (fasta_sequences, gb_sequences, seq_count, fasta_file,
-            index_file, gene_clusters_dir, cluster_file, clusters)
+            index_file, gene_clusters_dir, cluster_file, clusters, phams)
 
 
 def clean_sequences(input_dir, output_dir, annotate=False, verbose=False,

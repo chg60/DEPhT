@@ -159,6 +159,11 @@ def phamerate(sequence_db, db, tmpdir, first_iter, second_iter=None):
 
 
 def execute_phamerate_pipeline(fasta, outdir, first_iter, second_iter=None):
+    # Read fasta file and build database instance
+    geneids, translations = parse_fasta(fasta)
+    if not geneids:
+        return None 
+
     tempdir = outdir.joinpath("temp")
 
     # Make sure outdir and tmpdir exist
@@ -167,8 +172,6 @@ def execute_phamerate_pipeline(fasta, outdir, first_iter, second_iter=None):
     if not tempdir.is_dir():
         tempdir.mkdir(parents=False)
 
-    # Read fasta file and build database instance
-    geneids, translations = parse_fasta(fasta)
     input_db = Database(geneids, translations)
 
     # Create mmseqsdb
@@ -203,6 +206,8 @@ def execute_phamerate_pipeline(fasta, outdir, first_iter, second_iter=None):
     # Clean up temporary mulitple sequence fasta file
     if nr_fasta.is_file():
         nr_fasta.unlink()
+
+    return phams 
 
 
 def main(unparsed_args=None):
