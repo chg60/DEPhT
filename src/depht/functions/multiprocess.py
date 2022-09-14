@@ -69,11 +69,13 @@ def start_processes(inputs, cpus, verbose=False):
     result_q = multiprocessing.Queue()
 
     # Calculate how often to place a show_progress() job
+    ntasks = len(inputs)
     frequency = max([1, len(inputs)//100])
     for i, job in enumerate(inputs):
         job_q.put(job)
         if verbose and (i % frequency == 0 or i == len(inputs) - 1):
             job_q.put((show_progress, (i+1, len(inputs))))
+            ntasks += 1
 
     # Set up workers and put a 'STOP' signal at the end of job_q for each
     worker_pool = list()
@@ -87,7 +89,7 @@ def start_processes(inputs, cpus, verbose=False):
 
     # Grab results from result_q
     results = []
-    for _ in range(len(inputs)):
+    for _ in range(ntasks):
         result = result_q.get()
         if result is not None:
             results.append(result)

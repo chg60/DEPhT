@@ -302,7 +302,7 @@ def collect_sequences(sequences, output_dir, name, config,
         return (fasta_sequences, gb_sequences, seq_count)
 
     fasta_file, index_file, cluster_file = index_sequences(
-                                    sequences, output_dir,
+                                    gb_sequences, output_dir,
                                     name=name, cluster_table=cluster_table)
 
     gene_clusters_dir = output_dir.joinpath("phams")
