@@ -73,9 +73,8 @@ into a directory for DEPhT. For example, if you downloaded the Mycobacterium mod
 
     unzip ~/Downloads/Mycobacterium.zip -d ~/.depht/models/
 
-Models trained using `depht_train` will be put in this directory by default. We are generally amenable to aiding in 
-the construction of new models - the easiest way to accomplish this is by emailing either chg60@pitt.edu or 
-laa89@pitt.edu. Note that some genera are likely better suited than others for DEPhT model creation.
+Models trained using `depht_train` will be put in this directory by default. We are generally amenable to providing guidance
+or assistance in the construction of new models - the easiest way to accomplish this is by [creating an issue](https://github.com/chg60/DEPhT/issues). Note that per Figure 8 of Gauthier et. al 2022, some genera are likely better suited than others for DEPhT model creation.
 
 
 # Running DEPhT
