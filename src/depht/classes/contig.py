@@ -78,3 +78,9 @@ class Contig:
             return
 
         self.hhsearch_scores = [0.0] * len(self.genes)
+
+    def fill_mask_bits(self):
+        if not (self.genes):
+            return
+
+        self.mask_bits = [1] * len(self.genes)

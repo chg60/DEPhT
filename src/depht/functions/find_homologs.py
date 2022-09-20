@@ -1,3 +1,5 @@
+from os.path import getsize
+
 from depht.classes.hhresult import HHResult
 from depht.data import PARAMETERS
 from depht.functions.fasta import write_fasta
@@ -73,12 +75,13 @@ def find_single_homologs(header, sequence, db, tmp_dir, prob=HHSEARCH_PROB,
     for match in hhresult.matches:
         probability = float(match.probability) >= prob
         qry_cov = 100 * float(match.match_cols) / len(sequence) >= cov
-        sbj_cov = 100 * float(match.match_cols) / float(match.hit_length) >= cov
+        sbj_cov = (100 * float(match.match_cols) /
+                   float(match.hit_length) >= cov)
 
         if probability and qry_cov and sbj_cov:
             keep.append(match)
     hhresult.matches = keep
-                             
+
     if hhresult.matches:
         # Best match is the one with the highest bit-score
         hhresult.matches.sort(key=lambda x: float(x.score), reverse=True)
@@ -154,8 +157,8 @@ def find_homologs(contigs, prophage_coords, db, tmp_dir, cpus, min_length=150,
             if len(translation) < min_length:
                 continue
 
-            # Only check features that overlap or are in prophages or haven't been
-            # searched before
+            # Only check features that overlap or are in prophages or haven't
+            # been searched before
             search = False
             if __feature_in_prophage(feature, contig_prophage_coords):
                 search = True
@@ -198,3 +201,35 @@ def __feature_in_prophage(feature, contig_prophage_coords):
                 (start < feature.location.end < end):
             return True
     return False
+
+
+def validate_HMM_database(database):
+    """
+    Validates the HHsuite database at the given root path.
+
+    :param database: path to the HMM database
+    :return: bool
+    """
+
+    a3m_ffdata = database.with_name(database.name + "_a3m.ffdata")
+    a3m_ffindex = database.with_name(database.name + "_a3m.ffindex")
+    if not a3m_ffdata.exists() or not a3m_ffindex.exists():
+        return False
+    if getsize(a3m_ffdata) == 0 or getsize(a3m_ffindex) == 0:
+        return False
+
+    hmm_ffdata = database.with_name(database.name + "_hmm.ffdata")
+    hmm_ffindex = database.with_name(database.name + "_hmm.ffindex")
+    if not hmm_ffdata.exists() or not hmm_ffindex.exists():
+        return False
+    if getsize(hmm_ffdata) == 0 or getsize(hmm_ffindex) == 0:
+        return False
+
+    cs219_ffdata = database.with_name(database.name + "_cs219.ffdata")
+    cs219_ffindex = database.with_name(database.name + "_cs219.ffindex")
+    if not cs219_ffdata.exists() or not cs219_ffindex.exists():
+        return False
+    if getsize(cs219_ffdata) == 0 or getsize(cs219_ffindex) == 0:
+        return False
+
+    return True

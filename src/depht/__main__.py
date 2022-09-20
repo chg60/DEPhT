@@ -20,7 +20,7 @@ from depht.data import GLOBAL_VARIABLES, PARAMETERS
 from depht.functions.annotation import (annotate_record,
                                         cleanup_flatfile_records)
 from depht.functions.att import find_attachment_site
-from depht.functions.find_homologs import find_homologs
+from depht.functions.find_homologs import find_homologs, validate_HMM_database
 from depht.functions.mmseqs import assemble_bacterial_mask
 from depht.functions.multiprocess import CPUS
 from depht.functions.prophage_prediction import predict_prophage_coords
@@ -246,16 +246,24 @@ def main():
 
         contigs = load_contigs(records)
 
-        if verbose:
-            print("masking conserved bacterial features...")
+        if not bact_ref_values.exists():
+            bacterial_masks = [None] * len(contigs)
+            print(f"\nWARNING: no shell genome database found in '{model}'\n"
+                  "\tskipping masking of conserved bacterial features.\n")
 
-        mmseqs_dir = genome_tmp_dir.joinpath("mmseqs")
-        if not mmseqs_dir.is_dir():
-            mmseqs_dir.mkdir()
+            for contig in contigs:
+                contig.fill_mask_bits()
+        else:
+            if verbose:
+                print("masking conserved bacterial features...")
 
-        # Detect conserved bacterial genes for each contig
-        bacterial_masks = assemble_bacterial_mask(
-            contigs, bact_ref_fasta, bact_ref_values, mmseqs_dir)
+            mmseqs_dir = genome_tmp_dir.joinpath("mmseqs")
+            if not mmseqs_dir.is_dir():
+                mmseqs_dir.mkdir()
+
+            # Detect conserved bacterial genes for each contig
+            bacterial_masks = assemble_bacterial_mask(
+                contigs, bact_ref_fasta, bact_ref_values, mmseqs_dir)
 
         if verbose:
             print("looking for high-probability prophage regions...")
@@ -281,6 +289,9 @@ def main():
             shutil.rmtree(genome_tmp_dir)  # clean up after ourselves
             continue
 
+        for contig in contigs:
+            contig.fill_hhsearch_scores()
+
         product_threshold = 0
         if runmode in ("normal", "sensitive"):
             hhsearch_dir = genome_tmp_dir.joinpath("hhsearch")
@@ -291,19 +302,25 @@ def main():
             if verbose:
                 print("searching for phage gene homologs...")
 
-            find_homologs(contigs, prophage_predictions, essential_db,
-                          hhsearch_dir, cpus)
-            product_threshold = MIN_PRODUCTS_NORMAL
+            if not validate_HMM_database(essential_db):
+                print("\nWARNING: no essential phage protein database found "
+                      f"in '{model}'\n"
+                      "\tskipping essential phage gene homolog search.\n")
+            else:
+                find_homologs(contigs, prophage_predictions, essential_db,
+                              hhsearch_dir, cpus)
+                product_threshold = MIN_PRODUCTS_NORMAL
 
             if runmode == "sensitive":
+                if not validate_HMM_database(extended_db):
+                    print("\nWARNING: no accessory phage protein database "
+                          f"found in '{model}'\n"
+                          "\tskipping accessory phage gene homolog search.\n")
                 if verbose:
                     print("extending search for phage gene homologs...")
                 find_homologs(contigs, prophage_predictions, extended_db,
                               hhsearch_dir, cpus, cache_scores=False)
                 product_threshold = MIN_PRODUCTS_STRICT
-        else:
-            for contig in contigs:
-                contig.fill_hhsearch_scores()
 
         if args.products is not None:
             product_threshold = args.products

@@ -57,8 +57,8 @@ def parse_args(unparsed_args):
                         help="overwrite existing model with the same name")
 
     parser.add_argument("--config", type=pathlib.Path, metavar="",
-                        help=f"configuration file to customize pipeline "
-                             f"parameters")
+                        help="configuration file to customize pipeline "
+                             "parameters")
     parser.add_argument("--bacteria-clusters", type=pathlib.Path, metavar="",
                         help="a CSV file with manually determined clusters "
                              "for the input bacterial sequences")
@@ -182,10 +182,19 @@ def create_model(name, phages, bacteria, bact_clusters=None,
         print("\nBuilding bacterial reference database...")
     build_reference_db(bacterial_data_tuple[0], dir_map["reference_db_dir"])
 
-    if verbose:
-        print("\nBuilding shell genome content database...")
-    rep_threshold = config["shell_db"]["rep_threshold"]
-    screen_conserved_phams(bacterial_data_tuple[5], dir_map["shell_db_dir"],
+    if not bacterial_data_tuple[7]:
+        print(
+          "WARNING: not enough bacterial sequences to define proper clades "
+          "for pangenomic analyses.\n"
+          "\tUnable to create a shell genome content database.\n"
+          "\tConsider populating your dataset with more bacterial sequences "
+          "and/or sequences more closely related.\n")
+    else:
+        if verbose:
+            print("\nBuilding shell genome content database...")
+        rep_threshold = config["shell_db"]["rep_threshold"]
+        screen_conserved_phams(
+                           bacterial_data_tuple[5], dir_map["shell_db_dir"],
                            bacterial_data_tuple[4], bacterial_data_tuple[6],
                            rep_threshold=rep_threshold)
 
@@ -318,17 +327,17 @@ def collect_sequences(sequences, output_dir, name, config,
         return (fasta_sequences, gb_sequences, seq_count, fasta_file,
                 index_file, gene_clusters_dir, cluster_file, None, phams)
 
-    clusters = None
+    cluster_map = None
     if cluster_file is None and cluster:
         if verbose:
             print("...clustering genomes based on shared gene content...")
-        cluster_file, clusters = create_cluster_schema(
+        cluster_file, cluster_map = create_cluster_schema(
                                             index_file, gene_clusters_dir,
                                             output_dir, name, config,
                                             singletons=singletons)
 
     return (fasta_sequences, gb_sequences, seq_count, fasta_file,
-            index_file, gene_clusters_dir, cluster_file, clusters, phams)
+            index_file, gene_clusters_dir, cluster_file, cluster_map, phams)
 
 
 def clean_sequences(input_dir, output_dir, annotate=False, verbose=False,
@@ -433,9 +442,17 @@ def create_phage_homologs_db(phage_data_tuple, output_dir, config, tmp_dir,
                          verbose=verbose, cores=cpus,
                          min_hmm_count=min_hmm_count)
 
-    if verbose:
-        print("...creating database of essential phage protein profiles...")
-    build_HMM_db(curated_clusters_dir, output_dir, name="essential")
+    if not [cluster for cluster in curated_clusters_dir.iterdir()]:
+        print("WARNING: not enough congruent data to create "
+              "essential phage profiles.\n"
+              "\tUnable to create a sequence profile database.\n"
+              "\tConsider adding more phage sequences and/or "
+              "curating the quality of your sequence annotations.\n")
+    else:
+        if verbose:
+            print(
+                "...creating database of essential phage protein profiles...")
+        build_HMM_db(curated_clusters_dir, output_dir, name="essential")
 
     if verbose:
         print("...curating for accessory phage protein clusters...")
@@ -446,15 +463,24 @@ def create_phage_homologs_db(phage_data_tuple, output_dir, config, tmp_dir,
     ignored_functions = config["phage_homologs"][
                                "extended_annotations"]["NOT LIKE"]
     curate_gene_clusters(phage_data_tuple[5], phage_data_tuple[4],
-                         curated_clusters_dir,
+                         extended_curated_clusters_dir,
                          accepted_functions, ignored_functions,
                          verbose=verbose,
                          accept_all=True, cores=cpus,
                          min_hmm_count=min_hmm_count)
 
-    if verbose:
-        print("...creating database of accessory phage protein profiles...")
-    build_HMM_db(curated_clusters_dir, output_dir, name="extended")
+    if not [cluster for cluster in extended_curated_clusters_dir.iterdir()]:
+        print("WARNING: not enough congruent data to create "
+              "accessory phage protein profiles.\n"
+              "\tUnable to create a sequence profile database.\n"
+              "\tConsider adding more phage sequences and/or "
+              "curating the quality of your sequence annotations.\n")
+    else:
+        if verbose:
+            print(
+               "...creating database of accessory phage protein profiles...")
+        build_HMM_db(extended_curated_clusters_dir, output_dir,
+                     name="extended")
 
 
 def create_cluster_schema(index_file, gene_clusters_dir, tmp_dir, name,
@@ -498,16 +524,18 @@ def create_cluster_schema(index_file, gene_clusters_dir, tmp_dir, name,
                             config["pham_clust"]["gcs_threshold"])
 
     clustered_ids = list()
-    for cluster_matrix in clusters:
+    cluster_map = dict()
+    for i, cluster_matrix in enumerate(clusters):
         if len(cluster_matrix.node_names) <= 1 and not singletons:
             continue
 
         clustered_ids.append(cluster_matrix.node_names)
+        cluster_map[i+1] = cluster_matrix.node_names
 
     cluster_file = tmp_dir.joinpath(".".join([name, "ci"]))
     fileio.write_cluster_file(clustered_ids, cluster_file)
 
-    return cluster_file, clusters
+    return cluster_file, cluster_map
 
 
 def main(unparsed_args=None):
