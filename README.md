@@ -73,9 +73,8 @@ into a directory for DEPhT. For example, if you downloaded the Mycobacterium mod
 
     unzip ~/Downloads/Mycobacterium.zip -d ~/.depht/models/
 
-Models trained using `depht_train` will be put in this directory by default. We are generally amenable to aiding in 
-the construction of new models - the easiest way to accomplish this is by emailing either chg60@pitt.edu or 
-laa89@pitt.edu. Note that some genera are likely better suited than others for DEPhT model creation.
+Models trained using `depht_train` will be put in this directory by default. We are generally amenable to providing guidance
+or assistance in the construction of new models - the easiest way to accomplish this is by [creating an issue](https://github.com/chg60/DEPhT/issues). Note that per Figure 8 of Gauthier et. al 2022, some genera are likely better suited than others for DEPhT model creation.
 
 
 # Running DEPhT
@@ -325,7 +324,8 @@ opposed to only knowing what extracted phages/prophages look like.
 
 Lastly, you'll need to retrieve functionally annotated phages from Genbank or elsewhere. Like the bacteria, it's
 important that these phages represent the spectrum of diversity of phages infecting hosts in the genus. Ideally there
-will also be clusters of at least somewhat-related phages in this dataset.
+will also be groups of at least somewhat-related phages in this dataset. Phage annotations need to be in GenBank flatfile
+format.
 
 ## Running the Training Pipeline
 
@@ -337,8 +337,8 @@ in formatted files and databases recognized by DEPhT.  The overall workflow is i
 
 This training workflow is available in the `depht_train` package as a single pipeline. The only required arguments are:
 1. a name for the new model
-2. path to a directory containing functionally annotated phage genomes for the genus of interest
-3. path to a directory containing bacterial genomes for the genus of interest
+2. path to a directory containing functionally annotated phage genomes for the genus of interest (GenBank flatfiles)
+3. path to a directory containing bacterial genomes for the genus of interest (FASTA nucleotide or GenBank flatfiles)
 
 Run the pipeline like this:
 
