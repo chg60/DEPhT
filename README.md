@@ -382,8 +382,8 @@ are installed correctly. These genomes and their expected outputs can be found i
 
 # General Information
 
-- Current version is 1.1.6
-- Most recent stable version is 1.1.6
+- Current version is 1.1.7
+- Most recent stable version is 1.1.7
 - We currently have models available for these bacterial genera:
     - [Mycobacterium](https://osf.io/aw4up/download)
     - [Gordonia](https://osf.io/djwsb/download)
