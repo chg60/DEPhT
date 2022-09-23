@@ -68,6 +68,8 @@ MIN_PRODUCTS_STRICT = PARAMETERS["phage_homology_search"][
 ANNOTATIONS = GLOBAL_VARIABLES["sequences"]["annotations"]
 CONTIG_DATA_HEADER = ["Gene ID", "Start", "End", "Prediction",
                       "Bacterial Homology", "Phage Homology"]
+COORDINATE_DATA_HEADER = ["Contig", "ID", "Start", "End", "Length", "Strand",
+                          "Products"]
 
 
 def parse_args():
@@ -117,6 +119,8 @@ def parse_args():
                    type=int, default=MIN_LENGTH, metavar="",
                    help=f"minimum length to report a prophage "
                         f"[default: {MIN_LENGTH}]")
+    p.add_argument("--write_metadata", action="store_true",
+                   help="write prophage metadata such as genome coordinates")
 
     return p.parse_args()
 
@@ -141,6 +145,10 @@ def main():
     cpus = args.cpus            # How many physical cores can we use?
     att_sens = args.att_sens    # What's the att sensitivity modifier?
     min_length = args.length    # Minimum prophage length in bp
+    write_metadata = args.write_metadata # Do we write metadata to file?
+
+    # Explicitly state model to be used by DEPhT
+    print(f"\nRunning DEPhT with existing '{model}' model.\n")
 
     # Get output dir and make sure it's a valid path
     outdir = pathlib.Path(args.outdir).resolve()
@@ -362,7 +370,7 @@ def main():
         if not draw_dir.is_dir():
             draw_dir.mkdir()
         write_prophage_output(genome_outdir, contigs, prophages, draw_dir,
-                              draw)
+                              draw, write_metadata=write_metadata)
 
         if dump:
             destination = genome_outdir.joinpath("tmp_data")
@@ -498,7 +506,8 @@ def detect_att_sites(prophages, reference_db_path, search_space,
         prophage.parent_record.features.sort(key=lambda x: x.location.start)
 
 
-def write_prophage_output(outdir, contigs, prophages, tmp_dir, draw):
+def write_prophage_output(outdir, contigs, prophages, tmp_dir, draw,
+                          write_metadata=False):
     """Generates output structure and writes data to file
 
     :param outdir: Root directory the data will be written to
@@ -534,6 +543,12 @@ def write_prophage_output(outdir, contigs, prophages, tmp_dir, draw):
         SeqIO.write(prophage.record, genbank_filename, "genbank")
         SeqIO.write(prophage.record, fasta_filename, "fasta")
 
+    if write_metadata:
+        write_prophage_metadata(outdir, prophages)
+         
+
+        
+
     if draw and prophages:
         draw_complete_diagram(outdir, [contig.record for contig in contigs],
                               prophages, tmp_dir, name=outdir.name)
@@ -563,6 +578,37 @@ def write_contig_data(contig, outpath):
             data_dict[header] = data[j]
 
         csv_writer.writerow(data_dict)
+
+    handle.close()
+
+
+def write_prophage_metadata(outdir, prophages):
+    """Generates a csv containing metadata about discovered prophages
+   
+    :param outdir: Root direvtory the data will be written to
+    :type outdir: pathlib.Path
+    :param prophages: Identified prophages to be written to file
+    :type prophages: list
+    """
+    prophage_coordinates = list()
+    for prophage in prophages:
+        prophage_coordinates.append({"Contig": prophage.parent_record.id,
+                                     "ID": prophage.id,
+                                     "Start": prophage.start,
+                                     "End": prophage.end,
+                                     "Length": prophage.length,
+                                     "Strand": prophage.strand,
+                                     "Products": ";".join(prophage.products)})
+
+    metadata_file = outdir.joinpath("metadata.csv")
+
+    handle = open(metadata_file, "w")
+    csv_writer = csv.DictWriter(handle, fieldnames=COORDINATE_DATA_HEADER)
+
+    csv_writer.writeheader()
+
+    for row in prophage_coordinates:
+        csv_writer.writerow(row)
 
     handle.close()
 
