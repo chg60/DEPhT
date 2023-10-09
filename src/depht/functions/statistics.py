@@ -63,6 +63,18 @@ def standard_dev(values, mean=None):
     return st_dev
 
 
+def zscore(values, mean=None, st_dev=None):
+    """Calculate the z-scores of given values."""
+    if not mean:
+        mean = average(values)
+    if not st_dev:
+        st_dev = standard_dev(values, mean)
+
+    z = [(x - mean)/st_dev for x in values]
+
+    return z
+
+
 def median(values):
     """
     Calculate the median of given values.

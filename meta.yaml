@@ -1,5 +1,5 @@
 {% set name = "depht" %}
-{% set version = "1.2.0" %}
+{% set version = "1.2.1" %}
 
 
 package:
@@ -9,7 +9,7 @@ package:
 source:
   path: .
   # url: https://pypi.io/packages/source/{{ name[0] }}/{{ name }}/depht-{{ version }}.tar.gz
-  # sha256: f8a58e76e363ade42b03b82ede2609eef02c6f4921850faf5f5ac724838a9aaf
+  # sha256: 6ed18771c93aab6dd777c851faf045bed150417789be8b6e88b680ba24fcb108
 
 build:
   number: 0
@@ -31,7 +31,7 @@ requirements:
     - python ~=3.9.0
     - biopython >=1.78
     - bitarray ~=2.0.1
-    - bokeh ~=2.4.2 
+    - bokeh ~=2.4.2
     - dna_features_viewer ~=3.1.0
     - matplotlib-base ~=3.4.1
     - numpy ~=1.22.3
@@ -40,7 +40,7 @@ requirements:
     - plotly ~=5.1.0
     - pretty_html_table ~=0.9.10
     - python-kaleido ~=0.2.1
-    - scipy ~=1.7.0
+    - requests >=2.26.0
 
 test:
   imports:

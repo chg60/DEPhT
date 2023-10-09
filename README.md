@@ -38,25 +38,14 @@ It may take up to a couple of minutes to complete.
 For users that would prefer to manage their own dependencies, you'll need to install each of the following:
 - [BLAST](https://ftp.ncbi.nlm.nih.gov/blast/executables/blast+/) 2.9 or higher
 - [HHsuite3](https://github.com/soedinglab/hh-suite)
-- [MMseqs2](https://github.com/soedinglab/mmseqs2)
+- [MMseqs2](https://github.com/soedinglab/mmseqs2) 13.45111
 - [Prodigal](https://github.com/hyattpd/Prodigal)
 - [Aragorn](http://www.ansikte.se/ARAGORN/Downloads/)
-- [Python](https://www.python.org/downloads/) 3.6 or higher
-- [DEPhT](https://pypi.org/project/depht/)~=1.1.2
-- Python dependencies:
-  - [biopython](https://pypi.org/project/biopython/)~=1.78
-  - [bitarray](https://pypi.org/project/bitarray/)~=2.0.0
-  - [bokeh](https://pypi.org/project/bokeh/)~=2.2.2
-  - [dna-features-viewer](https://pypi.org/project/dna-features-viewer/)~=3.0.3
-  - [kaleido](https://pypi.org/project/kaleido/)~=0.2.1
-  - [matplotlib](https://pypi.org/project/matplotlib/)~=3.4.1
-  - [numpy](https://pypi.org/project/numpy/)~=1.20.2
-  - [pandas](https://pypi.org/project/pandas/)~=1.2.4
-  - [pretty-html-table](https://pypi.org/project/pretty-html-table/)~=0.9.10
-  - [plotly](https://pypi.org/project/plotly/)~=5.1.0
-  - [scipy](https://pypi.org/project/scipy/)~=1.7.0
-  - [phamclust](https://pypi.org/project/phamclust)~=0.1.0      (for model-training)
+- [Python](https://www.python.org/downloads/) 3.7 or higher
+- [DEPhT](https://pypi.org/project/depht/) 1.2.0 or higher
 - [ClustalO](http://www.clustal.org/omega/#Download)            (for model-training)
+
+All Python dependencies will be installed automatically when using pip to install the DEPhT package.
    
 # Setup
 
@@ -64,16 +53,35 @@ DEPhT requires at least one genus-specific model to be installed before it will 
 are a few models available in [our repository at the Open Science Framework](https://osf.io/zt4n3). New models can
 also be trained locally ([instructions below](#training-new-models)).
 
-Once a model has been downloaded (the easiest way is through a web browser), it needs to be decompressed and moved 
-into a directory for DEPhT. For example, if you downloaded the Mycobacterium model:
+We now provide a helper script to facilitate installation of models we have trained and made available at OSF.io.
 
-    if ! [[ -d ~/.depht/models ]]; then
-        mkdir -p ~/.depht/models
-    fi
+    usage: depht_fetch_model [-h] [-f] [-v] {Mycobacterium,Gordonia}
 
-    unzip ~/Downloads/Mycobacterium.zip -d ~/.depht/models/
+    Helper script to facilitate downloading models from OSF.io.
+    
+    positional arguments:
+      {Mycobacterium,Gordonia}
+                            choose a model to download
+    
+    optional arguments:
+      -h, --help            show this help message and exit
+      -f, --force           overwrite existing model files if they exist [default: False]
+      -v, --verbose         print verbose output to stdout [default: False]
 
-Models trained using `depht_train` will be put in this directory by default. We are generally amenable to providing guidance
+To download the Mycobacterium model, for example, run:
+
+    depht_fetch_model Mycobacterium -v
+
+Which should produce output similar to the following:
+
+    Downloading model files from https://osf.io/download/aw4up/...
+    Unzipping model files to ~/.depht/models/Mycobacterium...
+    Removing zip file at ~/.depht/models/Mycobacterium.zip...
+    Done.
+
+Overwriting an existing model can be done by supplying the `-f`/`--force` argument.
+
+Models trained using `depht_train` will be put in `~/.depht/models` by default. We are generally amenable to providing guidance
 or assistance in the construction of new models - the easiest way to accomplish this is by [creating an issue](https://github.com/chg60/DEPhT/issues). Note that per Figure 8 of Gauthier et. al 2022, some genera are likely better suited than others for DEPhT model creation.
 
 
@@ -82,7 +90,7 @@ or assistance in the construction of new models - the easiest way to accomplish 
 ## Basics
 
 After installation and setup, check that DEPhT can be run on the command line. NOTE: If you installed using conda, 
-you'll need to activate your environment first (e.g. `conda activate depht`). Typing `depht` at the commandline 
+you'll need to activate your environment first (e.g., `conda activate depht`). Typing `depht` at the commandline 
 should display something similar to the following (number of CPUs and models available will vary):
 
     usage: depht [-h] [--model] [-c] [-n] [-m {fast,normal,strict}] [-s] [-d] [-v] [-t] [-p] [-l]

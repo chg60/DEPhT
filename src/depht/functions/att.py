@@ -1,11 +1,9 @@
 import math
 
-from scipy.stats import zscore
-
 from depht.data import GLOBAL_VARIABLES, PARAMETERS
 from depht.functions.blastn import blastn, REF_BLASTN_OUTFMT
 from depht.functions.fasta import write_fasta
-from depht.functions.statistics import transform
+from depht.functions.statistics import transform, zscore
 
 # GLOBAL VARIABLES
 # -----------------------------------------------------------------------------
