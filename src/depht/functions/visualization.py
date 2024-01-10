@@ -127,13 +127,12 @@ def scrape_and_tabulate_host_metadata(contigs):
             info.get("Prophage Name").append(
                 feature.qualifiers.get("locus_tag")[0])
             # add the location Left Coordinates
-            info.get("Left Coordinate").append(feature.location.nofuzzy_start)
+            info.get("Left Coordinate").append(int(feature.location.start))
             # add Location Right Coordinates
-            info.get("Right Coordinate").append(feature.location.nofuzzy_end)
+            info.get("Right Coordinate").append(int(feature.location.end))
             # add length
-            info.get("Length").append(
-                feature.location.nofuzzy_end -
-                feature.location.nofuzzy_start)
+            info.get("Length").append(int(feature.location.end) - 
+                     int(feature.location.start))
 
         fwd_table = pandas.DataFrame(fwd_info)
         rvs_table = pandas.DataFrame(rvs_info)

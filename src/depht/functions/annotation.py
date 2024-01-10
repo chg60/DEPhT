@@ -129,15 +129,15 @@ def parse_aragorn(outfile):
 
         # Check if this is a tRNA or tmRNA
         if row[0] == "tmRNA":
-            ftr = SeqFeature(location=FeatureLocation(start - 1, end),
-                             type="tmRNA", strand=strand)
+            ftr = SeqFeature(location=FeatureLocation(start - 1, end, strand=strand),
+                             type="tmRNA")
             ftr.qualifiers["gene"] = [""]
             ftr.qualifiers["locus_tag"] = [""]
             tag_peptide = row[-1].rstrip("*")
             ftr.qualifiers["note"] = [f"tag peptide: {tag_peptide}"]
         else:
-            ftr = SeqFeature(location=FeatureLocation(start - 1, end),
-                             type="tRNA", strand=strand)
+            ftr = SeqFeature(location=FeatureLocation(start - 1, end, strand=strand),
+                             type="tRNA")
             ftr.qualifiers["gene"] = [""]
             ftr.qualifiers["locus_tag"] = [""]
             ftr.qualifiers["note"] = [f"{row[0]}{row[-1]}"]

@@ -36,22 +36,16 @@ def realign_subrecord(record, subrecord, subrecord_start, subrecord_end,
         if rev_orient:
             feature_start = (subrecord_end - feature.location.end)
             feature_end = (subrecord_end - feature.location.start)
-            feature_location = FeatureLocation(feature_start, feature_end)
-
-            if feature.strand == 1:
-                strand = -1
-            else:
-                strand = 1
+            strand = feature.location.strand * -1	# rev_orient: reverse strand
         else:
             feature_start = (feature.location.start - subrecord_start)
             feature_end = (feature.location.end - subrecord_start)
-            feature_location = FeatureLocation(feature_start, feature_end)
+            strand = feature.location.strand
 
-            strand = feature.strand
+        feature_location = FeatureLocation(feature_start, feature_end, strand=strand)
 
         new_feature = SeqFeature(feature_location, type=feature.type,
-                                 qualifiers=feature.qualifiers,
-                                 strand=strand)
+                                 qualifiers=feature.qualifiers)
         subrecord.features.append(new_feature)
         subrecord.features.sort(key=lambda x: x.location.start)
 
@@ -116,7 +110,7 @@ class Prophage:
             if feature.type not in FEATURE_TYPES:
                 continue
 
-            orientation += (int(feature.strand) *
+            orientation += (int(feature.location.strand) *
                             len(feature) ** FEATURE_LENGTH_WEIGHT_EXP)
 
         if orientation >= 0:
@@ -140,8 +134,8 @@ class Prophage:
             return
 
         # Sets the prophage SeqFeature according to the stored start and end
-        self.feature = SeqFeature(FeatureLocation(self.start, self.end),
-                                  strand=self.strand, type="source")
+        self.feature = SeqFeature(FeatureLocation(self.start, self.end, strand=self.strand),
+                                  type="source")
         self.feature.qualifiers["locus_tag"] = [self.id]
 
         # Extracts the prophage sequence with the created prophage
@@ -161,9 +155,9 @@ class Prophage:
         if self.seq is None or self.record is None or self.att_len <= 0:
             return
 
-        left_location = FeatureLocation(0, self.att_len)
+        left_location = FeatureLocation(0, self.att_len, strand=self.strand)
         right_location = FeatureLocation(self.length-self.att_len,
-                                         self.length)
+                                         self.length, strand=self.strand)
 
         if self.strand == 1:
             att_l_location = left_location
@@ -172,13 +166,11 @@ class Prophage:
             att_l_location = right_location
             att_r_location = left_location
 
-        self.attL = SeqFeature(att_l_location,
-                               strand=self.strand, type="misc_recomb")
+        self.attL = SeqFeature(att_l_location, type="misc_recomb")
         self.attL.qualifiers["name"] = [" ".join([self.id, "attL"])]
         self.attL.qualifiers["note"] = [str(self.attL.extract(self.seq))]
 
-        self.attR = SeqFeature(att_r_location,
-                               strand=self.strand, type="misc_recomb")
+        self.attR = SeqFeature(att_r_location, type="misc_recomb")
         self.attR.qualifiers["name"] = [" ".join([self.id, "attR"])]
         self.attR.qualifiers["note"] = [str(self.attR.extract(self.seq))]
 
