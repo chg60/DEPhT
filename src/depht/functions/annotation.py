@@ -62,8 +62,8 @@ def parse_prodigal(outfile):
         motif = notes[-3].split("=")[-1]
         spacer = notes[-2].split("=")[-1]
 
-        ftr = SeqFeature(location=FeatureLocation(start - 1, end),
-                         type="CDS", strand=strand)
+        ftr = SeqFeature(location=FeatureLocation(start - 1, end, strand=strand),
+                         type="CDS")
         ftr.qualifiers["gene"] = [""]
         ftr.qualifiers["locus_tag"] = [""]
         ftr.qualifiers["note"] = [f"rbs_motif: {motif}; rbs_spacer: {spacer}"]
